@@ -1,0 +1,81 @@
+﻿Analyzing app...
+
+  error - lib\features\transactions\qr_scanner_screen.dart:47:57 - Arguments of a constant creation must be constant expressions. Try making the argument a valid constant, or use 'new' to call the constructor. - const_with_non_constant_argument
+  error - lib\features\transactions\qr_scanner_screen.dart:47:57 - Expected to find ','. - expected_token
+  error - lib\features\transactions\qr_scanner_screen.dart:47:57 - Too many positional arguments: 1 expected, but 10 found. Try removing the extra positional arguments, or specifying the name for named arguments. - extra_positional_arguments_could_be_named
+  error - lib\features\transactions\qr_scanner_screen.dart:47:57 - Undefined name 's'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\features\transactions\qr_scanner_screen.dart:47:59 - Arguments of a constant creation must be constant expressions. Try making the argument a valid constant, or use 'new' to call the constructor. - const_with_non_constant_argument
+  error - lib\features\transactions\qr_scanner_screen.dart:47:59 - Expected to find ','. - expected_token
+  error - lib\features\transactions\qr_scanner_screen.dart:47:59 - Undefined name 'QR'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\features\transactions\qr_scanner_screen.dart:47:62 - Arguments of a constant creation must be constant expressions. Try making the argument a valid constant, or use 'new' to call the constructor. - const_with_non_constant_argument
+  error - lib\features\transactions\qr_scanner_screen.dart:47:62 - Expected to find ','. - expected_token
+  error - lib\features\transactions\qr_scanner_screen.dart:47:62 - Undefined name 'code'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\features\transactions\qr_scanner_screen.dart:47:66 - Expected to find ','. - expected_token
+  error - lib\features\transactions\qr_scanner_screen.dart:47:100 - Unterminated string literal. - unterminated_string_literal
+  error - lib\features\transactions\qr_scanner_screen.dart:48:11 - Expected to find ','. - expected_token
+  error - lib\features\transactions\qr_scanner_screen.dart:50:20 - The constructor being called isn't a const constructor. Try removing 'const' from the constructor invocation. - const_with_non_const
+  error - lib\features\transactions\qr_scanner_screen.dart:54:25 - The constructor being called isn't a const constructor. Try removing 'const' from the constructor invocation. - const_with_non_const
+  error - lib\features\transactions\qr_scanner_screen.dart:55:31 - The constructor being called isn't a const constructor. Try removing 'const' from the constructor invocation. - const_with_non_const
+  error - lib\features\transactions\qr_scanner_screen.dart:75:22 - The constructor being called isn't a const constructor. Try removing 'const' from the constructor invocation. - const_with_non_const
+  error - lib\features\transactions\qr_scanner_screen.dart:83:9 - Expected to find ')'. - expected_token
+  error - lib\shared\theme.dart:33:18 - The argument type 'CardTheme' can't be assigned to the parameter type 'CardThemeData?'.  - argument_type_not_assignable
+  error - test\widget_test.dart:16:35 - The name 'MyApp' isn't a class. Try correcting the name to match an existing class. - creation_with_non_type
+warning - lib\features\admin\admin_home.dart:5:8 - Unused import: '../../models/models.dart'. Try removing the import directive. - unused_import
+warning - lib\features\buyer\home_screen.dart:4:8 - Unused import: '../../models/models.dart'. Try removing the import directive. - unused_import
+warning - lib\features\seller\seller_home.dart:2:8 - Unused import: '../../state/app_state.dart'. Try removing the import directive. - unused_import
+warning - lib\features\seller\seller_home.dart:3:8 - Unused import: 'package:provider/provider.dart'. Try removing the import directive. - unused_import
+warning - lib\features\transactions\handover_qr_screen.dart:28:23 - The value of the local variable 'order' isn't used. Try removing the variable or using it. - unused_local_variable
+   info - lib\features\admin\admin_home.dart:7:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\admin\admin_home.dart:9:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\admin\admin_home.dart:119:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\admin\admin_home.dart:185:52 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\admin\admin_home.dart:249:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\admin\admin_home.dart:269:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\admin\admin_home.dart:283:31 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\admin\admin_home.dart:283:35 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\admin\admin_home.dart:299:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\admin\admin_home.dart:340:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\auth\auth_screen.dart:5:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\auth\auth_screen.dart:7:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\buyer\filter_screen.dart:4:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\buyer\filter_screen.dart:6:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\buyer\home_feed.dart:6:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\buyer\home_feed.dart:8:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\buyer\home_feed.dart:29:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - lib\features\buyer\home_feed.dart:32:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - lib\features\buyer\home_feed.dart:132:9 - Parameter 'key' could be a super parameter. Trying converting 'key' to a super parameter. - use_super_parameters
+   info - lib\features\buyer\home_feed.dart:152:35 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\buyer\home_feed.dart:152:39 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\buyer\home_screen.dart:8:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\buyer\home_screen.dart:10:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\seller\listing_flow.dart:6:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\seller\listing_flow.dart:8:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\seller\listing_flow.dart:93:19 - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\features\seller\seller_dashboard.dart:7:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\seller\seller_dashboard.dart:63:58 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\seller\seller_dashboard.dart:104:54 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\features\seller\seller_dashboard.dart:135:37 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\seller\seller_dashboard.dart:135:41 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\seller\seller_home.dart:8:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\seller\seller_home.dart:10:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\transactions\cart_screen.dart:6:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\transactions\cart_screen.dart:32:45 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\transactions\cart_screen.dart:32:49 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\features\transactions\checkout_screen.dart:5:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\transactions\checkout_screen.dart:7:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\transactions\handover_qr_screen.dart:6:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\transactions\handover_qr_screen.dart:53:29 - 'foregroundColor' is deprecated and shouldn't be used. use colors in eyeStyle and dataModuleStyle instead. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\features\transactions\qr_scanner_screen.dart:3:7 - Constructors for public widgets should have a named 'key' parameter. Try adding a named parameter to the constructor. - use_key_in_widget_constructors
+   info - lib\features\transactions\qr_scanner_screen.dart:5:3 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\transactions\qr_scanner_screen.dart:48:11 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\features\transactions\qr_scanner_screen.dart:54:43 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\features\transactions\qr_scanner_screen.dart:60:19 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\features\transactions\qr_scanner_screen.dart:62:21 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\features\transactions\qr_scanner_screen.dart:70:11 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\features\transactions\qr_scanner_screen.dart:72:22 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\features\transactions\qr_scanner_screen.dart:76:23 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\features\transactions\qr_scanner_screen.dart:77:24 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\features\transactions\qr_scanner_screen.dart:82:11 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\shared\theme.dart:18:9 - 'background' is deprecated and shouldn't be used. Use surface instead. This feature was deprecated after v3.18.0-0.1.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+
+77 issues found.
