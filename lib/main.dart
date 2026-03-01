@@ -12,6 +12,7 @@ import 'features/profile/notifications_page.dart';
 import 'features/profile/settings_page.dart';
 import 'features/profile/my_listings_page.dart';
 import 'features/profile/seller_dashboard_page.dart';
+import 'features/cart/cart_page.dart';
 import 'shared/widgets/scaffold_with_nav_bar.dart';
 
 import 'features/admin/admin_login_page.dart';
@@ -61,6 +62,11 @@ final _router = GoRouter(
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterPage(),
+    ),
+    GoRoute(
+      path: '/cart',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const CartPage(),
     ),
     GoRoute(
       path: '/admin/login',
@@ -203,6 +209,7 @@ class MyApp extends StatelessWidget {
     const surfaceColor = Colors.white; // Pure white for cards
 
     return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
       title: 'Campus Marketplace',
       theme: ThemeData(
         useMaterial3: true,
