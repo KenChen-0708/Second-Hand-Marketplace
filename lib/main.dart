@@ -13,6 +13,8 @@ import 'features/profile/settings_page.dart';
 import 'features/profile/my_listings_page.dart';
 import 'features/profile/seller_dashboard_page.dart';
 import 'features/cart/cart_page.dart';
+import 'features/checkout/checkout_page.dart';
+import 'features/profile/order_status_page.dart';
 import 'shared/widgets/scaffold_with_nav_bar.dart';
 
 import 'features/admin/admin_login_page.dart';
@@ -67,6 +69,11 @@ final _router = GoRouter(
       path: '/cart',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const CartPage(),
+    ),
+    GoRoute(
+      path: '/checkout',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const CheckoutPage(),
     ),
     GoRoute(
       path: '/admin/login',
@@ -188,6 +195,11 @@ final _router = GoRouter(
                   path: 'dashboard',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const SellerDashboardPage(),
+                ),
+                GoRoute(
+                  path: 'order-status',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const OrderStatusPage(),
                 ),
               ],
             ),

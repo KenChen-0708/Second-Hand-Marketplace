@@ -172,22 +172,41 @@ class ProfilePage extends StatelessWidget {
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: OutlinedButton.icon(
-                onPressed: () => context.go('/'),
-                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-                label: const Text(
-                  'Log Out',
-                  style: TextStyle(
-                    color: Colors.redAccent,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: const BorderSide(color: Colors.redAccent),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+              child: Material(
+                color: Colors.redAccent.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  onTap: () => context.go('/'),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.redAccent.withOpacity(0.15),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.logout_rounded,
+                          color: Colors.redAccent,
+                          size: 22,
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Log Out',
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

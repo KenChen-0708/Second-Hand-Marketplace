@@ -133,17 +133,7 @@ class _CartPageState extends State<CartPage> {
                       width: double.infinity,
                       height: 52,
                       child: FilledButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text('Checkout coming soon!'),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          );
-                        },
+                        onPressed: () => context.push('/checkout'),
                         icon: const Icon(Icons.lock_outline_rounded),
                         label: const Text(
                           'Proceed to Checkout',
