@@ -6,247 +6,101 @@ class SellerDashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text(
           'Seller Dashboard',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline_rounded),
+            onPressed: () {},
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Stats Row
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Total Earnings',
-                    '\$450.00',
-                    Icons.account_balance_wallet_rounded,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Items Sold',
-                    '3',
-                    Icons.sell_rounded,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
+            // Hero Section with Gradient
+            _buildHeroSection(context, primaryColor),
 
-            // Chart Overview
-            Text(
-              'Monthly Earnings',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              height: 300,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    offset: const Offset(0, 4),
-                    blurRadius: 10,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 24),
+
+                  // Quick Actions Grid
+                  _buildQuickActions(context),
+
+                  const SizedBox(height: 32),
+
+                  // Chart Overview
+                  _buildSectionHeader(
+                    context,
+                    'Sales Performance',
+                    'Last 6 Months',
                   ),
+                  const SizedBox(height: 16),
+                  _buildEarningsChart(context, primaryColor),
+
+                  const SizedBox(height: 32),
+
+                  // Active Listings Section
+                  _buildSectionHeader(context, 'Active Listings', '6 Items'),
+                  const SizedBox(height: 16),
+                  _buildActiveListings(),
+
+                  const SizedBox(height: 32),
+
+                  // Recent Transactions
+                  _buildSectionHeader(
+                    context,
+                    'Recent Transactions',
+                    'View All',
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTransaction(
+                    context,
+                    'Mini Fridge - 3.2 cu ft',
+                    'p3',
+                    '+\$65.00',
+                    'Today, 2:30 PM',
+                    Status.completed,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTransaction(
+                    context,
+                    'Sony WH-1000XM4',
+                    'p2',
+                    '+\$180.00',
+                    'Oct 12, 10:15 AM',
+                    Status.completed,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTransaction(
+                    context,
+                    'Calculus Textbook',
+                    'p1',
+                    '+\$45.00',
+                    'Oct 10, 4:00 PM',
+                    Status.pending,
+                  ),
+                  const SizedBox(height: 32),
                 ],
               ),
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: 200,
-                  barTouchData: BarTouchData(enabled: false),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (double value, TitleMeta meta) {
-                          const style = TextStyle(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          );
-                          Widget text;
-                          switch (value.toInt()) {
-                            case 0:
-                              text = const Text('Jan', style: style);
-                              break;
-                            case 1:
-                              text = const Text('Feb', style: style);
-                              break;
-                            case 2:
-                              text = const Text('Mar', style: style);
-                              break;
-                            case 3:
-                              text = const Text('Apr', style: style);
-                              break;
-                            case 4:
-                              text = const Text('May', style: style);
-                              break;
-                            case 5:
-                              text = const Text('Jun', style: style);
-                              break;
-                            default:
-                              text = const Text('', style: style);
-                              break;
-                          }
-                          return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            child: text,
-                          );
-                        },
-                      ),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            '\$${value.toInt()}',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 10,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                  ),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: 50,
-                    getDrawingHorizontalLine: (value) => FlLine(
-                      color: Colors.grey.withValues(alpha: 0.2),
-                      strokeWidth: 1,
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  barGroups: [
-                    BarChartGroupData(
-                      x: 0,
-                      barRods: [
-                        BarChartRodData(
-                          toY: 50,
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 16,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ],
-                    ),
-                    BarChartGroupData(
-                      x: 1,
-                      barRods: [
-                        BarChartRodData(
-                          toY: 120,
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 16,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ],
-                    ),
-                    BarChartGroupData(
-                      x: 2,
-                      barRods: [
-                        BarChartRodData(
-                          toY: 80,
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 16,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ],
-                    ),
-                    BarChartGroupData(
-                      x: 3,
-                      barRods: [
-                        BarChartRodData(
-                          toY: 150,
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 16,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ],
-                    ),
-                    BarChartGroupData(
-                      x: 4,
-                      barRods: [
-                        BarChartRodData(
-                          toY: 200,
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 16,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ],
-                    ),
-                    BarChartGroupData(
-                      x: 5,
-                      barRods: [
-                        BarChartRodData(
-                          toY: 180,
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 16,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // Recent Transactions
-            Text(
-              'Recent Transactions',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            _buildTransaction(
-              context,
-              'Mini Fridge - 3.2 cu ft',
-              '+\$65.00',
-              'Today, 2:30 PM',
-            ),
-            const SizedBox(height: 12),
-            _buildTransaction(
-              context,
-              'Sony WH-1000XM4',
-              '+\$180.00',
-              'Oct 12, 10:15 AM',
-            ),
-            const SizedBox(height: 12),
-            _buildTransaction(
-              context,
-              'Calculus Textbook',
-              '+\$45.00',
-              'Oct 10, 4:00 PM',
             ),
           ],
         ),
@@ -254,55 +108,421 @@ class SellerDashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard(
+  Widget _buildHeroSection(BuildContext context, Color primaryColor) {
+    return Container(
+      padding: const EdgeInsets.only(top: 120, left: 24, right: 24, bottom: 40),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            primaryColor,
+            primaryColor.withValues(alpha: 0.8),
+            primaryColor.withValues(alpha: 0.7),
+          ],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryColor.withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Available Balance',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '\$1,240.50',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: primaryColor,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Withdraw',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Row(
+            children: [
+              Expanded(
+                child: _buildSimpleStat(
+                  'Total Sales',
+                  '24 Items',
+                  Icons.shopping_bag_outlined,
+                ),
+              ),
+              Container(width: 1, height: 40, color: Colors.white24),
+              Expanded(
+                child: _buildSimpleStat(
+                  'Store Rating',
+                  '4.9 (12 rev)',
+                  Icons.star_outline_rounded,
+                ),
+              ),
+              Container(width: 1, height: 40, color: Colors.white24),
+              Expanded(
+                child: _buildSimpleStat(
+                  'Profile Views',
+                  '1.2k',
+                  Icons.visibility_outlined,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleStat(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 20),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 10),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActions(BuildContext context) {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 4,
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      children: [
+        _buildActionItem(context, Icons.add_rounded, 'Add New', Colors.blue),
+        _buildActionItem(
+          context,
+          Icons.list_alt_rounded,
+          'Orders',
+          Colors.orange,
+        ),
+        _buildActionItem(
+          context,
+          Icons.analytics_outlined,
+          'Analytics',
+          Colors.purple,
+        ),
+        _buildActionItem(
+          context,
+          Icons.storefront_rounded,
+          'My Shop',
+          Colors.teal,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionItem(
+    BuildContext context,
+    IconData icon,
+    String label,
+    Color color,
+  ) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Icon(icon, color: color, size: 28),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Colors.black54,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(
     BuildContext context,
     String title,
-    String value,
-    IconData icon,
+    String action,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        TextButton(
+          onPressed: () {},
+          child: Text(
+            action,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEarningsChart(BuildContext context, Color primaryColor) {
+    return Container(
+      height: 220,
+      padding: const EdgeInsets.only(top: 24, bottom: 8, right: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceEvenly,
+          maxY: 250,
+          barTouchData: BarTouchData(
+            touchTooltipData: BarTouchTooltipData(
+              tooltipRoundedRadius: 8,
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                return BarTooltipItem(
+                  '\$${rod.toY.toInt()}',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                );
+              },
+            ),
+          ),
+          titlesData: FlTitlesData(
+            show: true,
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (value, meta) {
+                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+                  if (value.toInt() < months.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        months[value.toInt()],
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  }
+                  return const Text('');
+                },
+              ),
+            ),
+            leftTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+          ),
+          gridData: const FlGridData(show: false),
+          borderData: FlBorderData(show: false),
+          barGroups: [
+            _buildBarGroup(0, 50, primaryColor),
+            _buildBarGroup(1, 120, primaryColor),
+            _buildBarGroup(2, 80, primaryColor),
+            _buildBarGroup(3, 170, primaryColor),
+            _buildBarGroup(4, 200, primaryColor),
+            _buildBarGroup(5, 150, primaryColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  BarChartGroupData _buildBarGroup(int x, double y, Color color) {
+    return BarChartGroupData(
+      x: x,
+      barRods: [
+        BarChartRodData(
+          toY: y,
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [color.withValues(alpha: 0.3), color],
+          ),
+          width: 14,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActiveListings() {
+    return SizedBox(
+      height: 140,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _buildListingCard('iPhone 13 Pro', '\$850', '24 Views', 'p1'),
+          _buildListingCard('Dorm Desk Lamp', '\$15', '142 Views', 'p4'),
+          _buildListingCard('Ergonomic Chair', '\$120', '89 Views', 'p5'),
+          _buildListingCard('Nike Air Max', '\$65', '12 Views', 'p6'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListingCard(
+    String title,
+    String price,
+    String views,
+    String imgCode,
   ) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: 140,
+      margin: const EdgeInsets.only(right: 16),
       decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.primaryContainer.withValues(alpha: 0.5),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: Theme.of(context).colorScheme.primary,
-              size: 28,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.7),
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.image_outlined, color: Colors.grey.shade400),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w900,
-              fontSize: 24,
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      price,
+                      style: const TextStyle(
+                        color: Color(0xFF10B981),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.visibility_outlined,
+                          size: 10,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          views.split(' ')[0],
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -313,25 +533,43 @@ class SellerDashboardPage extends StatelessWidget {
   Widget _buildTransaction(
     BuildContext context,
     String title,
+    String id,
     String amount,
     String date,
+    Status status,
   ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: status == Status.completed
+                  ? Colors.green.withValues(alpha: 0.1)
+                  : Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              status == Status.completed
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.access_time_rounded,
+              color: status == Status.completed ? Colors.green : Colors.orange,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,35 +578,44 @@ class SellerDashboardPage extends StatelessWidget {
                   title,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                    fontSize: 14,
+                    color: Color(0xFF1F2937),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
                 Text(
                   date,
-                  style: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.5),
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          Text(
-            amount,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Colors.green,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                amount,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+              Text(
+                status == Status.completed ? 'Completed' : 'Pending',
+                style: TextStyle(
+                  color: status == Status.completed
+                      ? Colors.green
+                      : Colors.orange,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 }
+
+enum Status { completed, pending }
