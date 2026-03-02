@@ -31,7 +31,7 @@ class ProductDetailPage extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Theme.of(
                         context,
-                      ).colorScheme.surface.withOpacity(0.8),
+                      ).colorScheme.surface.withValues(alpha: 0.8),
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -47,7 +47,7 @@ class ProductDetailPage extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Theme.of(
                           context,
-                        ).colorScheme.surface.withOpacity(0.8),
+                        ).colorScheme.surface.withValues(alpha: 0.8),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
@@ -132,7 +132,7 @@ class ProductDetailPage extends StatelessWidget {
                         style: TextStyle(
                           color: Theme.of(
                             context,
-                          ).colorScheme.onSurface.withOpacity(0.8),
+                          ).colorScheme.onSurface.withValues(alpha: 0.8),
                           height: 1.5,
                         ),
                       ),
@@ -198,7 +198,7 @@ class ProductDetailPage extends StatelessWidget {
                                         color: Theme.of(context)
                                             .colorScheme
                                             .onSurface
-                                            .withOpacity(0.6),
+                                            .withValues(alpha: 0.6),
                                         fontSize: 12,
                                       ),
                                     ),
@@ -233,7 +233,7 @@ class ProductDetailPage extends StatelessWidget {
                 color: Theme.of(context).colorScheme.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     offset: const Offset(0, -4),
                     blurRadius: 10,
                   ),

@@ -22,9 +22,8 @@ class ProfilePage extends StatelessWidget {
                 Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
                   ),
                   child: IconButton(
                     icon: const Icon(Icons.shopping_cart_outlined),
@@ -83,7 +82,7 @@ class ProfilePage extends StatelessWidget {
                     style: TextStyle(
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.withOpacity(0.6),
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
                       fontSize: 14,
                     ),
                   ),
@@ -119,7 +118,7 @@ class ProfilePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -143,6 +142,13 @@ class ProfilePage extends StatelessWidget {
                     title: 'Notifications',
                     badgeCount: 1,
                     onTap: () => context.push('/profile/notifications'),
+                  ),
+                  const Divider(height: 1),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'Order History',
+                    onTap: () => context.push('/profile/orders'),
                   ),
                   const Divider(height: 1),
                   _buildMenuItem(
@@ -173,7 +179,7 @@ class ProfilePage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Material(
-                color: Colors.redAccent.withOpacity(0.08),
+                color: Colors.redAccent.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
                 child: InkWell(
                   onTap: () => context.go('/'),
@@ -183,7 +189,7 @@ class ProfilePage extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: Colors.redAccent.withOpacity(0.15),
+                        color: Colors.redAccent.withValues(alpha: 0.15),
                         width: 1.5,
                       ),
                     ),
@@ -231,7 +237,7 @@ class ProfilePage extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(
             context,
-          ).colorScheme.primaryContainer.withOpacity(0.5),
+          ).colorScheme.primaryContainer.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, color: Theme.of(context).colorScheme.primary),
@@ -259,7 +265,9 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(width: 8),
           Icon(
             Icons.chevron_right_rounded,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.3),
           ),
         ],
       ),

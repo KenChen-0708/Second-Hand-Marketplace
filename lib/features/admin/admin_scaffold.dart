@@ -167,7 +167,7 @@ class _NavItem extends StatelessWidget {
         ),
       ),
       selected: isSelected,
-      selectedTileColor: Colors.blueAccent.withOpacity(0.1),
+      selectedTileColor: Colors.blueAccent.withValues(alpha: 0.1),
       onTap: onTap,
     );
   }

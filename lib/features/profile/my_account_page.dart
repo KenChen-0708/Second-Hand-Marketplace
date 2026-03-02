@@ -98,7 +98,9 @@ class MyAccountPage extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.8),
           ),
         ),
         const SizedBox(height: 8),
@@ -109,7 +111,9 @@ class MyAccountPage extends StatelessWidget {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
             filled: !enabled,
             fillColor: !enabled
-                ? Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5)
+                ? Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
                 : null,
           ),
         ),

@@ -21,13 +21,14 @@ class OrderStatusPage extends StatelessWidget {
                   Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: 0.5),
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.arrow_back_rounded),
-                      onPressed: () => context.go('/home'),
+                      onPressed: () => context.pop(),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -70,10 +71,10 @@ class OrderStatusPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withOpacity(0.05),
+                      color: const Color(0xFF10B981).withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: const Color(0xFF10B981).withOpacity(0.1),
+                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
                       ),
                     ),
                     child: Column(

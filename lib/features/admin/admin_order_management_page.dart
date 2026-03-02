@@ -76,7 +76,7 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage> {
                     scrollDirection: Axis.horizontal,
                     child: SingleChildScrollView(
                       child: DataTable(
-                        headingRowColor: MaterialStateProperty.all(
+                        headingRowColor: WidgetStateProperty.all(
                           const Color(0xFFF9FAFB),
                         ),
                         columns: const [
@@ -133,7 +133,7 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage> {
                                   decoration: BoxDecoration(
                                     color: _getStatusColor(
                                       order['status'],
-                                    ).withOpacity(0.1),
+                                    ).withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Text(

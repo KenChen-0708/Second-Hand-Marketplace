@@ -15,6 +15,8 @@ import 'features/profile/seller_dashboard_page.dart';
 import 'features/cart/cart_page.dart';
 import 'features/checkout/checkout_page.dart';
 import 'features/profile/order_status_page.dart';
+import 'features/profile/order_history_page.dart';
+
 import 'shared/widgets/scaffold_with_nav_bar.dart';
 
 import 'features/admin/admin_login_page.dart';
@@ -201,6 +203,11 @@ final _router = GoRouter(
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const OrderStatusPage(),
                 ),
+                GoRoute(
+                  path: 'orders',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const OrderHistoryPage(),
+                ),
               ],
             ),
           ],
@@ -231,7 +238,7 @@ class MyApp extends StatelessWidget {
               primary: primaryColor,
               surface: surfaceColor,
               brightness: Brightness.light,
-              primaryContainer: primaryColor.withOpacity(0.1),
+              primaryContainer: primaryColor.withValues(alpha: 0.1),
               onPrimaryContainer: primaryColor,
             ).copyWith(
               surface: surfaceColor,

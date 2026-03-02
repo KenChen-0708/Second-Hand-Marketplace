@@ -30,12 +30,14 @@ class NotificationsPage extends StatelessWidget {
                   ? Theme.of(context).colorScheme.surface
                   : Theme.of(
                       context,
-                    ).colorScheme.primaryContainer.withOpacity(0.3),
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: note.isRead
                     ? Theme.of(context).colorScheme.outlineVariant
-                    : Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                    : Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.5),
               ),
             ),
             child: Row(
@@ -70,7 +72,7 @@ class NotificationsPage extends StatelessWidget {
                             style: TextStyle(
                               color: Theme.of(
                                 context,
-                              ).colorScheme.onSurface.withOpacity(0.5),
+                              ).colorScheme.onSurface.withValues(alpha: 0.5),
                               fontSize: 12,
                             ),
                           ),
@@ -82,7 +84,7 @@ class NotificationsPage extends StatelessWidget {
                         style: TextStyle(
                           color: Theme.of(
                             context,
-                          ).colorScheme.onSurface.withOpacity(0.8),
+                          ).colorScheme.onSurface.withValues(alpha: 0.8),
                           fontSize: 14,
                         ),
                       ),

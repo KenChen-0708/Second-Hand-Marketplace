@@ -1,4 +1,3 @@
-
 class User {
   final String id;
   final String name;
@@ -101,14 +100,14 @@ final List<Product> mockProducts = [
   ),
   Product(
     id: 'p3',
-    title: 'Mini Fridge - 3.2 cu ft',
-    price: 65.0,
-    condition: 'Acceptable',
-    category: 'Dorm Gear',
+    title: 'Mechanical Keyboard - RGB Backlit',
+    price: 45.0,
+    condition: 'Excellent',
+    category: 'Electronics',
     description:
-        'Reliable mini fridge, perfect for dorms. Has a small freezer compartment.',
+        'Tactile mechanical keyboard with customizable RGB lighting. Perfect for gaming or late-night coding sessions.',
     imageUrl:
-        'https://images.unsplash.com/photo-1584568694244-14fb0f49fe07?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&q=80&w=800',
     seller: mockSeller1,
   ),
   Product(
@@ -135,7 +134,7 @@ final List<NotificationItem> mockNotifications = [
   NotificationItem(
     id: 'n2',
     title: 'Item Sold',
-    message: 'Great news! Someone just bought your Mini Fridge.',
+    message: 'Great news! Someone just bought your Mechanical Keyboard.',
     date: DateTime.now().subtract(const Duration(hours: 2)),
     isRead: true,
   ),
@@ -145,5 +144,46 @@ final List<NotificationItem> mockNotifications = [
     message: 'Scheduled maintenance this Saturday from 2 AM to 4 AM.',
     date: DateTime.now().subtract(const Duration(days: 1)),
     isRead: true,
+  ),
+];
+
+class Order {
+  final String id;
+  final Product product;
+  final DateTime orderDate;
+  final String
+  status; // 'Paid/Pending Handover', 'Completed/Handed Over', 'Cancelled'
+  final double totalPrice;
+
+  Order({
+    required this.id,
+    required this.product,
+    required this.orderDate,
+    required this.status,
+    required this.totalPrice,
+  });
+}
+
+final List<Order> mockOrders = [
+  Order(
+    id: '#CT-9921',
+    product: mockProducts[0],
+    orderDate: DateTime.now().subtract(const Duration(days: 2)),
+    status: 'Paid/Pending Handover',
+    totalPrice: 45.0,
+  ),
+  Order(
+    id: '#CT-8832',
+    product: mockProducts[1],
+    orderDate: DateTime.now().subtract(const Duration(days: 5)),
+    status: 'Completed/Handed Over',
+    totalPrice: 180.0,
+  ),
+  Order(
+    id: '#CT-7741',
+    product: mockProducts[2],
+    orderDate: DateTime.now().subtract(const Duration(days: 10)),
+    status: 'Cancelled',
+    totalPrice: 45.0,
   ),
 ];

@@ -137,7 +137,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
+                        color: Colors.black.withValues(alpha: 0.12),
                         blurRadius: 20,
                         offset: const Offset(0, -4),
                       ),
@@ -337,7 +337,9 @@ class _HomePageState extends State<HomePage> {
                                 activeTrackColor: cs.primary,
                                 inactiveTrackColor: cs.primaryContainer,
                                 thumbColor: cs.primary,
-                                overlayColor: cs.primary.withOpacity(0.12),
+                                overlayColor: cs.primary.withValues(
+                                  alpha: 0.12,
+                                ),
                                 trackHeight: 5,
                                 thumbShape: const RoundSliderThumbShape(
                                   enabledThumbRadius: 10,
@@ -720,7 +722,7 @@ class _HomePageState extends State<HomePage> {
                 filled: true,
                 fillColor: Theme.of(
                   context,
-                ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24.0),
                   borderSide: BorderSide.none,
@@ -748,9 +750,8 @@ class _HomePageState extends State<HomePage> {
               shape: BoxShape.circle,
               color: _hasActiveFilters
                   ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                  : Theme.of(context).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
             ),
             child: IconButton(
               icon: Icon(
@@ -772,7 +773,7 @@ class _HomePageState extends State<HomePage> {
                   shape: BoxShape.circle,
                   color: Theme.of(
                     context,
-                  ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 ),
                 child: IconButton(
                   icon: const Icon(Icons.shopping_cart_outlined),
@@ -946,7 +947,7 @@ class _HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(24.0),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),

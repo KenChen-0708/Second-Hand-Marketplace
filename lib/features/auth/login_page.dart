@@ -57,7 +57,7 @@ class LoginPage extends StatelessWidget {
                               ?.copyWith(
                                 color: Theme.of(
                                   context,
-                                ).colorScheme.onSurface.withOpacity(0.7),
+                                ).colorScheme.onSurface.withValues(alpha: 0.7),
                               ),
                           textAlign: TextAlign.center,
                         ),
@@ -76,7 +76,7 @@ class LoginPage extends StatelessWidget {
                             fillColor: Theme.of(context)
                                 .colorScheme
                                 .surfaceContainerHighest
-                                .withOpacity(0.3),
+                                .withValues(alpha: 0.3),
                           ),
                           keyboardType: TextInputType.emailAddress,
                         ),
@@ -95,7 +95,7 @@ class LoginPage extends StatelessWidget {
                             fillColor: Theme.of(context)
                                 .colorScheme
                                 .surfaceContainerHighest
-                                .withOpacity(0.3),
+                                .withValues(alpha: 0.3),
                           ),
                           obscureText: true,
                         ),
@@ -157,7 +157,7 @@ class LoginPage extends StatelessWidget {
                               style: TextStyle(
                                 color: Theme.of(
                                   context,
-                                ).colorScheme.onSurface.withOpacity(0.7),
+                                ).colorScheme.onSurface.withValues(alpha: 0.7),
                               ),
                             ),
                             TextButton(
@@ -179,9 +179,8 @@ class LoginPage extends StatelessWidget {
                               child: Text(
                                 'Admin Login',
                                 style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface.withOpacity(0.4),
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.4),
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                 ),

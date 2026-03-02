@@ -48,7 +48,7 @@ class _SellPageState extends State<SellPage> {
                 decoration: BoxDecoration(
                   color: Theme.of(
                     context,
-                  ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(24.0),
                   border: Border.all(
                     color: Theme.of(context).colorScheme.outlineVariant,
@@ -64,7 +64,7 @@ class _SellPageState extends State<SellPage> {
                       size: 48,
                       color: Theme.of(
                         context,
-                      ).colorScheme.primary.withOpacity(0.7),
+                      ).colorScheme.primary.withValues(alpha: 0.7),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -199,7 +199,7 @@ class _SellPageState extends State<SellPage> {
         text,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
           fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
         ),
       ),
     );

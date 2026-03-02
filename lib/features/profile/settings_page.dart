@@ -109,7 +109,9 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Text(
               'App Version 1.0.0',
               style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
           ),

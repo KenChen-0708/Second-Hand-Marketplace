@@ -85,7 +85,7 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
                       leading: CircleAvatar(
                         backgroundColor: _getStatusColor(
                           user['status'] as String,
-                        ).withOpacity(0.2),
+                        ).withValues(alpha: 0.2),
                         child: Text(
                           (user['name'] as String)[0].toUpperCase(),
                           style: TextStyle(
@@ -109,7 +109,7 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
                             decoration: BoxDecoration(
                               color: _getStatusColor(
                                 user['status'] as String,
-                              ).withOpacity(0.1),
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(

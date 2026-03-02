@@ -69,7 +69,7 @@ class MyListingsPage extends StatelessWidget {
                     width: 80,
                     height: 80,
                     fit: BoxFit.cover,
-                    color: isSold ? Colors.black.withOpacity(0.5) : null,
+                    color: isSold ? Colors.black.withValues(alpha: 0.5) : null,
                     colorBlendMode: isSold ? BlendMode.darken : null,
                   ),
                 ),
