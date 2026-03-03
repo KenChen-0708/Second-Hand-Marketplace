@@ -65,8 +65,9 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage> {
                 ).textTheme.bodyLarge?.copyWith(color: Colors.black54),
               ),
               const SizedBox(height: 24),
-              Expanded(
+              Flexible(
                 child: Container(
+                  width: double.infinity,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),

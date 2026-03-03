@@ -263,7 +263,7 @@ class ProductDetailPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      onPressed: () {},
+                      onPressed: () => context.push('/checkout'),
                       child: const Text(
                         'Buy Now',
                         style: TextStyle(

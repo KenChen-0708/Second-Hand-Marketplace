@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/models.dart';
 
 class AdminListingModerationPage extends StatefulWidget {
   const AdminListingModerationPage({super.key});
@@ -10,36 +11,14 @@ class AdminListingModerationPage extends StatefulWidget {
 
 class _AdminListingModerationPageState
     extends State<AdminListingModerationPage> {
-  final List<Map<String, dynamic>> _listings = [
-    {
-      'title': 'Calculus 101 Textbook',
-      'seller': 'Alice Smith',
-      'price': '\$25.00',
-      'status': 'Active',
-      'reported': false,
-    },
-    {
-      'title': 'MacBook Pro 2020',
-      'seller': 'Bob Johnson',
-      'price': '\$800.00',
-      'status': 'Under Review',
-      'reported': true,
-    },
-    {
-      'title': 'Dorm Desk Lamp',
-      'seller': 'Charlie Davis',
-      'price': '\$10.00',
-      'status': 'Active',
-      'reported': false,
-    },
-    {
-      'title': 'Fake Tickets',
-      'seller': 'Diana Prince',
-      'price': '\$150.00',
-      'status': 'Active',
-      'reported': false,
-    },
-  ];
+  late List<Product> _listings;
+  final Set<String> _flaggedIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _listings = List.from(mockProducts);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,8 +55,8 @@ class _AdminListingModerationPageState
                   ),
                   itemCount: _listings.length,
                   itemBuilder: (context, index) {
-                    final item = _listings[index];
-                    return _buildListingCard(item, index);
+                    final product = _listings[index];
+                    return _buildListingCard(product, index);
                   },
                 ),
               ),
@@ -88,12 +67,13 @@ class _AdminListingModerationPageState
     );
   }
 
-  Widget _buildListingCard(Map<String, dynamic> item, int index) {
+  Widget _buildListingCard(Product product, int index) {
+    bool isReported = _flaggedIds.contains(product.id);
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: item['reported']
+        border: isReported
             ? Border.all(color: Colors.orange, width: 2)
             : Border.all(color: Colors.black12),
         boxShadow: [
@@ -108,19 +88,23 @@ class _AdminListingModerationPageState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.image_rounded,
-                  size: 64,
-                  color: Colors.black26,
+              child: Image.network(
+                product.imageUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: const Color(0xFFF3F4F6),
+                  child: const Center(
+                    child: Icon(
+                      Icons.image_rounded,
+                      size: 64,
+                      color: Colors.black26,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -130,7 +114,7 @@ class _AdminListingModerationPageState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (item['reported'])
+                if (isReported)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -151,7 +135,7 @@ class _AdminListingModerationPageState
                   ),
                 const SizedBox(height: 8),
                 Text(
-                  item['title'],
+                  product.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -161,12 +145,12 @@ class _AdminListingModerationPageState
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Seller: ${item['seller']}',
+                  'Seller: ${product.seller.name}',
                   style: const TextStyle(fontSize: 12, color: Colors.black54),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  item['price'],
+                  '\$${product.price.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.green,
@@ -178,7 +162,7 @@ class _AdminListingModerationPageState
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     TextButton.icon(
-                      onPressed: () => _confirmFlag(item['title'], index),
+                      onPressed: () => _confirmFlag(product, index),
                       icon: const Icon(
                         Icons.flag_rounded,
                         size: 18,
@@ -190,7 +174,7 @@ class _AdminListingModerationPageState
                       ),
                     ),
                     IconButton(
-                      onPressed: () => _confirmDelete(item['title'], index),
+                      onPressed: () => _confirmDelete(product, index),
                       icon: const Icon(Icons.delete_rounded, color: Colors.red),
                       tooltip: 'Delete Listing',
                     ),
@@ -204,13 +188,13 @@ class _AdminListingModerationPageState
     );
   }
 
-  void _confirmDelete(String title, int index) {
+  void _confirmDelete(Product product, int index) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Listing'),
         content: Text(
-          'Are you sure you want to permanently delete "$title"? This action cannot be undone.',
+          'Are you sure you want to permanently delete "${product.title}"? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -233,13 +217,13 @@ class _AdminListingModerationPageState
     );
   }
 
-  void _confirmFlag(String title, int index) {
+  void _confirmFlag(Product product, int index) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Flag Listing'),
         content: Text(
-          'Mark "$title" as requiring manual review? It will be hidden from search results.',
+          'Mark "${product.title}" as requiring manual review? It will be hidden from search results.',
         ),
         actions: [
           TextButton(
@@ -249,7 +233,7 @@ class _AdminListingModerationPageState
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: () {
-              setState(() => _listings[index]['reported'] = true);
+              setState(() => _flaggedIds.add(product.id));
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Listing flagged for review.')),

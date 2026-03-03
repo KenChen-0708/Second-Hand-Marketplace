@@ -217,7 +217,7 @@ class ProfilePage extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 100), // Spacing for fab/bottom nav
+            const SizedBox(height: 60), // Spacing for fab/bottom nav
           ],
         ),
       ),
