@@ -10,7 +10,7 @@ class MyAccountPage extends StatelessWidget {
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text(
-          'My Account',
+          'Edit Profile',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,

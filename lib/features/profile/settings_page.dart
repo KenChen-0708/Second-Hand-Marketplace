@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -29,6 +30,25 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(24.0),
         children: [
+          const Text(
+            'Account',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            title: const Text('Edit Profile'),
+            leading: const Icon(Icons.person_outline_rounded),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            contentPadding: EdgeInsets.zero,
+            onTap: () => context.push('/profile/account'),
+          ),
+          const Divider(),
+          const SizedBox(height: 24),
+
           const Text(
             'Appearance',
             style: TextStyle(

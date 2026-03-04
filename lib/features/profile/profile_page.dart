@@ -1,57 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../chat/chat_models.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16, top: 12),
-            child: Stack(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.5),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.shopping_cart_outlined),
-                    onPressed: () => context.push('/cart'),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.redAccent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Text(
-                      '2',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          _buildActionIcon(
+            context,
+            icon: Icons.shopping_cart_outlined,
+            onTap: () => context.push('/cart'),
+            badgeCount: 2,
+          ),
+          const SizedBox(width: 12),
+          _buildActionIcon(
+            context,
+            icon: Icons.chat_bubble_outline_rounded,
+            onTap: () => context.push('/messages'),
+            badgeCount: mockConversations.fold<int>(
+              0,
+              (sum, c) => sum + c.unreadCount,
             ),
           ),
+          const SizedBox(width: 16),
         ],
       ),
       body: SingleChildScrollView(
@@ -129,13 +112,6 @@ class ProfilePage extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.person_outline_rounded,
-                    title: 'My Account',
-                    onTap: () => context.push('/profile/account'),
-                  ),
-                  const Divider(height: 1),
                   _buildMenuItem(
                     context,
                     icon: Icons.notifications_none_rounded,
@@ -220,6 +196,54 @@ class ProfilePage extends StatelessWidget {
             const SizedBox(height: 60), // Spacing for fab/bottom nav
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildActionIcon(
+    BuildContext context, {
+    required IconData icon,
+    required VoidCallback onTap,
+    int? badgeCount,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+            ),
+            child: Icon(icon, color: cs.onSurfaceVariant, size: 24),
+          ),
+          if (badgeCount != null && badgeCount > 0)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

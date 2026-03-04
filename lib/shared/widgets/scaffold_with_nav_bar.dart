@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 class ScaffoldWithNavBar extends StatelessWidget {
-  /// The navigation shell and container for the branch Navigators.
   const ScaffoldWithNavBar({required this.navigationShell, Key? key})
     : super(key: key ?? const ValueKey<String>('ScaffoldWithNavBar'));
 
@@ -44,7 +43,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
               selectedColor: selectedColor,
               unselectedColor: unselectedColor,
             ),
-            // Sell (center circle button with label)
+            // Sell (center circle FAB)
             GestureDetector(
               onTap: () => _goBranch(1),
               child: Column(

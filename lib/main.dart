@@ -16,6 +16,8 @@ import 'features/cart/cart_page.dart';
 import 'features/checkout/checkout_page.dart';
 import 'features/profile/order_status_page.dart';
 import 'features/profile/order_history_page.dart';
+import 'features/chat/chat_inbox_page.dart';
+import 'features/chat/chat_room_page.dart';
 
 import 'shared/widgets/scaffold_with_nav_bar.dart';
 
@@ -76,6 +78,51 @@ final _router = GoRouter(
       path: '/checkout',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const CheckoutPage(),
+    ),
+    // Chat inbox (push from anywhere)
+    GoRoute(
+      path: '/messages',
+      parentNavigatorKey: _rootNavigatorKey,
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: const ChatInboxPage(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          final tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: Curves.easeInOutCubic));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    ),
+    // Chat room (push from home header chat icon or inbox)
+    GoRoute(
+      path: '/chat/:id',
+      parentNavigatorKey: _rootNavigatorKey,
+      pageBuilder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: ChatRoomPage(conversationId: id),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            final tween = Tween(
+              begin: begin,
+              end: end,
+            ).chain(CurveTween(curve: Curves.easeInOutCubic));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+        );
+      },
     ),
     GoRoute(
       path: '/admin/login',
@@ -166,6 +213,7 @@ final _router = GoRouter(
             ),
           ],
         ),
+
         StatefulShellBranch(
           navigatorKey: _shellNavigatorProfileKey,
           routes: [

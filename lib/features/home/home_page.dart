@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../chat/chat_models.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,6 +13,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   // --- Search State ---
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  bool _searchFocused = false;
   List<Product> _filteredProducts = mockProducts;
 
   // --- Filter State ---
@@ -27,8 +30,17 @@ class _HomePageState extends State<HomePage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _searchFocus.addListener(() {
+      setState(() => _searchFocused = _searchFocus.hasFocus);
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -681,126 +693,172 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildStickyHeader(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final showFilter = _searchController.text.isNotEmpty || _searchFocused;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      color: Theme.of(context).colorScheme.surface,
-      child: Row(
+      color: cs.surface,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Column(
         children: [
-          // Search Bar
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              onSubmitted: _onSearchSubmitted,
-              onChanged: (value) {
-                if (value.isEmpty) {
-                  setState(() => _filteredProducts = mockProducts);
-                }
-              },
-              decoration: InputDecoration(
-                hintText: 'Search textbooks, gear...',
-                hintStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                // Search icon on the left — tapping it submits the search
-                prefixIcon: GestureDetector(
-                  onTap: () => _onSearchSubmitted(_searchController.text),
-                  child: Icon(
-                    Icons.search,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                // Camera icon on the right — inside the pill
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    Icons.camera_alt_outlined,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  onPressed: () {
-                    // Camera / QR scanner action
-                  },
-                ),
-                filled: true,
-                fillColor: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24.0),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24.0),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24.0),
-                  borderSide: BorderSide(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 1.5,
-                  ),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Filter Button
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _hasActiveFilters
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.5),
-            ),
-            child: IconButton(
-              icon: Icon(
-                Icons.tune_rounded,
-                color: _hasActiveFilters
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              onPressed: _showFilterModal,
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Cart Button
-          Stack(
+          Row(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.shopping_cart_outlined),
-                  onPressed: () => context.push('/cart'),
+              // ── Search Bar ──────────────────────────────────────
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocus,
+                  onSubmitted: _onSearchSubmitted,
+                  onChanged: (value) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search textbooks, gear...',
+                    hintStyle: TextStyle(color: cs.onSurfaceVariant),
+                    prefixIcon: Icon(Icons.search, color: cs.onSurfaceVariant),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: cs.onSurfaceVariant,
+                              size: 18,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _filteredProducts = mockProducts);
+                            },
+                          )
+                        : Icon(Icons.camera_alt_outlined, color: cs.primary),
+                    filled: true,
+                    fillColor: cs.surfaceContainerHighest.withValues(
+                      alpha: 0.5,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24.0),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
                 ),
               ),
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Colors.redAccent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Text(
-                    '2',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+              const SizedBox(width: 12),
+              // ── Cart Button ─────────────────────────────────────
+              _buildHeaderIcon(
+                context,
+                icon: Icons.shopping_cart_outlined,
+                onTap: () => context.push('/cart'),
+                badgeCount: 2,
+              ),
+              const SizedBox(width: 12),
+              // ── Chat Button ─────────────────────────────────────
+              _buildHeaderIcon(
+                context,
+                icon: Icons.chat_bubble_outline_rounded,
+                onTap: () => context.push('/messages'),
+                badgeCount: mockConversations.fold<int>(
+                  0,
+                  (sum, c) => sum + c.unreadCount,
                 ),
               ),
             ],
           ),
+          // ── Filter Row (Conditional) ────────────────────────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.fastOutSlowIn,
+            child: showFilter
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Row(
+                      children: [
+                        ActionChip(
+                          avatar: Icon(
+                            Icons.tune_rounded,
+                            size: 16,
+                            color: _hasActiveFilters
+                                ? cs.onPrimary
+                                : cs.primary,
+                          ),
+                          label: Text(
+                            _hasActiveFilters ? 'Filters Active' : 'Filter',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _hasActiveFilters
+                                  ? cs.onPrimary
+                                  : cs.primary,
+                            ),
+                          ),
+                          onPressed: _showFilterModal,
+                          backgroundColor: _hasActiveFilters
+                              ? cs.primary
+                              : cs.primaryContainer.withValues(alpha: 0.5),
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                        if (_hasActiveFilters) ...[
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: _resetFilters,
+                            child: Text(
+                              'Clear all',
+                              style: TextStyle(color: cs.error, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderIcon(
+    BuildContext context, {
+    required IconData icon,
+    required VoidCallback onTap,
+    int? badgeCount,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+            ),
+            child: Icon(icon, color: cs.onSurfaceVariant, size: 24),
+          ),
+          if (badgeCount != null && badgeCount > 0)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

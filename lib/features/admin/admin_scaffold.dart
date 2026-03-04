@@ -99,15 +99,6 @@ class AdminScaffold extends StatelessWidget {
             },
           ),
           _NavItem(
-            icon: Icons.inventory_2_rounded,
-            label: 'Listings',
-            isSelected: navigationShell.currentIndex == 2,
-            onTap: () {
-              navigationShell.goBranch(2);
-              if (isMobile) Navigator.pop(context);
-            },
-          ),
-          _NavItem(
             icon: Icons.receipt_long_rounded,
             label: 'Orders',
             isSelected: navigationShell.currentIndex == 3,

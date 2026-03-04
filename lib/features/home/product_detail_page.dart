@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
+import '../chat/chat_models.dart';
 import 'package:go_router/go_router.dart';
 
 class ProductDetailPage extends StatelessWidget {
@@ -210,7 +211,18 @@ class ProductDetailPage extends StatelessWidget {
                           IconButton(
                             icon: const Icon(Icons.chat_bubble_outline_rounded),
                             color: Theme.of(context).colorScheme.primary,
-                            onPressed: () {},
+                            tooltip: 'Chat with seller',
+                            onPressed: () {
+                              // Find existing convo for this product, else go to inbox
+                              final convo = mockConversations
+                                  .where((c) => c.product.id == product.id)
+                                  .firstOrNull;
+                              if (convo != null) {
+                                context.push('/chat/${convo.id}');
+                              } else {
+                                context.push('/messages');
+                              }
+                            },
                           ),
                         ],
                       ),
