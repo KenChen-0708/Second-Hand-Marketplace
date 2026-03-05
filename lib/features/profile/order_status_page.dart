@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/models.dart';
 
 class OrderStatusPage extends StatelessWidget {
-  const OrderStatusPage({super.key});
+  final Object? order;
+  const OrderStatusPage({super.key, this.order});
 
   @override
   Widget build(BuildContext context) {
+    Order? currentOrder = order as Order?;
+    bool isHandedOver = currentOrder?.status == 'Completed/Handed Over';
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -61,10 +65,12 @@ class OrderStatusPage extends StatelessWidget {
                   ),
                   _buildStatusItem(
                     context,
-                    title: 'Awaiting Handover',
-                    subtitle: 'Meet the seller at the agreed location.',
-                    time: 'Pending',
-                    isCompleted: false,
+                    title: isHandedOver ? 'Handed Over' : 'Awaiting Handover',
+                    subtitle: isHandedOver
+                        ? 'You have successfully received the item.'
+                        : 'Meet the seller at the agreed location.',
+                    time: isHandedOver ? 'Completed' : 'Pending',
+                    isCompleted: isHandedOver,
                     isLast: true,
                   ),
                   const SizedBox(height: 40),
@@ -97,6 +103,37 @@ class OrderStatusPage extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (isHandedOver) ...[
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () {
+                          // Navigate to Seller Review page
+                          context.push(
+                            '/profile/seller-review',
+                            extra: currentOrder?.product,
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: const Color(
+                            0xFF10B981,
+                          ), // Emerald Green
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: const Text(
+                          'Rate Seller',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -18,6 +18,9 @@ import 'features/profile/order_status_page.dart';
 import 'features/profile/order_history_page.dart';
 import 'features/chat/chat_inbox_page.dart';
 import 'features/chat/chat_room_page.dart';
+import 'features/profile/seller_review_page.dart';
+import 'features/profile/seller_profile_page.dart';
+import 'models/models.dart';
 
 import 'shared/widgets/scaffold_with_nav_bar.dart';
 
@@ -122,6 +125,14 @@ final _router = GoRouter(
             );
           },
         );
+      },
+    ),
+    GoRoute(
+      path: '/seller/:id',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return SellerProfilePage(sellerId: id);
       },
     ),
     GoRoute(
@@ -249,12 +260,21 @@ final _router = GoRouter(
                 GoRoute(
                   path: 'order-status',
                   parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const OrderStatusPage(),
+                  builder: (context, state) => OrderStatusPage(
+                    order: state
+                        .extra, // Can be null, will cast in OrderStatusPage
+                  ),
                 ),
                 GoRoute(
                   path: 'orders',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const OrderHistoryPage(),
+                ),
+                GoRoute(
+                  path: 'seller-review',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) =>
+                      SellerReviewPage(product: state.extra as Product?),
                 ),
               ],
             ),

@@ -123,7 +123,7 @@ class OrderHistoryPage extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(24),
-          onTap: () => context.push('/profile/order-status'),
+          onTap: () => context.push('/profile/order-status', extra: order),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -208,6 +208,34 @@ class OrderHistoryPage extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (order.status == 'Completed/Handed Over') ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () {
+                        context.push(
+                          '/profile/seller-review',
+                          extra: order.product,
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Color(0xFF10B981)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Review Seller',
+                        style: TextStyle(
+                          color: Color(0xFF10B981),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

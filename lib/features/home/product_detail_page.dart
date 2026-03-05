@@ -146,66 +146,77 @@ class ProductDetailPage extends StatelessWidget {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundImage: NetworkImage(
-                              product.seller.avatarUrl,
+                          GestureDetector(
+                            onTap: () =>
+                                context.push('/seller/${product.seller.id}'),
+                            child: Hero(
+                              tag: 'seller_avatar_${product.seller.id}',
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundImage: NetworkImage(
+                                  product.seller.avatarUrl,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  product.seller.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
+                            child: GestureDetector(
+                              onTap: () =>
+                                  context.push('/seller/${product.seller.id}'),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    product.seller.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.star_rounded,
-                                      color: Colors.amber,
-                                      size: 16,
-                                    ),
-                                    const Icon(
-                                      Icons.star_rounded,
-                                      color: Colors.amber,
-                                      size: 16,
-                                    ),
-                                    const Icon(
-                                      Icons.star_rounded,
-                                      color: Colors.amber,
-                                      size: 16,
-                                    ),
-                                    const Icon(
-                                      Icons.star_rounded,
-                                      color: Colors.amber,
-                                      size: 16,
-                                    ),
-                                    const Icon(
-                                      Icons.star_half_rounded,
-                                      color: Colors.amber,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '4.8 (24)',
-                                      style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(alpha: 0.6),
-                                        fontSize: 12,
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        color: Colors.amber,
+                                        size: 16,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        color: Colors.amber,
+                                        size: 16,
+                                      ),
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        color: Colors.amber,
+                                        size: 16,
+                                      ),
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        color: Colors.amber,
+                                        size: 16,
+                                      ),
+                                      const Icon(
+                                        Icons.star_half_rounded,
+                                        color: Colors.amber,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '4.8 (24)',
+                                        style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.6),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           IconButton(
