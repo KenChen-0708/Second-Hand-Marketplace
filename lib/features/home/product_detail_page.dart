@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 import '../chat/chat_models.dart';
 import 'package:go_router/go_router.dart';
 
@@ -13,6 +14,13 @@ class ProductDetailPage extends StatelessWidget {
     final product = mockProducts.firstWhere(
       (p) => p.id == productId,
       orElse: () => mockProducts.first,
+    );
+
+    // Look up seller from product's sellerId
+    final sellers = [mockUserBuyer, mockUserSeller1, mockUserSeller2];
+    final seller = sellers.firstWhere(
+      (u) => u.id == product.sellerId,
+      orElse: () => mockUserSeller1,
     );
 
     return Scaffold(
@@ -61,7 +69,10 @@ class ProductDetailPage extends StatelessWidget {
                 flexibleSpace: FlexibleSpaceBar(
                   background: Hero(
                     tag: 'product_image_${product.id}',
-                    child: Image.network(product.imageUrl, fit: BoxFit.cover),
+                    child: Image.network(
+                      product.imageUrl ?? 'https://via.placeholder.com/400',
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),
@@ -148,13 +159,13 @@ class ProductDetailPage extends StatelessWidget {
                         children: [
                           GestureDetector(
                             onTap: () =>
-                                context.push('/seller/${product.seller.id}'),
+                                context.push('/seller/${product.sellerId}'),
                             child: Hero(
-                              tag: 'seller_avatar_${product.seller.id}',
+                              tag: 'seller_avatar_${product.sellerId}',
                               child: CircleAvatar(
                                 radius: 24,
                                 backgroundImage: NetworkImage(
-                                  product.seller.avatarUrl,
+                                  seller.avatarUrl ?? 'https://i.pravatar.cc/150',
                                 ),
                               ),
                             ),
@@ -163,12 +174,12 @@ class ProductDetailPage extends StatelessWidget {
                           Expanded(
                             child: GestureDetector(
                               onTap: () =>
-                                  context.push('/seller/${product.seller.id}'),
+                                  context.push('/seller/${product.sellerId}'),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    product.seller.name,
+                                    seller.name,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,

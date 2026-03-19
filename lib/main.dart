@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'state/state.dart';
+import 'models/models.dart';
 
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
@@ -20,7 +25,6 @@ import 'features/chat/chat_inbox_page.dart';
 import 'features/chat/chat_room_page.dart';
 import 'features/profile/seller_review_page.dart';
 import 'features/profile/seller_profile_page.dart';
-import 'models/models.dart';
 
 import 'shared/widgets/scaffold_with_nav_bar.dart';
 
@@ -32,7 +36,18 @@ import 'features/admin/admin_listing_moderation_page.dart';
 import 'features/admin/admin_order_management_page.dart';
 import 'features/admin/admin_notification_center_page.dart';
 
-void main() {
+const String supabaseUrl = 'https://yqvgeownycvbzelukmfp.supabase.co';
+const String supabaseKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxdmdlb3dueWN2YnplbHVrbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzc2MjcsImV4cCI6MjA4NzgxMzYyN30.1OOTEJnPr7qXWLGdSUNmydvK6_UFSB38mkJbQnv1Qp0';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseKey,
+  );
+
   runApp(const MyApp());
 }
 
@@ -65,9 +80,12 @@ final _shellNavigatorAdminNotificationsKey = GlobalKey<NavigatorState>(
 
 final _router = GoRouter(
   navigatorKey: _rootNavigatorKey,
-  initialLocation: '/', // Start at Login
+  initialLocation: '/',
   routes: [
-    GoRoute(path: '/', builder: (context, state) => const LoginPage()),
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const LoginPage(),
+    ),
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterPage(),
@@ -82,7 +100,6 @@ final _router = GoRouter(
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const CheckoutPage(),
     ),
-    // Chat inbox (push from anywhere)
     GoRoute(
       path: '/messages',
       parentNavigatorKey: _rootNavigatorKey,
@@ -96,6 +113,7 @@ final _router = GoRouter(
             begin: begin,
             end: end,
           ).chain(CurveTween(curve: Curves.easeInOutCubic));
+
           return SlideTransition(
             position: animation.drive(tween),
             child: child,
@@ -103,7 +121,6 @@ final _router = GoRouter(
         },
       ),
     ),
-    // Chat room (push from home header chat icon or inbox)
     GoRoute(
       path: '/chat/:id',
       parentNavigatorKey: _rootNavigatorKey,
@@ -119,6 +136,7 @@ final _router = GoRouter(
               begin: begin,
               end: end,
             ).chain(CurveTween(curve: Curves.easeInOutCubic));
+
             return SlideTransition(
               position: animation.drive(tween),
               child: child,
@@ -139,6 +157,7 @@ final _router = GoRouter(
       path: '/admin/login',
       builder: (context, state) => const AdminLoginPage(),
     ),
+
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return AdminScaffold(navigationShell: navigationShell);
@@ -191,6 +210,7 @@ final _router = GoRouter(
         ),
       ],
     ),
+
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return ScaffoldWithNavBar(navigationShell: navigationShell);
@@ -224,7 +244,6 @@ final _router = GoRouter(
             ),
           ],
         ),
-
         StatefulShellBranch(
           navigatorKey: _shellNavigatorProfileKey,
           routes: [
@@ -261,8 +280,7 @@ final _router = GoRouter(
                   path: 'order-status',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => OrderStatusPage(
-                    order: state
-                        .extra, // Can be null, will cast in OrderStatusPage
+                    order: state.extra,
                   ),
                 ),
                 GoRoute(
@@ -273,8 +291,9 @@ final _router = GoRouter(
                 GoRoute(
                   path: 'seller-review',
                   parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) =>
-                      SellerReviewPage(product: state.extra as Product?),
+                  builder: (context, state) => SellerReviewPage(
+                    product: state.extra as ProductModel?,
+                  ),
                 ),
               ],
             ),
@@ -290,73 +309,91 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // "Clean-tech" aesthetic (Emerald Green and crisp whites)
-    const primaryColor = Color(0xFF10B981); // Emerald Green
-    const scaffoldBgColor = Color(0xFFF9FAFB); // Crisp off-white
-    const surfaceColor = Colors.white; // Pure white for cards
+    const primaryColor = Color(0xFF10B981);
+    const scaffoldBgColor = Color(0xFFF9FAFB);
+    const surfaceColor = Colors.white;
 
-    return MaterialApp.router(
-      debugShowCheckedModeBanner: false,
-      title: 'Campus Marketplace',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme:
-            ColorScheme.fromSeed(
-              seedColor: primaryColor,
-              primary: primaryColor,
-              surface: surfaceColor,
-              brightness: Brightness.light,
-              primaryContainer: primaryColor.withValues(alpha: 0.1),
-              onPrimaryContainer: primaryColor,
-            ).copyWith(
-              surface: surfaceColor,
-              onSurface: const Color(0xFF1F2937), // Dark text (Gray 800)
-              surfaceContainerHighest: const Color(
-                0xFFF3F4F6,
-              ), // Gray 100 for subtle fills
-              outlineVariant: const Color(0xFFD1D5DB), // Gray 300 for borders
-            ),
-        scaffoldBackgroundColor: scaffoldBgColor,
-        fontFamily: 'Roboto', // Modern sans-serif default or any injected
-        textTheme: const TextTheme(
-          headlineSmall: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF111827),
-          ), // Gray 900
-          titleLarge: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF111827),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => UserState()),
+        ChangeNotifierProvider(create: (_) => CategoryState()),
+        ChangeNotifierProvider(create: (_) => ProductState()),
+        ChangeNotifierProvider(create: (_) => CartItemState()),
+        ChangeNotifierProvider(create: (_) => OrderState()),
+        ChangeNotifierProvider(create: (_) => PaymentState()),
+        ChangeNotifierProvider(create: (_) => ChatConversationState()),
+        ChangeNotifierProvider(create: (_) => ChatMessageState()),
+        ChangeNotifierProvider(create: (_) => AppNotificationState()),
+        ChangeNotifierProvider(create: (_) => ReviewState()),
+        ChangeNotifierProvider(create: (_) => SellerProfileState()),
+        ChangeNotifierProvider(create: (_) => FavoriteState()),
+        ChangeNotifierProvider(create: (_) => DisputeState()),
+        ChangeNotifierProvider(create: (_) => AdminLogState()),
+      ],
+      child: MaterialApp.router(
+        debugShowCheckedModeBanner: false,
+        title: 'Campus Marketplace',
+        routerConfig: _router,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: primaryColor,
+            primary: primaryColor,
+            surface: surfaceColor,
+            brightness: Brightness.light,
+            primaryContainer: primaryColor.withValues(alpha: 0.1),
+            onPrimaryContainer: primaryColor,
+          ).copyWith(
+            surface: surfaceColor,
+            onSurface: const Color(0xFF1F2937),
+            surfaceContainerHighest: const Color(0xFFF3F4F6),
+            outlineVariant: const Color(0xFFD1D5DB),
           ),
-          bodyLarge: TextStyle(color: Color(0xFF374151)), // Gray 700
-          bodyMedium: TextStyle(color: Color(0xFF4B5563)), // Gray 600
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            backgroundColor: primaryColor,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
+          scaffoldBackgroundColor: scaffoldBgColor,
+          fontFamily: 'Roboto',
+          textTheme: const TextTheme(
+            headlineSmall: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF111827),
+            ),
+            titleLarge: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF111827),
+            ),
+            bodyLarge: TextStyle(
+              color: Color(0xFF374151),
+            ),
+            bodyMedium: TextStyle(
+              color: Color(0xFF4B5563),
+            ),
+          ),
+          filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: const Color(0xFFF3F4F6),
+            border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
             ),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFFF3F4F6), // Gray 100
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: primaryColor, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 16,
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: primaryColor, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 16,
+            ),
           ),
         ),
       ),
-      routerConfig: _router,
     );
   }
 }

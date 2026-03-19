@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -11,7 +12,7 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage> {
   // Mock cart items same as CartPage
-  final List<Product> _checkoutItems = [
+  final List<ProductModel> _checkoutItems = [
     mockProducts[0], // Calculus Textbook
     mockProducts[1], // Sony Headphones
   ];
@@ -215,7 +216,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Image.network(
-                      product.imageUrl,
+                      product.imageUrl ?? 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=200',
                       width: 50,
                       height: 50,
                       fit: BoxFit.cover,

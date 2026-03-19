@@ -1,4 +1,5 @@
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 // ─────────────────────────────────────────────────────
 // ChatMessage model
@@ -24,8 +25,8 @@ class ChatMessage {
 // ─────────────────────────────────────────────────────
 class ChatConversation {
   final String id;
-  final User otherUser;
-  final Product product;
+  final UserModel otherUser;
+  final ProductModel product;
   final List<ChatMessage> messages;
   bool dealAgreed;
 
@@ -65,7 +66,7 @@ String relativeTime(DateTime dt) {
 final List<ChatConversation> mockConversations = [
   ChatConversation(
     id: 'c1',
-    otherUser: mockSeller1,
+    otherUser: mockUserSeller1,
     product: mockProducts[0], // Calculus textbook
     dealAgreed: false,
     messages: [
@@ -79,7 +80,7 @@ final List<ChatConversation> mockConversations = [
       ),
       ChatMessage(
         id: 'm2',
-        senderId: mockSeller1.id,
+        senderId: mockUserSeller1.id,
         text: 'Yes it is! Just listed it yesterday.',
         timestamp: DateTime.now().subtract(
           const Duration(hours: 2, minutes: 15),
@@ -94,7 +95,7 @@ final List<ChatConversation> mockConversations = [
       ChatMessage(
         id: 'm4',
         // starts with 'unread_' so our hasUnread logic picks it up
-        senderId: 'unread_${mockSeller1.id}',
+        senderId: 'unread_${mockUserSeller1.id}',
         text: 'I can do \$40, final offer 😊',
         timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
       ),
@@ -102,13 +103,13 @@ final List<ChatConversation> mockConversations = [
   ),
   ChatConversation(
     id: 'c2',
-    otherUser: mockSeller2,
+    otherUser: mockUserSeller2,
     product: mockProducts[1], // Sony headphones
     dealAgreed: true,
     messages: [
       ChatMessage(
         id: 'm10',
-        senderId: mockSeller2.id,
+        senderId: mockUserSeller2.id,
         text: 'Hey, I saw you were interested in the headphones.',
         timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
       ),
@@ -120,7 +121,7 @@ final List<ChatConversation> mockConversations = [
       ),
       ChatMessage(
         id: 'm12',
-        senderId: mockSeller2.id,
+        senderId: mockUserSeller2.id,
         text: 'Absolutely, noise cancellation works perfectly.',
         timestamp: DateTime.now().subtract(const Duration(days: 1)),
       ),
@@ -132,7 +133,7 @@ final List<ChatConversation> mockConversations = [
       ),
       ChatMessage(
         id: 'm14',
-        senderId: mockSeller2.id,
+        senderId: mockUserSeller2.id,
         text: 'Perfect! Let me know when you\'re ready to meet 🎉',
         timestamp: DateTime.now().subtract(const Duration(hours: 18)),
       ),
@@ -140,7 +141,7 @@ final List<ChatConversation> mockConversations = [
   ),
   ChatConversation(
     id: 'c3',
-    otherUser: mockSeller1,
+    otherUser: mockUserSeller1,
     product: mockProducts[2], // Keyboard
     dealAgreed: false,
     messages: [
@@ -152,7 +153,7 @@ final List<ChatConversation> mockConversations = [
       ),
       ChatMessage(
         id: 'm21',
-        senderId: mockSeller1.id,
+        senderId: mockUserSeller1.id,
         text: 'Cherry MX Brown – great for both typing and gaming!',
         timestamp: DateTime.now().subtract(const Duration(days: 2, hours: 22)),
       ),
@@ -160,13 +161,13 @@ final List<ChatConversation> mockConversations = [
   ),
   ChatConversation(
     id: 'c4',
-    otherUser: mockSeller2,
+    otherUser: mockUserSeller2,
     product: mockProducts[3], // iPad Pro
     dealAgreed: false,
     messages: [
       ChatMessage(
         id: 'm30',
-        senderId: 'unread_${mockSeller2.id}',
+        senderId: 'unread_${mockUserSeller2.id}',
         text: 'Hey are you still looking for the iPad?',
         timestamp: DateTime.now().subtract(const Duration(minutes: 45)),
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 import '../chat/chat_models.dart';
 
 class HomePage extends StatefulWidget {
@@ -15,7 +16,7 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   bool _searchFocused = false;
-  List<Product> _filteredProducts = mockProducts;
+  List<ProductModel> _filteredProducts = mockProducts;
 
   // --- Filter State ---
   RangeValues _priceRange = const RangeValues(0, 600);
@@ -45,6 +46,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   // --- Search Logic ---
+  String _getCategoryName(String? categoryId) {
+    if (categoryId == null) return 'Uncategorized';
+    final category = mockCategories.firstWhere(
+      (c) => c.id == categoryId,
+      orElse: () => mockCategories[0],
+    );
+    return category.name;
+  }
+
   void _onSearchSubmitted(String query) {
     setState(() {
       if (query.trim().isEmpty) {
@@ -53,7 +63,7 @@ class _HomePageState extends State<HomePage> {
         final lowerQuery = query.trim().toLowerCase();
         _filteredProducts = mockProducts.where((p) {
           return p.title.toLowerCase().contains(lowerQuery) ||
-              p.category.toLowerCase().contains(lowerQuery) ||
+              _getCategoryName(p.categoryId).toLowerCase().contains(lowerQuery) ||
               p.condition.toLowerCase().contains(lowerQuery);
         }).toList();
       }
@@ -593,14 +603,14 @@ class _HomePageState extends State<HomePage> {
       final inPrice = p.price >= price.start && p.price <= price.end;
       final inCondition =
           conditions.isEmpty || conditions.contains(p.condition);
-      final inCategory = categories.isEmpty || categories.contains(p.category);
+      final inCategory = categories.isEmpty || categories.contains(_getCategoryName(p.categoryId));
       return inPrice && inCondition && inCategory;
     }).length;
   }
 
   // ── Apply all filters + sort to _filteredProducts ───────────────────────
   void _applyAllFilters() {
-    List<Product> result = mockProducts.where((p) {
+    List<ProductModel> result = mockProducts.where((p) {
       final inPrice =
           p.price >= _priceRange.start && p.price <= _priceRange.end;
       final inCondition =
@@ -608,7 +618,7 @@ class _HomePageState extends State<HomePage> {
           _selectedConditions.contains(p.condition);
       final inCategory =
           _selectedCategories.isEmpty ||
-          _selectedCategories.contains(p.category);
+          _selectedCategories.contains(_getCategoryName(p.categoryId));
       return inPrice && inCondition && inCategory;
     }).toList();
 
@@ -1022,7 +1032,7 @@ class _HomePageState extends State<HomePage> {
                       child: Hero(
                         tag: 'product_image_${product.id}',
                         child: Image.network(
-                          product.imageUrl,
+                          product.imageUrl ?? 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800',
                           fit: BoxFit.cover,
                         ),
                       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class AdminListingModerationPage extends StatefulWidget {
   const AdminListingModerationPage({super.key});
@@ -11,7 +12,7 @@ class AdminListingModerationPage extends StatefulWidget {
 
 class _AdminListingModerationPageState
     extends State<AdminListingModerationPage> {
-  late List<Product> _listings;
+  late List<ProductModel> _listings;
   final Set<String> _flaggedIds = {};
 
   @override
@@ -67,7 +68,7 @@ class _AdminListingModerationPageState
     );
   }
 
-  Widget _buildListingCard(Product product, int index) {
+  Widget _buildListingCard(ProductModel product, int index) {
     bool isReported = _flaggedIds.contains(product.id);
     return Container(
       decoration: BoxDecoration(
@@ -93,7 +94,7 @@ class _AdminListingModerationPageState
                 top: Radius.circular(16),
               ),
               child: Image.network(
-                product.imageUrl,
+                product.imageUrl ?? 'https://via.placeholder.com/400',
                 width: double.infinity,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) => Container(
@@ -145,7 +146,7 @@ class _AdminListingModerationPageState
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Seller: ${product.seller.name}',
+                  'Seller: ${_getSeller(product).name}',
                   style: const TextStyle(fontSize: 12, color: Colors.black54),
                 ),
                 const SizedBox(height: 8),
@@ -188,7 +189,15 @@ class _AdminListingModerationPageState
     );
   }
 
-  void _confirmDelete(Product product, int index) {
+  UserModel _getSeller(ProductModel product) {
+    final sellers = [mockUserBuyer, mockUserSeller1, mockUserSeller2];
+    return sellers.firstWhere(
+      (u) => u.id == product.sellerId,
+      orElse: () => mockUserSeller1,
+    );
+  }
+
+  void _confirmDelete(ProductModel product, int index) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -217,7 +226,7 @@ class _AdminListingModerationPageState
     );
   }
 
-  void _confirmFlag(Product product, int index) {
+  void _confirmFlag(ProductModel product, int index) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

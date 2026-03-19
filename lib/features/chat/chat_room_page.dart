@@ -124,7 +124,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
               CircleAvatar(
                 radius: 18,
                 backgroundImage: NetworkImage(
-                  _conversation.otherUser.avatarUrl,
+                  _conversation.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
                 ),
                 backgroundColor: cs.primaryContainer,
               ),
@@ -157,7 +157,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: Image.network(
-                            product.imageUrl,
+                            product.imageUrl ?? 'https://via.placeholder.com/400',
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) =>
                                 Icon(Icons.image, size: 10, color: cs.primary),
@@ -227,7 +227,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                               _conversation.messages[i + 1].senderId.startsWith(
                                 'unread_',
                               )),
-                      otherAvatarUrl: _conversation.otherUser.avatarUrl,
+                      otherAvatarUrl: _conversation.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
                     ),
                   ],
                 );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class MyAccountPage extends StatelessWidget {
   const MyAccountPage({super.key});
@@ -26,7 +27,7 @@ class MyAccountPage extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 60,
-                    backgroundImage: NetworkImage(mockUser.avatarUrl),
+                    backgroundImage: NetworkImage(mockUserBuyer.avatarUrl ?? 'https://i.pravatar.cc/150'),
                   ),
                   Positioned(
                     bottom: 0,
@@ -54,12 +55,12 @@ class MyAccountPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            _buildTextField(context, 'Full Name', mockUser.name),
+            _buildTextField(context, 'Full Name', mockUserBuyer.name),
             const SizedBox(height: 16),
             _buildTextField(
               context,
               'Student Email',
-              mockUser.email,
+              mockUserBuyer.email,
               enabled: false,
             ),
             const SizedBox(height: 16),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class CartPage extends StatefulWidget {
   const CartPage({super.key});
@@ -11,7 +12,7 @@ class CartPage extends StatefulWidget {
 
 class _CartPageState extends State<CartPage> {
   // Mock cart items — in a real app these would come from app state / a provider
-  final List<Product> _cartItems = [
+  final List<ProductModel> _cartItems = [
     mockProducts[0], // Calculus Textbook
     mockProducts[1], // Sony Headphones
   ];
@@ -158,7 +159,7 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
-  Widget _buildCartItem(BuildContext context, Product product, int index) {
+  Widget _buildCartItem(BuildContext context, ProductModel product, int index) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
@@ -180,7 +181,7 @@ class _CartPageState extends State<CartPage> {
               left: Radius.circular(20),
             ),
             child: Image.network(
-              product.imageUrl,
+              product.imageUrl ?? 'https://via.placeholder.com/90',
               width: 90,
               height: 90,
               fit: BoxFit.cover,

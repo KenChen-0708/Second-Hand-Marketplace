@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class MyListingsPage extends StatelessWidget {
   const MyListingsPage({super.key});
@@ -40,7 +41,7 @@ class MyListingsPage extends StatelessWidget {
 
   Widget _buildListingTab(
     BuildContext context,
-    List<Product> products, {
+    List<ProductModel> products, {
     bool isSold = false,
   }) {
     if (products.isEmpty) {
@@ -65,7 +66,7 @@ class MyListingsPage extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.network(
-                    product.imageUrl,
+                    product.imageUrl ?? 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=200',
                     width: 80,
                     height: 80,
                     fit: BoxFit.cover,

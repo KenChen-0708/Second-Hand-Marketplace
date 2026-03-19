@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class SellerReviewPage extends StatefulWidget {
-  final Product? product;
+  final ProductModel? product;
 
   const SellerReviewPage({super.key, this.product});
 
@@ -35,7 +36,13 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
   Widget build(BuildContext context) {
     // Fallback to mock product if none is provided
     final product = widget.product ?? mockProducts[0];
-    final seller = product.seller;
+    
+    // Look up seller from product's sellerId
+    final sellers = [mockUserBuyer, mockUserSeller1, mockUserSeller2];
+    final seller = sellers.firstWhere(
+      (u) => u.id == product.sellerId,
+      orElse: () => mockUserSeller1,
+    );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -140,7 +147,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
     );
   }
 
-  Widget _buildTopSection(Product product, User seller) {
+  Widget _buildTopSection(ProductModel product, UserModel seller) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -157,7 +164,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Image.network(
-              product.imageUrl,
+              product.imageUrl ?? 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=200',
               width: 60,
               height: 60,
               fit: BoxFit.cover,
@@ -177,7 +184,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
                   children: [
                     CircleAvatar(
                       radius: 12,
-                      backgroundImage: NetworkImage(seller.avatarUrl),
+                      backgroundImage: NetworkImage(seller.avatarUrl ?? 'https://i.pravatar.cc/150'),
                     ),
                     const SizedBox(width: 8),
                     Text(

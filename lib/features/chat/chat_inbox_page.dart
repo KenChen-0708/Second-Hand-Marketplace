@@ -169,7 +169,7 @@ class _ConversationTile extends StatelessWidget {
                   CircleAvatar(
                     radius: 28,
                     backgroundImage: NetworkImage(
-                      conversation.otherUser.avatarUrl,
+                      conversation.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
                     ),
                     backgroundColor: cs.surfaceContainerHighest,
                   ),
@@ -192,7 +192,7 @@ class _ConversationTile extends StatelessWidget {
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: Image.network(
-                        conversation.product.imageUrl,
+                        conversation.product.imageUrl ?? 'https://via.placeholder.com/400',
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           color: cs.primaryContainer,

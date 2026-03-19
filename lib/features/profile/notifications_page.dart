@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -68,7 +68,9 @@ class NotificationsPage extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            _formatDate(note.date),
+                            note.createdAt != null
+                            ? _formatDate(note.createdAt!)
+                            : '',
                             style: TextStyle(
                               color: Theme.of(
                                 context,

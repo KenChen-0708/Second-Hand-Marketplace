@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 // Mock Reviews
 class Review {
@@ -82,14 +83,14 @@ class _SellerProfilePageState extends State<SellerProfilePage>
   Widget build(BuildContext context) {
     // Find seller from mock data
     final seller = [
-      mockSeller1,
-      mockSeller2,
-      mockUser,
-    ].firstWhere((u) => u.id == widget.sellerId, orElse: () => mockSeller1);
+      mockUserSeller1,
+      mockUserSeller2,
+      mockUserBuyer,
+    ].firstWhere((u) => u.id == widget.sellerId, orElse: () => mockUserSeller1);
 
     // Find active listings
     final activeListings = mockProducts
-        .where((p) => p.seller.id == seller.id)
+        .where((p) => p.sellerId == seller.id)
         .toList();
 
     return Scaffold(
@@ -125,7 +126,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context, User seller) {
+  Widget _buildProfileHeader(BuildContext context, UserModel seller) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
@@ -185,7 +186,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
               tag: 'seller_avatar_${seller.id}',
               child: CircleAvatar(
                 radius: 48,
-                backgroundImage: NetworkImage(seller.avatarUrl),
+                backgroundImage: NetworkImage(seller.avatarUrl ?? 'https://i.pravatar.cc/150'),
               ),
             ),
             const SizedBox(height: 16),
@@ -241,7 +242,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
   }
 
   int activeListingsCount(String sellerId) {
-    return mockProducts.where((p) => p.seller.id == sellerId).length;
+    return mockProducts.where((p) => p.sellerId == sellerId).length;
   }
 
   Widget _buildMetricItem(
@@ -277,7 +278,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
   Widget _buildActiveListingsSliver(
     BuildContext context,
-    List<Product> activeListings,
+    List<ProductModel> activeListings,
   ) {
     if (activeListings.isEmpty) {
       return SliverFillRemaining(
@@ -344,7 +345,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                       child: Hero(
                         tag: 'product_image_${product.id}_profile',
                         child: Image.network(
-                          product.imageUrl,
+                          product.imageUrl ?? 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800',
                           fit: BoxFit.cover,
                         ),
                       ),

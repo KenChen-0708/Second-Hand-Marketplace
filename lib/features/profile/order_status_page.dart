@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class OrderStatusPage extends StatelessWidget {
   final Object? order;
   const OrderStatusPage({super.key, this.order});
 
+  ProductModel? _getProduct(String? productId) {
+    if (productId == null) return null;
+    try {
+      return mockProducts.firstWhere((p) => p.id == productId);
+    } catch (e) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    Order? currentOrder = order as Order?;
+    OrderModel? currentOrder = order as OrderModel?;
     bool isHandedOver = currentOrder?.status == 'Completed/Handed Over';
     return Scaffold(
       backgroundColor: Colors.white,
@@ -112,7 +122,7 @@ class OrderStatusPage extends StatelessWidget {
                           // Navigate to Seller Review page
                           context.push(
                             '/profile/seller-review',
-                            extra: currentOrder?.product,
+                            extra: _getProduct(currentOrder?.productId),
                           );
                         },
                         style: FilledButton.styleFrom(

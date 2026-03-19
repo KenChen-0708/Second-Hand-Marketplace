@@ -2,9 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 
 class OrderHistoryPage extends StatelessWidget {
   const OrderHistoryPage({super.key});
+
+  ProductModel? _getProduct(String productId) {
+    try {
+      return mockProducts.firstWhere((p) => p.id == productId);
+    } catch (e) {
+      return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +109,7 @@ class OrderHistoryPage extends StatelessWidget {
     );
   }
 
-  Widget _buildOrderCard(BuildContext context, Order order) {
+  Widget _buildOrderCard(BuildContext context, OrderModel order) {
     final dateFormat = DateFormat('MMM dd, yyyy');
 
     return Container(
@@ -135,7 +144,7 @@ class OrderHistoryPage extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Image.network(
-                        order.product.imageUrl,
+                        _getProduct(order.productId)?.imageUrl ?? 'https://via.placeholder.com/80',
                         width: 80,
                         height: 80,
                         fit: BoxFit.cover,
@@ -159,7 +168,9 @@ class OrderHistoryPage extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                dateFormat.format(order.orderDate),
+                                order.createdAt != null
+                                    ? dateFormat.format(order.createdAt!)
+                                    : '',
                                 style: TextStyle(
                                   color: Theme.of(context).colorScheme.onSurface
                                       .withValues(alpha: 0.5),
@@ -170,7 +181,7 @@ class OrderHistoryPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            order.product.title,
+                            _getProduct(order.productId)?.title ?? 'N/A',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -216,7 +227,7 @@ class OrderHistoryPage extends StatelessWidget {
                       onPressed: () {
                         context.push(
                           '/profile/seller-review',
-                          extra: order.product,
+                          extra: _getProduct(order.productId),
                         );
                       },
                       style: OutlinedButton.styleFrom(

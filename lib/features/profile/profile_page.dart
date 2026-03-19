@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 import '../chat/chat_models.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -47,21 +48,21 @@ class ProfilePage extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 56,
-                    backgroundImage: NetworkImage(mockUser.avatarUrl),
+                    backgroundImage: NetworkImage(mockUserBuyer.avatarUrl ?? 'https://i.pravatar.cc/150'),
                     backgroundColor: Theme.of(
                       context,
                     ).colorScheme.surfaceContainerHighest,
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    mockUser.name,
+                    mockUserBuyer.name,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    mockUser.email,
+                    mockUserBuyer.email,
                     style: TextStyle(
                       color: Theme.of(
                         context,
