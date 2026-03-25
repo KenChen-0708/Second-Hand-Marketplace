@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
 import '../../models/models.dart';
 import '../../models/mock_data.dart';
+import '../../state/state.dart';
 import '../chat/chat_models.dart';
 
 class HomePage extends StatefulWidget {
@@ -704,6 +707,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildStickyHeader(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final cartQuantity = context.watch<CartState>().totalQuantity;
     final showFilter = _searchController.text.isNotEmpty || _searchFocused;
 
     return Container(
@@ -751,12 +755,12 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 12),
               // ── Cart Button ─────────────────────────────────────
-              _buildHeaderIcon(
-                context,
-                icon: Icons.shopping_cart_outlined,
-                onTap: () => context.push('/cart'),
-                badgeCount: 2,
-              ),
+                _buildHeaderIcon(
+                  context,
+                  icon: Icons.shopping_cart_outlined,
+                  onTap: () => context.push('/cart'),
+                  badgeCount: cartQuantity,
+                ),
               const SizedBox(width: 12),
               // ── Chat Button ─────────────────────────────────────
               _buildHeaderIcon(

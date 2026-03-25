@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../models/models.dart';
-import '../../models/mock_data.dart';
-import '../chat/chat_models.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/mock_data.dart';
+import '../../models/models.dart';
+import '../../state/state.dart';
+import '../chat/chat_models.dart';
 
 class ProductDetailPage extends StatelessWidget {
   final String productId;
@@ -285,7 +288,15 @@ class ProductDetailPage extends StatelessWidget {
                     child: IconButton(
                       icon: const Icon(Icons.add_shopping_cart_rounded),
                       color: Theme.of(context).colorScheme.primary,
-                      onPressed: () {},
+                      onPressed: () {
+                        context.read<CartState>().addToCart(product);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${product.title} added to cart'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: 16),

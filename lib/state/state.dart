@@ -2,6 +2,7 @@ export 'entity_state.dart';
 export 'user_state.dart';
 export 'category_state.dart';
 export 'product_state.dart';
+export 'cart_state.dart';
 export 'cart_item_state.dart';
 export 'order_state.dart';
 export 'payment_state.dart';

@@ -1,0 +1,207 @@
+Database Schema:
+
+Table users:
+* id (uuid, primary key)
+* email (varchar)
+* name (varchar)
+* avatar_url (text)
+* role (varchar)
+* is_active (boolean)
+* phone_number (varchar)
+* address (text)
+* city (varchar)
+* postal_code (varchar)
+* country (varchar)
+* bio (text)
+* created_at (timestamp)
+
+---
+
+Table seller_profiles:
+* id (uuid, primary key)
+* user_id (uuid, unique, foreign key → users.id)
+* total_sales (integer)
+* average_rating (numeric)
+* total_reviews (integer)
+* total_products (integer)
+* is_verified (boolean)
+* verification_date (timestamp)
+* created_at (timestamp)
+
+---
+
+Table admin_logs:
+* id (uuid, primary key)
+* admin_id (uuid, foreign key → users.id)
+* action (varchar)
+* entity_type (varchar)
+* entity_id (uuid)
+* details (jsonb)
+* created_at (timestamp)
+
+---
+
+Table categories:
+* id (uuid, primary key)
+* name (varchar)
+* description (text)
+* created_at (timestamp)
+
+---
+
+Table products:
+* id (uuid, primary key)
+* title (varchar)
+* description (text)
+* price (numeric)
+* category_id (uuid, foreign key → categories.id)
+* seller_id (uuid, foreign key → users.id)
+* condition (varchar)
+* image_url (text)
+* images (jsonb)
+* status (varchar)
+* view_count (integer)
+* likes_count (integer)
+* created_at (timestamp)
+* updated_at (timestamp)
+
+---
+
+Table cart_items:
+* id (uuid, primary key)
+* user_id (uuid, foreign key → users.id)
+* product_id (uuid, foreign key → products.id)
+* quantity (integer)
+* added_at (timestamp)
+* unique(user_id, product_id)
+
+---
+
+Table orders:
+* id (uuid, primary key)
+* order_number (varchar)
+* buyer_id (uuid, foreign key → users.id)
+* total_price (numeric)
+* status (varchar)
+* payment_status (varchar)
+* handover_location (text)
+* handover_date (timestamp)
+* notes (text)
+* created_at (timestamp)
+* updated_at (timestamp)
+
+---
+
+Table order_items:
+* id (uuid, primary key)
+* order_id (uuid, foreign key → orders.id)
+* product_id (uuid, foreign key → products.id)
+* quantity (integer)
+* unit_price (numeric)
+* subtotal (numeric)
+* created_at (timestamp)
+* unique(order_id, product_id)
+
+---
+
+Table payments:
+* id (uuid, primary key)
+* order_id (uuid, foreign key → orders.id)
+* user_id (uuid, foreign key → users.id)
+* amount (numeric)
+* payment_method (varchar)
+* payment_status (varchar)
+* transaction_id (varchar)
+* gateway_response (jsonb)
+* created_at (timestamp)
+* updated_at (timestamp)
+
+---
+
+Table chat_conversations:
+* id (uuid, primary key)
+* product_id (uuid, foreign key → products.id)
+* buyer_id (uuid, foreign key → users.id)
+* seller_id (uuid, foreign key → users.id)
+* deal_agreed (boolean)
+* last_message_at (timestamp)
+* created_at (timestamp)
+* unique(product_id, buyer_id, seller_id)
+
+---
+
+Table chat_messages:
+* id (uuid, primary key)
+* conversation_id (uuid, foreign key → chat_conversations.id)
+* sender_id (uuid, foreign key → users.id)
+* message_text (text)
+* is_image (boolean)
+* image_url (text)
+* is_read (boolean)
+* created_at (timestamp)
+
+---
+
+Table notifications:
+* id (uuid, primary key)
+* user_id (uuid, foreign key → users.id)
+* title (varchar)
+* message (text)
+* notification_type (varchar)
+* related_order_id (uuid, foreign key → orders.id)
+* related_product_id (uuid, foreign key → products.id)
+* is_read (boolean)
+* created_at (timestamp)
+
+---
+
+Table reviews:
+* id (uuid, primary key)
+* order_id (uuid, foreign key → orders.id)
+* reviewer_id (uuid, foreign key → users.id)
+* reviewee_id (uuid, foreign key → users.id)
+* product_id (uuid, foreign key → products.id)
+* rating (integer)
+* title (varchar)
+* comment (text)
+* created_at (timestamp)
+
+---
+
+Table favorites:
+* id (uuid, primary key)
+* user_id (uuid, foreign key → users.id)
+* product_id (uuid, foreign key → products.id)
+* created_at (timestamp)
+* unique(user_id, product_id)
+
+---
+
+Table disputes:
+* id (uuid, primary key)
+* order_id (uuid, foreign key → orders.id)
+* reporter_id (uuid, foreign key → users.id)
+* accused_id (uuid, foreign key → users.id)
+* reason (varchar)
+* description (text)
+* status (varchar)
+* admin_notes (text)
+* resolution_notes (text)
+* created_at (timestamp)
+* updated_at (timestamp)
+* resolved_at (timestamp)
+
+---
+
+Relationships Summary:
+
+* users is the central table (buyers, sellers, admins, senders)
+* products belong to categories and sellers
+* cart_items store user shopping cart (1 user → many items)
+* orders store checkout (1 order per transaction)
+* order_items store products inside an order (1 order → many items)
+* payments belong to orders
+* chat system links users and products
+* favorites connect users and products
+* reviews are based on completed orders
+* disputes handle order issues
