@@ -3,17 +3,57 @@ import '../../models/models.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
-
-  factory AuthService() {
-    return _instance;
-  }
-
+  factory AuthService() => _instance;
   AuthService._internal();
 
   final SupabaseClient supabase = Supabase.instance.client;
 
-  /// Login with email and password
-  /// Returns the matched user profile from the `users` table
+  /// NEW: Update User Profile in Database
+  /// This keeps the UI decoupled from Supabase syntax
+  Future<void> updateUserProfile(UserModel user) async {
+    try {
+      await supabase.from('users').update(user.toMap()).eq('id', user.id);
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Update failed: $e');
+    }
+  }
+
+  /// REGISTER: Creates Auth user + Trigger handles Public Profile
+  Future<UserModel> registerUser({
+    required String email,
+    required String password,
+    required String name,
+  }) async {
+    try {
+      final AuthResponse response = await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'name': name},
+      );
+
+      final authUser = response.user;
+      if (authUser == null) throw Exception('Registration failed');
+
+      // Add a tiny delay if you still hit the "0 rows" timing issue
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      final data = await supabase
+          .from('users')
+          .select()
+          .eq('id', authUser.id)
+          .single();
+
+      return UserModel.fromMap(Map<String, dynamic>.from(data));
+    } on AuthException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Registration error: $e');
+    }
+  }
+
+  /// LOGIN: Authenticates and fetches Profile
   Future<UserModel> loginUser(String email, String password) async {
     try {
       final AuthResponse response = await supabase.auth.signInWithPassword(
@@ -22,86 +62,8 @@ class AuthService {
       );
 
       final authUser = response.user;
-      if (authUser == null) {
-        throw Exception('Login failed: Invalid credentials');
-      }
+      if (authUser == null) throw Exception('Invalid credentials');
 
-      Map<String, dynamic>? userData;
-
-      // Best case: your users.id matches auth.users.id
-      try {
-        final data = await supabase
-            .from('users')
-            .select()
-            .eq('id', authUser.id)
-            .single();
-
-        userData = Map<String, dynamic>.from(data);
-      } catch (_) {
-        // Fallback: if your table uses a different UUID than auth.users.id,
-        // try by email
-        final data = await supabase
-            .from('users')
-            .select()
-            .eq('email', authUser.email ?? email)
-            .single();
-
-        userData = Map<String, dynamic>.from(data);
-      }
-
-      return UserModel.fromMap(userData);
-    } on AuthException catch (e) {
-      throw Exception(e.message);
-    } on PostgrestException catch (e) {
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Login error: $e');
-    }
-  }
-
-  bool isLoggedIn() {
-    return supabase.auth.currentSession != null;
-  }
-
-  String? getCurrentUserId() {
-    return supabase.auth.currentUser?.id;
-  }
-
-  String? getCurrentUserEmail() {
-    return supabase.auth.currentUser?.email;
-  }
-
-  Future<void> logout() async {
-    try {
-      await supabase.auth.signOut();
-    } on AuthException catch (e) {
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Logout error: $e');
-    }
-  }
-
-  Future<UserModel?> getUserProfile(String userId) async {
-    try {
-      final data = await supabase
-          .from('users')
-          .select()
-          .eq('id', userId)
-          .single();
-
-      return UserModel.fromMap(Map<String, dynamic>.from(data));
-    } on PostgrestException catch (_) {
-      return null;
-    } catch (e) {
-      throw Exception('Error fetching user profile: $e');
-    }
-  }
-
-  Future<UserModel?> getCurrentUserProfile() async {
-    final authUser = supabase.auth.currentUser;
-    if (authUser == null) return null;
-
-    try {
       final data = await supabase
           .from('users')
           .select()
@@ -109,22 +71,13 @@ class AuthService {
           .single();
 
       return UserModel.fromMap(Map<String, dynamic>.from(data));
-    } on PostgrestException {
-      if (authUser.email == null) return null;
-
-      try {
-        final data = await supabase
-            .from('users')
-            .select()
-            .eq('email', authUser.email!)
-            .single();
-
-        return UserModel.fromMap(Map<String, dynamic>.from(data));
-      } catch (e) {
-        throw Exception('Error fetching current user profile: $e');
-      }
+    } on AuthException catch (e) {
+      throw Exception(e.message);
     } catch (e) {
-      throw Exception('Error fetching current user profile: $e');
+      throw Exception('Login error: $e');
     }
   }
+
+  Future<void> logout() async => await supabase.auth.signOut();
+  bool isLoggedIn() => supabase.auth.currentSession != null;
 }

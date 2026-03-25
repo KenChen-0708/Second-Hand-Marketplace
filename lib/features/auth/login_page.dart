@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/models.dart';
-import '../../services/auth/auth_service.dart';
 import '../../state/state.dart';
 
 class LoginPage extends StatefulWidget {
@@ -17,7 +15,9 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  final AuthService _authService = AuthService();
+
+  // REMOVED: final AuthService _authService = AuthService();
+  // UI no longer knows that AuthService exists.
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -42,27 +42,31 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final UserModel user = await _authService.loginUser(
+      // 🔥 THE ARCHITECTURAL WIN:
+      // UI calls the State. The State calls the Service.
+      await context.read<UserState>().login(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
 
       if (!mounted) return;
 
-      context.read<UserState>().setCurrentUser(user);
+      // Navigate to the Home Page after State confirms success
       context.go('/home');
+
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
+        // Displays error thrown by the Service layer through the State layer
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -224,10 +228,10 @@ class _LoginPageState extends State<LoginPage> {
                                 onPressed: _isLoading
                                     ? null
                                     : () {
-                                        setState(() {
-                                          _obscurePassword = !_obscurePassword;
-                                        });
-                                      },
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
                                 icon: Icon(
                                   _obscurePassword
                                       ? Icons.visibility_off_outlined
@@ -269,19 +273,19 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             child: _isLoading
                                 ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
                                 : const Text(
-                                    'Login',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                              'Login',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
 
                           const SizedBox(height: 12),
@@ -312,9 +316,9 @@ class _LoginPageState extends State<LoginPage> {
                               Text(
                                 "Don't have an account?",
                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: colorScheme.onSurface
-                                          .withValues(alpha: 0.7),
-                                    ),
+                                  color: colorScheme.onSurface
+                                      .withValues(alpha: 0.7),
+                                ),
                               ),
                               TextButton(
                                 onPressed: _isLoading
