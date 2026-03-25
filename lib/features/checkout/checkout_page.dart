@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/models.dart';
-import '../../models/mock_data.dart';
+import 'package:provider/provider.dart';
+
+import '../../state/state.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -11,31 +12,31 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  // Mock cart items same as CartPage
-  final List<ProductModel> _checkoutItems = [
-    mockProducts[0], // Calculus Textbook
-    mockProducts[1], // Sony Headphones
-  ];
-
   String _selectedPaymentMethod = 'Credit/Debit Card';
   final TextEditingController _messageController = TextEditingController();
   bool _isProcessing = false;
 
-  double get _totalAmount => _checkoutItems.fold(0, (sum, p) => sum + p.price);
-
   Future<void> _handlePayment() async {
     setState(() => _isProcessing = true);
 
-    // Mock processing delay
-    await Future.delayed(const Duration(seconds: 2));
+    final cartState = context.read<CartState>();
+    final orderState = context.read<OrderState>();
 
-    // MOCK DATABASE UPDATE: Order state changes from "Pending" to "Paid"
-    // In a real app with AppState: appState.updateOrderStatus(orderId, 'Paid');
-    debugPrint('Order status updated from Pending to Paid in mock database');
+    try {
+      final orders = await orderState.checkout(
+        cartState: cartState,
+        notes: _messageController.text.trim().isEmpty
+            ? null
+            : _messageController.text.trim(),
+      );
 
-    if (mounted) {
-      // Show success overlay or dialog
-      showDialog(
+      if (!mounted) {
+        return;
+      }
+
+      final createdOrder = orders.isNotEmpty ? orders.first : null;
+
+      await showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => Dialog(
@@ -76,8 +77,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   height: 52,
                   child: FilledButton(
                     onPressed: () {
-                      context.pop(); // Close dialog
-                      context.pushReplacement('/profile/order-status');
+                      context.pop();
+                      context.pushReplacement(
+                        '/profile/order-status',
+                        extra: createdOrder,
+                      );
                     },
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
@@ -99,12 +103,36 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
         ),
       );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to complete checkout right now. Please try again.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final cartState = context.watch<CartState>();
 
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerHighest,
@@ -123,12 +151,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildOrderSummary(context),
+                        _buildOrderSummary(context, cartState),
                         const SizedBox(height: 20),
                         _buildPaymentMethod(context),
                         const SizedBox(height: 20),
                         _buildHandoverInstructions(context),
-                        const SizedBox(height: 100), // Space for fixed button
+                        const SizedBox(height: 100),
                       ],
                     ),
                   ),
@@ -136,7 +164,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ],
             ),
           ),
-          _buildBottomButton(context),
+          _buildBottomButton(context, cartState),
           if (_isProcessing)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
@@ -186,7 +214,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Widget _buildOrderSummary(BuildContext context) {
+  Widget _buildOrderSummary(BuildContext context, CartState cartState) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -208,45 +236,52 @@ class _CheckoutPageState extends State<CheckoutPage> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
-          ..._checkoutItems.map(
-            (product) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      product.imageUrl ?? 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=200',
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
+          if (cartState.isEmpty)
+            const Text(
+              'Your cart is empty.',
+              style: TextStyle(color: Colors.grey),
+            )
+          else
+            ...cartState.items.map(
+              (cartItem) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        cartItem.product.imageUrl ??
+                            'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=200',
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.title,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          '\$${product.price.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            cartItem.product.title,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                          Text(
+                            '\$${cartItem.product.price.toStringAsFixed(2)} x ${cartItem.quantity}',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
           const Divider(height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -260,7 +295,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
               ),
               Text(
-                '\$${_totalAmount.toStringAsFixed(2)}',
+                '\$${cartState.subtotal.toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
@@ -303,10 +338,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
           const SizedBox(height: 20),
           _buildPaymentOption('Credit/Debit Card', Icons.credit_card_rounded),
-          _buildPaymentOption(
-            'Apple/Google Pay',
-            Icons.apple_rounded, // or google for android
-          ),
+          _buildPaymentOption('Apple/Google Pay', Icons.apple_rounded),
           _buildPaymentOption(
             'Campus Wallet',
             Icons.account_balance_wallet_rounded,
@@ -409,7 +441,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Widget _buildBottomButton(BuildContext context) {
+  Widget _buildBottomButton(BuildContext context, CartState cartState) {
     return Positioned(
       bottom: 0,
       left: 0,
@@ -431,7 +463,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           width: double.infinity,
           height: 56,
           child: FilledButton(
-            onPressed: _isProcessing ? null : _handlePayment,
+            onPressed: _isProcessing || cartState.isEmpty ? null : _handlePayment,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF10B981),
               shape: RoundedRectangleBorder(

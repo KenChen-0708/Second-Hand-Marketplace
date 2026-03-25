@@ -310,7 +310,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => UserState()),
         ChangeNotifierProvider(create: (_) => CategoryState()),
         ChangeNotifierProvider(create: (_) => ProductState()),
-        ChangeNotifierProvider(create: (_) => CartItemState()),
+        ChangeNotifierProvider(create: (_) => CartState()),
         ChangeNotifierProvider(create: (_) => OrderState()),
         ChangeNotifierProvider(create: (_) => PaymentState()),
         ChangeNotifierProvider(create: (_) => ChatConversationState()),

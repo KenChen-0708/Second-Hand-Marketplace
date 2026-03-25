@@ -144,7 +144,8 @@ class OrderHistoryPage extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Image.network(
-                        _getProduct(order.productId)?.imageUrl ?? 'https://via.placeholder.com/80',
+                        _getProduct(order.primaryProductId ?? '')?.imageUrl ??
+                            'https://via.placeholder.com/80',
                         width: 80,
                         height: 80,
                         fit: BoxFit.cover,
@@ -181,7 +182,8 @@ class OrderHistoryPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _getProduct(order.productId)?.title ?? 'N/A',
+                            _getProduct(order.primaryProductId ?? '')?.title ??
+                                'N/A',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -227,7 +229,7 @@ class OrderHistoryPage extends StatelessWidget {
                       onPressed: () {
                         context.push(
                           '/profile/seller-review',
-                          extra: _getProduct(order.productId),
+                          extra: _getProduct(order.primaryProductId ?? ''),
                         );
                       },
                       style: OutlinedButton.styleFrom(
