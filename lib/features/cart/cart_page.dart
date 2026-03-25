@@ -8,6 +8,25 @@ import '../../state/state.dart';
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
 
+  Future<void> _runCartAction(
+    BuildContext context,
+    Future<void> Function(CartState cartState) action,
+  ) async {
+    final cartState = context.read<CartState>();
+    await action(cartState);
+
+    if (!context.mounted || cartState.error == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(cartState.error!),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -47,7 +66,12 @@ class CartPage extends StatelessWidget {
                   const Spacer(),
                   if (cartState.isNotEmpty)
                     TextButton(
-                      onPressed: cartState.clearCart,
+                      onPressed: cartState.isLoading
+                          ? null
+                          : () => _runCartAction(
+                              context,
+                              (state) => state.clearCart(),
+                            ),
                       child: const Text(
                         'Clear All',
                         style: TextStyle(
@@ -60,7 +84,9 @@ class CartPage extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: cartState.isEmpty
+              child: cartState.isLoading && cartState.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : cartState.isEmpty
                   ? _buildEmptyCart(context)
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(
@@ -233,7 +259,12 @@ class CartPage extends StatelessWidget {
                   children: [
                     _buildQuantityButton(
                       icon: Icons.remove_rounded,
-                      onPressed: () => cartState.decreaseQuantity(product.id),
+                      onPressed: cartState.isLoading
+                          ? null
+                          : () => _runCartAction(
+                              context,
+                              (state) => state.decreaseQuantity(product.id),
+                            ),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -247,13 +278,23 @@ class CartPage extends StatelessWidget {
                     ),
                     _buildQuantityButton(
                       icon: Icons.add_rounded,
-                      onPressed: () => cartState.increaseQuantity(product.id),
+                      onPressed: cartState.isLoading
+                          ? null
+                          : () => _runCartAction(
+                              context,
+                              (state) => state.increaseQuantity(product.id),
+                            ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 IconButton(
-                  onPressed: () => cartState.removeFromCart(product.id),
+                  onPressed: cartState.isLoading
+                      ? null
+                      : () => _runCartAction(
+                          context,
+                          (state) => state.removeFromCart(product.id),
+                        ),
                   icon: const Icon(Icons.delete_outline_rounded),
                   color: Colors.redAccent,
                 ),
@@ -267,7 +308,7 @@ class CartPage extends StatelessWidget {
 
   Widget _buildQuantityButton({
     required IconData icon,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
   }) {
     return SizedBox(
       width: 30,

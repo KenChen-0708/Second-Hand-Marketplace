@@ -19,11 +19,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Future<void> _handlePayment() async {
     setState(() => _isProcessing = true);
 
-    await Future.delayed(const Duration(seconds: 2));
+    final cartState = context.read<CartState>();
+    final orderState = context.read<OrderState>();
 
-    debugPrint('Order status updated from Pending to Paid in mock database');
+    try {
+      final orders = await orderState.checkout(
+        cartState: cartState,
+        notes: _messageController.text.trim().isEmpty
+            ? null
+            : _messageController.text.trim(),
+      );
 
-    if (mounted) {
+      if (!mounted) {
+        return;
+      }
+
+      final createdOrder = orders.isNotEmpty ? orders.first : null;
+
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -65,9 +77,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   height: 52,
                   child: FilledButton(
                     onPressed: () {
-                      context.read<CartState>().clearCart();
                       context.pop();
-                      context.pushReplacement('/profile/order-status');
+                      context.pushReplacement(
+                        '/profile/order-status',
+                        extra: createdOrder,
+                      );
                     },
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
@@ -89,10 +103,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
         ),
       );
-    }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
 
-    if (mounted) {
-      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to complete checkout right now. Please try again.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 

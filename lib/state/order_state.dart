@@ -23,7 +23,6 @@ class OrderState extends EntityState<OrderModel> {
 
   Future<List<OrderModel>> checkout({
     required CartState cartState,
-    String? paymentMethod,
     String? handoverLocation,
     DateTime? handoverDate,
     String? notes,
@@ -44,7 +43,6 @@ class OrderState extends EntityState<OrderModel> {
       final orders = await _orderService.createOrder(
         buyerId: buyerId,
         orderItems: cartState.toOrderItems(),
-        paymentMethod: paymentMethod,
         handoverLocation: handoverLocation,
         handoverDate: handoverDate,
         notes: notes,
@@ -53,7 +51,7 @@ class OrderState extends EntityState<OrderModel> {
       addItems(orders);
       _lastCheckoutOrders = orders;
       _lastOrderNumber = orders.isNotEmpty ? orders.first.orderNumber : null;
-      cartState.clearCart();
+      await cartState.clearCart();
       return orders;
     } catch (e) {
       setError(e.toString());

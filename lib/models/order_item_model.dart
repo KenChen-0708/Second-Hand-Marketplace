@@ -8,38 +8,34 @@ class OrderItemModel implements AppModel {
   final String id;
   final String? orderId;
   final String productId;
-  final String sellerId;
   final int quantity;
   final double unitPrice;
-  final double totalPrice;
+  final double subtotal;
 
   const OrderItemModel({
     required this.id,
     this.orderId,
     required this.productId,
-    required this.sellerId,
     required this.quantity,
     required this.unitPrice,
-    required this.totalPrice,
+    required this.subtotal,
   });
 
   OrderItemModel copyWith({
     String? id,
     String? orderId,
     String? productId,
-    String? sellerId,
     int? quantity,
     double? unitPrice,
-    double? totalPrice,
+    double? subtotal,
   }) {
     return OrderItemModel(
       id: id ?? this.id,
       orderId: orderId ?? this.orderId,
       productId: productId ?? this.productId,
-      sellerId: sellerId ?? this.sellerId,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
-      totalPrice: totalPrice ?? this.totalPrice,
+      subtotal: subtotal ?? this.subtotal,
     );
   }
 
@@ -48,10 +44,9 @@ class OrderItemModel implements AppModel {
       id: JsonUtils.asString(map['id']) ?? '',
       orderId: JsonUtils.asString(map['order_id']),
       productId: JsonUtils.asString(map['product_id']) ?? '',
-      sellerId: JsonUtils.asString(map['seller_id']) ?? '',
       quantity: JsonUtils.asInt(map['quantity']) ?? 1,
       unitPrice: JsonUtils.asDouble(map['unit_price']) ?? 0,
-      totalPrice: JsonUtils.asDouble(map['total_price']) ?? 0,
+      subtotal: JsonUtils.asDouble(map['subtotal']) ?? 0,
     );
   }
 
@@ -60,10 +55,9 @@ class OrderItemModel implements AppModel {
       'id': id,
       'order_id': orderId,
       'product_id': productId,
-      'seller_id': sellerId,
       'quantity': quantity,
       'unit_price': unitPrice,
-      'total_price': totalPrice,
+      'subtotal': subtotal,
     };
   }
 

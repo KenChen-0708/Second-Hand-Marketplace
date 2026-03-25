@@ -19,7 +19,10 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   bool _searchFocused = false;
-  List<ProductModel> _filteredProducts = mockProducts;
+  List<ProductModel> _allProducts = [];
+  List<ProductModel> _filteredProducts = [];
+  bool _isLoadingProducts = true;
+  String? _productLoadError;
 
   // --- Filter State ---
   RangeValues _priceRange = const RangeValues(0, 600);
@@ -39,6 +42,9 @@ class _HomePageState extends State<HomePage> {
     _searchFocus.addListener(() {
       setState(() => _searchFocused = _searchFocus.hasFocus);
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProducts();
+    });
   }
 
   @override
@@ -49,6 +55,40 @@ class _HomePageState extends State<HomePage> {
   }
 
   // --- Search Logic ---
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoadingProducts = true;
+      _productLoadError = null;
+    });
+
+    try {
+      final products = await context.read<ProductState>().fetchProducts();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _allProducts = products;
+        _applyAllFilters();
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _allProducts = [];
+        _filteredProducts = [];
+        _productLoadError =
+            'Unable to load products right now. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingProducts = false);
+      }
+    }
+  }
+
   String _getCategoryName(String? categoryId) {
     if (categoryId == null) return 'Uncategorized';
     final category = mockCategories.firstWhere(
@@ -61,10 +101,10 @@ class _HomePageState extends State<HomePage> {
   void _onSearchSubmitted(String query) {
     setState(() {
       if (query.trim().isEmpty) {
-        _filteredProducts = mockProducts;
+        _applyAllFilters();
       } else {
         final lowerQuery = query.trim().toLowerCase();
-        _filteredProducts = mockProducts.where((p) {
+        _filteredProducts = _allProducts.where((p) {
           return p.title.toLowerCase().contains(lowerQuery) ||
               _getCategoryName(p.categoryId).toLowerCase().contains(lowerQuery) ||
               p.condition.toLowerCase().contains(lowerQuery);
@@ -80,7 +120,9 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _priceRange = const RangeValues(0, 600);
       _selectedConditions.clear();
-      _filteredProducts = mockProducts;
+      _selectedCategories.clear();
+      _selectedSort = 'Relevance';
+      _applyAllFilters();
     });
   }
 
@@ -602,7 +644,7 @@ class _HomePageState extends State<HomePage> {
     Set<String> conditions,
     Set<String> categories,
   ) {
-    return mockProducts.where((p) {
+    return _allProducts.where((p) {
       final inPrice = p.price >= price.start && p.price <= price.end;
       final inCondition =
           conditions.isEmpty || conditions.contains(p.condition);
@@ -613,7 +655,7 @@ class _HomePageState extends State<HomePage> {
 
   // ── Apply all filters + sort to _filteredProducts ───────────────────────
   void _applyAllFilters() {
-    List<ProductModel> result = mockProducts.where((p) {
+    List<ProductModel> result = _allProducts.where((p) {
       final inPrice =
           p.price >= _priceRange.start && p.price <= _priceRange.end;
       final inCondition =
@@ -649,7 +691,11 @@ class _HomePageState extends State<HomePage> {
           children: [
             _buildStickyHeader(context),
             Expanded(
-              child: _filteredProducts.isEmpty
+              child: _isLoadingProducts
+                  ? const Center(child: CircularProgressIndicator())
+                  : _productLoadError != null
+                  ? _buildLoadErrorState(context)
+                  : _filteredProducts.isEmpty
                   ? _buildEmptyState(context)
                   : CustomScrollView(
                       slivers: [
@@ -737,7 +783,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                             onPressed: () {
                               _searchController.clear();
-                              setState(() => _filteredProducts = mockProducts);
+                              setState(_applyAllFilters);
                             },
                           )
                         : Icon(Icons.camera_alt_outlined, color: cs.primary),
@@ -916,6 +962,43 @@ class _HomePageState extends State<HomePage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadErrorState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 72,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Unable to load products',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _productLoadError ?? 'Please try again in a moment.',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _loadProducts,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
             ),
           ],
         ),

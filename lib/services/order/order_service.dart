@@ -11,7 +11,6 @@ class OrderService {
   Future<List<OrderModel>> createOrder({
     required String buyerId,
     required List<OrderItemModel> orderItems,
-    String? paymentMethod,
     String? handoverLocation,
     DateTime? handoverDate,
     String? notes,
@@ -24,32 +23,57 @@ class OrderService {
 
     try {
       final orderNumber = _generateOrderNumber();
-      final payload = orderItems
+      final totalPrice = orderItems.fold<double>(
+        0,
+        (sum, item) => sum + item.subtotal,
+      );
+
+      final insertedOrder = await _supabase
+          .from('orders')
+          .insert({
+            'order_number': orderNumber,
+            'buyer_id': buyerId,
+            'total_price': totalPrice,
+            'status': status,
+            'payment_status': paymentStatus,
+            'handover_location': handoverLocation,
+            'handover_date': handoverDate?.toIso8601String(),
+            'notes': notes,
+          })
+          .select()
+          .single();
+
+      final order = OrderModel.fromMap(
+        Map<String, dynamic>.from(insertedOrder),
+      );
+
+      final orderItemPayload = orderItems
           .map(
             (item) => <String, dynamic>{
-              'buyer_id': buyerId,
-              'seller_id': item.sellerId,
+              'order_id': order.id,
               'product_id': item.productId,
               'quantity': item.quantity,
-              'total_price': item.totalPrice,
-              'order_number': orderNumber,
-              'status': status,
-              'payment_method': paymentMethod,
-              'payment_status': paymentStatus,
-              'handover_location': handoverLocation,
-              'handover_date': handoverDate?.toIso8601String(),
-              'notes': notes,
+              'unit_price': item.unitPrice,
+              'subtotal': item.subtotal,
             },
           )
           .toList();
 
-      final data = await _supabase.from('orders').insert(payload).select();
-      return (data as List)
-          .map(
-            (item) =>
-                OrderModel.fromMap(Map<String, dynamic>.from(item as Map)),
-          )
-          .toList();
+      final insertedOrderItems = await _supabase
+          .from('order_items')
+          .insert(orderItemPayload)
+          .select();
+
+      final normalizedOrder = order.copyWith(
+        orderItems: (insertedOrderItems as List)
+            .map(
+              (item) =>
+                  OrderItemModel.fromMap(Map<String, dynamic>.from(item as Map)),
+            )
+            .toList(),
+      );
+
+      return [normalizedOrder];
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
