@@ -15,8 +15,6 @@ import 'features/profile/profile_page.dart';
 import 'features/profile/my_account_page.dart';
 import 'features/profile/notifications_page.dart';
 import 'features/profile/settings_page.dart';
-import 'features/profile/my_listings_page.dart';
-import 'features/profile/seller_dashboard_page.dart';
 import 'features/cart/cart_page.dart';
 import 'features/checkout/checkout_page.dart';
 import 'features/profile/order_status_page.dart';
@@ -25,6 +23,8 @@ import 'features/chat/chat_inbox_page.dart';
 import 'features/chat/chat_room_page.dart';
 import 'features/profile/seller_review_page.dart';
 import 'features/profile/seller_profile_page.dart';
+import 'features/sell/my_listings_page.dart';
+import 'features/sell/seller_dashboard_page.dart';
 
 import 'shared/widgets/scaffold_with_nav_bar.dart';
 
@@ -43,10 +43,7 @@ const String supabaseKey =
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseKey,
-  );
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
 
   runApp(const MyApp());
 }
@@ -82,10 +79,7 @@ final _router = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/',
   routes: [
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const LoginPage(),
-    ),
+    GoRoute(path: '/', builder: (context, state) => const LoginPage()),
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterPage(),
@@ -279,9 +273,8 @@ final _router = GoRouter(
                 GoRoute(
                   path: 'order-status',
                   parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => OrderStatusPage(
-                    order: state.extra,
-                  ),
+                  builder: (context, state) =>
+                      OrderStatusPage(order: state.extra),
                 ),
                 GoRoute(
                   path: 'orders',
@@ -291,9 +284,8 @@ final _router = GoRouter(
                 GoRoute(
                   path: 'seller-review',
                   parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => SellerReviewPage(
-                    product: state.extra as ProductModel?,
-                  ),
+                  builder: (context, state) =>
+                      SellerReviewPage(product: state.extra as ProductModel?),
                 ),
               ],
             ),
@@ -336,19 +328,20 @@ class MyApp extends StatelessWidget {
         routerConfig: _router,
         theme: ThemeData(
           useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: primaryColor,
-            primary: primaryColor,
-            surface: surfaceColor,
-            brightness: Brightness.light,
-            primaryContainer: primaryColor.withValues(alpha: 0.1),
-            onPrimaryContainer: primaryColor,
-          ).copyWith(
-            surface: surfaceColor,
-            onSurface: const Color(0xFF1F2937),
-            surfaceContainerHighest: const Color(0xFFF3F4F6),
-            outlineVariant: const Color(0xFFD1D5DB),
-          ),
+          colorScheme:
+              ColorScheme.fromSeed(
+                seedColor: primaryColor,
+                primary: primaryColor,
+                surface: surfaceColor,
+                brightness: Brightness.light,
+                primaryContainer: primaryColor.withValues(alpha: 0.1),
+                onPrimaryContainer: primaryColor,
+              ).copyWith(
+                surface: surfaceColor,
+                onSurface: const Color(0xFF1F2937),
+                surfaceContainerHighest: const Color(0xFFF3F4F6),
+                outlineVariant: const Color(0xFFD1D5DB),
+              ),
           scaffoldBackgroundColor: scaffoldBgColor,
           fontFamily: 'Roboto',
           textTheme: const TextTheme(
@@ -360,12 +353,8 @@ class MyApp extends StatelessWidget {
               fontWeight: FontWeight.bold,
               color: Color(0xFF111827),
             ),
-            bodyLarge: TextStyle(
-              color: Color(0xFF374151),
-            ),
-            bodyMedium: TextStyle(
-              color: Color(0xFF4B5563),
-            ),
+            bodyLarge: TextStyle(color: Color(0xFF374151)),
+            bodyMedium: TextStyle(color: Color(0xFF4B5563)),
           ),
           filledButtonTheme: FilledButtonThemeData(
             style: FilledButton.styleFrom(
