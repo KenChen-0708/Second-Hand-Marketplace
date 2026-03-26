@@ -1,0 +1,65 @@
+[33mcommit ed852246458175531eea63883cac20787e04c0d1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Thu Mar 19 23:29:07 2026 +0800
+
+    updates states, models, added database connection
+
+[33mcommit 8379f4b946a7f279aa64d2d00abee5d0efc40b99[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Thu Mar 5 12:34:17 2026 +0800
+
+    add review
+
+[33mcommit 01551d14cdd248b6b8e5f841c448c11a9a5eb56b[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Wed Mar 4 17:19:30 2026 +0800
+
+    add chat, update profile
+
+[33mcommit faedb98dadebee4a83afeec658b821284680a945[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Tue Mar 3 21:58:48 2026 +0800
+
+    update UI
+
+[33mcommit dd73a8a0b34411bed726e98fd4a8f5466ed956fb[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Mon Mar 2 23:30:43 2026 +0800
+
+    remove unuse files
+
+[33mcommit 65598bac9a0d2009736d461fe2b408fa688d9b67[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Mon Mar 2 18:09:52 2026 +0800
+
+    improve seller dashboard and sell page
+
+[33mcommit fc33850bf1406c63c5f061e4c69c5ca796c343b6[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Mon Mar 2 17:56:24 2026 +0800
+
+    update UI
+
+[33mcommit 99d260fe17356466f396b49628e1731ec769d34d[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Mon Mar 2 00:32:49 2026 +0800
+
+    com
+
+[33mcommit fb600c6e02179737eb2403f630c5a0f49068bf8f[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Mon Mar 2 00:08:30 2026 +0800
+
+    update profile
+
+[33mcommit 1579ef42d83e6963c6c81b4126ff7b70b03c070c[m
+Author: ken <kenchenkaijian0708@gmail.com>
+Date:   Sun Mar 1 23:47:10 2026 +0800
+
+    fix UI
+
+[33mcommit e5745d398f6cb2b2fb77bbbbb60ca99b11b4a172[m
+Author: KenChen-0708 <kenchenkaijian0708@gmail.com>
+Date:   Sun Mar 1 21:44:20 2026 +0800
+
+    new commit

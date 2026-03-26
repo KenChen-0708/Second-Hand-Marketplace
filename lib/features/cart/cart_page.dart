@@ -1,38 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/models.dart';
-import '../../models/mock_data.dart';
+import 'package:provider/provider.dart';
 
-class CartPage extends StatefulWidget {
+import '../../models/models.dart';
+import '../../state/state.dart';
+
+class CartPage extends StatelessWidget {
   const CartPage({super.key});
 
-  @override
-  State<CartPage> createState() => _CartPageState();
-}
+  Future<void> _runCartAction(
+    BuildContext context,
+    Future<void> Function(CartState cartState) action,
+  ) async {
+    final cartState = context.read<CartState>();
+    await action(cartState);
 
-class _CartPageState extends State<CartPage> {
-  // Mock cart items — in a real app these would come from app state / a provider
-  final List<ProductModel> _cartItems = [
-    mockProducts[0], // Calculus Textbook
-    mockProducts[1], // Sony Headphones
-  ];
+    if (!context.mounted || cartState.error == null) {
+      return;
+    }
 
-  double get _subtotal => _cartItems.fold(0, (sum, p) => sum + p.price);
-
-  void _removeItem(int index) {
-    setState(() => _cartItems.removeAt(index));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(cartState.error!),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final cartState = context.watch<CartState>();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
-            // --- Header ---
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 16.0,
@@ -60,10 +64,15 @@ class _CartPageState extends State<CartPage> {
                     ),
                   ),
                   const Spacer(),
-                  if (_cartItems.isNotEmpty)
+                  if (cartState.isNotEmpty)
                     TextButton(
-                      onPressed: () => setState(() => _cartItems.clear()),
-                      child: Text(
+                      onPressed: cartState.isLoading
+                          ? null
+                          : () => _runCartAction(
+                              context,
+                              (state) => state.clearCart(),
+                            ),
+                      child: const Text(
                         'Clear All',
                         style: TextStyle(
                           color: Colors.redAccent,
@@ -74,27 +83,25 @@ class _CartPageState extends State<CartPage> {
                 ],
               ),
             ),
-
-            // --- Body ---
             Expanded(
-              child: _cartItems.isEmpty
+              child: cartState.isLoading && cartState.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : cartState.isEmpty
                   ? _buildEmptyCart(context)
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 8,
                       ),
-                      itemCount: _cartItems.length,
+                      itemCount: cartState.items.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
                       itemBuilder: (context, index) {
-                        final product = _cartItems[index];
-                        return _buildCartItem(context, product, index);
+                        final cartItem = cartState.items[index];
+                        return _buildCartItem(context, cartItem);
                       },
                     ),
             ),
-
-            // --- Checkout Footer ---
-            if (_cartItems.isNotEmpty)
+            if (cartState.isNotEmpty)
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -116,11 +123,11 @@ class _CartPageState extends State<CartPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Subtotal (${_cartItems.length} items)',
+                          'Subtotal (${cartState.totalQuantity} items)',
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                         Text(
-                          '\$${_subtotal.toStringAsFixed(2)}',
+                          '\$${cartState.subtotal.toStringAsFixed(2)}',
                           style: TextStyle(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w800,
@@ -159,8 +166,11 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
-  Widget _buildCartItem(BuildContext context, ProductModel product, int index) {
+  Widget _buildCartItem(BuildContext context, CartModel cartItem) {
     final colorScheme = Theme.of(context).colorScheme;
+    final product = cartItem.product;
+    final cartState = context.read<CartState>();
+
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surface,
@@ -175,7 +185,6 @@ class _CartPageState extends State<CartPage> {
       ),
       child: Row(
         children: [
-          // Product Image
           ClipRRect(
             borderRadius: const BorderRadius.horizontal(
               left: Radius.circular(20),
@@ -183,12 +192,11 @@ class _CartPageState extends State<CartPage> {
             child: Image.network(
               product.imageUrl ?? 'https://via.placeholder.com/90',
               width: 90,
-              height: 90,
+              height: 110,
               fit: BoxFit.cover,
             ),
           ),
           const SizedBox(width: 12),
-          // Details
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -232,17 +240,89 @@ class _CartPageState extends State<CartPage> {
                       fontSize: 16,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Item total: \$${cartItem.totalPrice.toStringAsFixed(2)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),
           ),
-          // Remove Button
-          IconButton(
-            onPressed: () => _removeItem(index),
-            icon: const Icon(Icons.delete_outline_rounded),
-            color: Colors.redAccent,
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildQuantityButton(
+                      icon: Icons.remove_rounded,
+                      onPressed: cartState.isLoading
+                          ? null
+                          : () => _runCartAction(
+                              context,
+                              (state) => state.decreaseQuantity(product.id),
+                            ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        '${cartItem.quantity}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    _buildQuantityButton(
+                      icon: Icons.add_rounded,
+                      onPressed: cartState.isLoading
+                          ? null
+                          : () => _runCartAction(
+                              context,
+                              (state) => state.increaseQuantity(product.id),
+                            ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                IconButton(
+                  onPressed: cartState.isLoading
+                      ? null
+                      : () => _runCartAction(
+                          context,
+                          (state) => state.removeFromCart(product.id),
+                        ),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  color: Colors.redAccent,
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuantityButton({
+    required IconData icon,
+    required VoidCallback? onPressed,
+  }) {
+    return SizedBox(
+      width: 30,
+      height: 30,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          side: const BorderSide(color: Color(0xFFD1D5DB)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Icon(icon, size: 16),
       ),
     );
   }

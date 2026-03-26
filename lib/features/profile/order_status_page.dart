@@ -122,7 +122,7 @@ class OrderStatusPage extends StatelessWidget {
                           // Navigate to Seller Review page
                           context.push(
                             '/profile/seller-review',
-                            extra: _getProduct(currentOrder?.productId),
+                            extra: _getProduct(currentOrder?.primaryProductId),
                           );
                         },
                         style: FilledButton.styleFrom(

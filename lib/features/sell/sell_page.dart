@@ -1,30 +1,1049 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-class SellPage extends StatefulWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// Entry screen – shown as the /sell shell branch
+// ─────────────────────────────────────────────────────────────────────────────
+class SellPage extends StatelessWidget {
   const SellPage({super.key});
 
+  void _openWizard(BuildContext context) {
+    Navigator.of(context, rootNavigator: true).push(
+      PageRouteBuilder(
+        fullscreenDialog: true,
+        pageBuilder: (_, __, ___) => const _SellWizard(),
+        transitionsBuilder: (_, animation, __, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 380),
+      ),
+    );
+  }
+
   @override
-  State<SellPage> createState() => _SellPageState();
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Simple header ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              child: Row(
+                children: [
+                  Text(
+                    'Sell',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.8,
+                      color: colors.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Spacer(),
+
+            // ── Hero create-listing button ──
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => _openWizard(context),
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.primary.withOpacity(0.35),
+                            blurRadius: 32,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Create Listing',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                      color: colors.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Snap a photo and list your item\nin minutes.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: colors.onSurface.withOpacity(0.55),
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Spacer(),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              child: FilledButton.icon(
+                onPressed: () => _openWizard(context),
+                icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                label: const Text(
+                  'Get Started',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _SellPageState extends State<SellPage> {
-  final _formKey = GlobalKey<FormState>();
-  String? _selectedCategory;
-  String? _selectedCondition;
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _descController = TextEditingController();
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-step wizard
+// ─────────────────────────────────────────────────────────────────────────────
+class _SellWizard extends StatefulWidget {
+  const _SellWizard();
 
-  final List<Map<String, dynamic>> _categories = [
-    {'name': 'Textbooks', 'icon': Icons.menu_book_rounded},
-    {'name': 'Electronics', 'icon': Icons.devices_rounded},
-    {'name': 'Dorm Gear', 'icon': Icons.bed_rounded},
-    {'name': 'Clothing', 'icon': Icons.checkroom_rounded},
-    {'name': 'Sports', 'icon': Icons.sports_basketball_rounded},
-    {'name': 'Beauty', 'icon': Icons.face_retouching_natural_rounded},
+  @override
+  State<_SellWizard> createState() => _SellWizardState();
+}
+
+class _SellWizardState extends State<_SellWizard> {
+  final PageController _pageController = PageController();
+  int _currentStep = 0;
+  static const int _totalSteps = 5;
+
+  // ── Shared state ──
+  final List<String> _selectedImages = []; // mock: store placeholder keys
+  String? _selectedCategory;
+  String? _selectedSubcategory;
+  final _nameController = TextEditingController();
+  String? _selectedCondition;
+  final _priceController = TextEditingController();
+  bool _openToOffers = true;
+  bool _faceToFace = false;
+  bool _delivery = false;
+  final _locationController = TextEditingController();
+  String? _deliveryMethod; // 'official' | 'self'
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _nameController.dispose();
+    _priceController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  void _next() {
+    if (_currentStep < _totalSteps - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+  }
+
+  void _prev() {
+    if (_currentStep > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+  }
+
+  void _onPageChanged(int index) {
+    setState(() => _currentStep = index);
+  }
+
+  bool get _canProceedStep0 => _selectedImages.isNotEmpty;
+  bool get _canProceedStep1 => _selectedCategory != null;
+  bool get _canProceedStep2 =>
+      _nameController.text.trim().isNotEmpty &&
+      _selectedCondition != null &&
+      _priceController.text.trim().isNotEmpty;
+  bool get _canProceedStep3 =>
+      (_faceToFace || _delivery) &&
+      (!_faceToFace || _locationController.text.trim().isNotEmpty) &&
+      (!_delivery || _deliveryMethod != null);
+
+  bool _canProceed(int step) {
+    switch (step) {
+      case 0:
+        return _canProceedStep0;
+      case 1:
+        return _canProceedStep1;
+      case 2:
+        return _canProceedStep2;
+      case 3:
+        return _canProceedStep3;
+      default:
+        return true;
+    }
+  }
+
+  void _publish() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+        content: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.white),
+            SizedBox(width: 10),
+            Text(
+              'Listing published successfully!',
+              style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
+    Navigator.of(context, rootNavigator: true).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Top bar ──
+            _WizardTopBar(
+              currentStep: _currentStep,
+              totalSteps: _totalSteps,
+              onClose: () => Navigator.of(context, rootNavigator: true).pop(),
+              onBack: _currentStep > 0 ? _prev : null,
+            ),
+
+            // ── Pages ──
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: _onPageChanged,
+                children: [
+                  _Step0Images(
+                    images: _selectedImages,
+                    onAdd: _addImage,
+                    onRemove: (i) => setState(() => _selectedImages.removeAt(i)),
+                  ),
+                  _Step1Category(
+                    selectedCategory: _selectedCategory,
+                    selectedSubcategory: _selectedSubcategory,
+                    images: _selectedImages,
+                    onCategorySelected: (cat, sub) => setState(() {
+                      _selectedCategory = cat;
+                      _selectedSubcategory = sub;
+                    }),
+                    onAdd: _addImage,
+                    onRemove: (i) => setState(() => _selectedImages.removeAt(i)),
+                  ),
+                  _Step2Details(
+                    nameController: _nameController,
+                    priceController: _priceController,
+                    selectedCondition: _selectedCondition,
+                    openToOffers: _openToOffers,
+                    onConditionSelected: (c) =>
+                        setState(() => _selectedCondition = c),
+                    onOffersChanged: (v) => setState(() => _openToOffers = v),
+                  ),
+                  _Step3TradeMethod(
+                    faceToFace: _faceToFace,
+                    delivery: _delivery,
+                    locationController: _locationController,
+                    deliveryMethod: _deliveryMethod,
+                    onFaceToFaceChanged: (v) =>
+                        setState(() => _faceToFace = v),
+                    onDeliveryChanged: (v) => setState(() => _delivery = v),
+                    onDeliveryMethodChanged: (v) =>
+                        setState(() => _deliveryMethod = v),
+                  ),
+                  _Step4Review(
+                    images: _selectedImages,
+                    category: _selectedCategory,
+                    subcategory: _selectedSubcategory,
+                    name: _nameController.text,
+                    condition: _selectedCondition,
+                    price: _priceController.text,
+                    openToOffers: _openToOffers,
+                    faceToFace: _faceToFace,
+                    delivery: _delivery,
+                    location: _locationController.text,
+                    deliveryMethod: _deliveryMethod,
+                    onEdit: (step) => _pageController.animateToPage(
+                      step,
+                      duration: const Duration(milliseconds: 350),
+                      curve: Curves.easeInOutCubic,
+                    ),
+                    onPublish: _publish,
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Bottom next/publish bar (hidden on review step since it has its own) ──
+            if (_currentStep < 4)
+              _WizardBottomBar(
+                canProceed: _canProceed(_currentStep),
+                isLastBeforeReview: _currentStep == 3,
+                onNext: _next,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _addImage() {
+    if (_selectedImages.length < 10) {
+      setState(() {
+        _selectedImages.add('photo_${DateTime.now().millisecondsSinceEpoch}');
+      });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared: Top bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _WizardTopBar extends StatelessWidget {
+  final int currentStep;
+  final int totalSteps;
+  final VoidCallback onClose;
+  final VoidCallback? onBack;
+
+  const _WizardTopBar({
+    required this.currentStep,
+    required this.totalSteps,
+    required this.onClose,
+    this.onBack,
+  });
+
+  static const List<String> _stepTitles = [
+    'Add Photos',
+    'Choose Category',
+    'Product Details',
+    'Trade Method',
+    'Review Listing',
   ];
 
-  final List<String> _conditions = [
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final progress = (currentStep + 1) / totalSteps;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+      color: const Color(0xFFF6F7FB),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              // Back or close
+              if (onBack != null)
+                IconButton(
+                  onPressed: onBack,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  tooltip: 'Back',
+                )
+              else
+                IconButton(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Close',
+                ),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _stepTitles[currentStep],
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    Text(
+                      'Step ${currentStep + 1} of $totalSteps',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.onSurface.withOpacity(0.5),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Close button on right when back is shown
+              if (onBack != null)
+                IconButton(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Close',
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Progress bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 5,
+                backgroundColor: colors.primary.withOpacity(0.12),
+                color: colors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared: Bottom bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _WizardBottomBar extends StatelessWidget {
+  final bool canProceed;
+  final bool isLastBeforeReview;
+  final VoidCallback onNext;
+
+  const _WizardBottomBar({
+    required this.canProceed,
+    required this.isLastBeforeReview,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: colors.outline.withOpacity(0.08)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 16,
+            offset: const Offset(0, -6),
+          ),
+        ],
+      ),
+      child: FilledButton(
+        onPressed: canProceed ? onNext : null,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: colors.primary,
+          disabledBackgroundColor: colors.primary.withOpacity(0.3),
+        ),
+        child: Text(
+          isLastBeforeReview ? 'Review Listing' : 'Next',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Image grid strip (reused across steps 0 & 1)
+// ─────────────────────────────────────────────────────────────────────────────
+class _ImageStrip extends StatelessWidget {
+  final List<String> images;
+  final VoidCallback onAdd;
+  final void Function(int) onRemove;
+  final double height;
+
+  const _ImageStrip({
+    required this.images,
+    required this.onAdd,
+    required this.onRemove,
+    this.height = 110,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final canAdd = images.length < 10;
+
+    return SizedBox(
+      height: height,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        physics: const BouncingScrollPhysics(),
+        children: [
+          if (canAdd)
+            GestureDetector(
+              onTap: onAdd,
+              child: Container(
+                width: height,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  gradient: LinearGradient(colors: [
+                    colors.primary.withOpacity(0.08),
+                    colors.primary.withOpacity(0.16),
+                  ]),
+                  border: Border.all(
+                    color: colors.primary.withOpacity(0.25),
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${images.length}/10',
+                      style: TextStyle(
+                        color: colors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ...List.generate(images.length, (i) {
+            // Mock colourful placeholder
+            final mockColors = [
+              const Color(0xFF10B981),
+              const Color(0xFF6366F1),
+              const Color(0xFFF59E0B),
+              const Color(0xFFEF4444),
+              const Color(0xFF8B5CF6),
+            ];
+            final bg = mockColors[i % mockColors.length];
+
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: height,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    color: bg.withOpacity(0.85),
+                  ),
+                  child: Stack(
+                    children: [
+                      Center(
+                        child: Icon(
+                          Icons.image_rounded,
+                          color: Colors.white.withOpacity(0.7),
+                          size: 36,
+                        ),
+                      ),
+                      if (i == 0)
+                        Positioned(
+                          bottom: 6,
+                          left: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black38,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'Cover',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  top: -4,
+                  right: 6,
+                  child: GestureDetector(
+                    onTap: () => onRemove(i),
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 0 – Image selection
+// ─────────────────────────────────────────────────────────────────────────────
+class _Step0Images extends StatelessWidget {
+  final List<String> images;
+  final VoidCallback onAdd;
+  final void Function(int) onRemove;
+
+  const _Step0Images({
+    required this.images,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 24, bottom: 16),
+      child: Column(
+        children: [
+          // ── Big add button ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: GestureDetector(
+              onTap: onAdd,
+              child: Container(
+                height: 220,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      colors.primary.withOpacity(0.08),
+                      colors.primary.withOpacity(0.18),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: colors.primary.withOpacity(0.25),
+                    width: 2,
+                    strokeAlign: BorderSide.strokeAlignOutside,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.primary.withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.photo_library_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Choose from Library',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: colors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Up to 10 photos',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colors.onSurface.withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Or take photo ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: OutlinedButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.camera_alt_rounded),
+              label: const Text(
+                'Take a Photo',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                side: BorderSide(color: colors.primary.withOpacity(0.35)),
+                foregroundColor: colors.primary,
+              ),
+            ),
+          ),
+
+          if (images.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Selected Photos',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _ImageStrip(
+              images: images,
+              onAdd: onAdd,
+              onRemove: onRemove,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 1 – Category
+// ─────────────────────────────────────────────────────────────────────────────
+class _Step1Category extends StatelessWidget {
+  final String? selectedCategory;
+  final String? selectedSubcategory;
+  final List<String> images;
+  final void Function(String cat, String? sub) onCategorySelected;
+  final VoidCallback onAdd;
+  final void Function(int) onRemove;
+
+  const _Step1Category({
+    required this.selectedCategory,
+    required this.selectedSubcategory,
+    required this.images,
+    required this.onCategorySelected,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  static const List<Map<String, dynamic>> _categories = [
+    {
+      'name': 'Textbooks',
+      'icon': Icons.menu_book_rounded,
+      'sub': ['Science', 'Arts', 'Engineering', 'Business', 'Law', 'Medicine'],
+    },
+    {
+      'name': 'Electronics',
+      'icon': Icons.devices_rounded,
+      'sub': ['Laptops', 'Phones', 'Tablets', 'Accessories', 'Gaming'],
+    },
+    {
+      'name': 'Dorm Gear',
+      'icon': Icons.bed_rounded,
+      'sub': ['Furniture', 'Bedding', 'Kitchen', 'Storage'],
+    },
+    {
+      'name': 'Clothing',
+      'icon': Icons.checkroom_rounded,
+      'sub': ['Tops', 'Bottoms', 'Shoes', 'Bags', 'Accessories'],
+    },
+    {
+      'name': 'Sports',
+      'icon': Icons.sports_basketball_rounded,
+      'sub': ['Equipment', 'Apparel', 'Outdoor'],
+    },
+    {
+      'name': 'Beauty',
+      'icon': Icons.face_retouching_natural_rounded,
+      'sub': ['Skincare', 'Makeup', 'Haircare', 'Fragrance'],
+    },
+    {
+      'name': 'Stationery',
+      'icon': Icons.edit_rounded,
+      'sub': ['Pens & Pencils', 'Notebooks', 'Art Supplies'],
+    },
+    {
+      'name': 'Other',
+      'icon': Icons.category_rounded,
+      'sub': ['Miscellaneous'],
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final selectedData = _categories.firstWhere(
+      (c) => c['name'] == selectedCategory,
+      orElse: () => {},
+    );
+    final subs = (selectedData['sub'] as List<String>?) ?? [];
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image strip at top
+          if (images.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _ImageStrip(
+              images: images,
+              onAdd: onAdd,
+              onRemove: onRemove,
+              height: 90,
+            ),
+            const SizedBox(height: 16),
+          ] else
+            const SizedBox(height: 16),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              'Category',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Category grid
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: _categories.map((cat) {
+                final sel = selectedCategory == cat['name'];
+                return GestureDetector(
+                  onTap: () => onCategorySelected(cat['name'] as String, null),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: sel
+                          ? colors.primary
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: sel
+                            ? colors.primary
+                            : colors.outline.withOpacity(0.15),
+                      ),
+                      boxShadow: sel
+                          ? [
+                              BoxShadow(
+                                color: colors.primary.withOpacity(0.25),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : [],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          cat['icon'] as IconData,
+                          size: 18,
+                          color: sel ? Colors.white : colors.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          cat['name'] as String,
+                          style: TextStyle(
+                            color: sel ? Colors.white : colors.onSurface,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+          // Subcategory
+          if (subs.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                'Subcategory',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: subs.map((sub) {
+                  final sel = selectedSubcategory == sub;
+                  return GestureDetector(
+                    onTap: () =>
+                        onCategorySelected(selectedCategory!, sub),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: sel
+                            ? colors.primary.withOpacity(0.12)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: sel
+                              ? colors.primary
+                              : colors.outline.withOpacity(0.15),
+                        ),
+                      ),
+                      child: Text(
+                        sub,
+                        style: TextStyle(
+                          color: sel ? colors.primary : colors.onSurface,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 2 – Product Details
+// ─────────────────────────────────────────────────────────────────────────────
+class _Step2Details extends StatelessWidget {
+  final TextEditingController nameController;
+  final TextEditingController priceController;
+  final String? selectedCondition;
+  final bool openToOffers;
+  final void Function(String) onConditionSelected;
+  final void Function(bool) onOffersChanged;
+
+  const _Step2Details({
+    required this.nameController,
+    required this.priceController,
+    required this.selectedCondition,
+    required this.openToOffers,
+    required this.onConditionSelected,
+    required this.onOffersChanged,
+  });
+
+  static const List<String> _conditions = [
     'New',
     'Like New',
     'Excellent',
@@ -32,358 +1051,353 @@ class _SellPageState extends State<SellPage> {
     'Fair',
   ];
 
-  void _onPublish() {
-    if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_outline_rounded, color: Colors.white),
-              SizedBox(width: 12),
-              Text('Listing published successfully!'),
-            ],
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(colorScheme, theme),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 60),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildSectionCard(
-                      colorScheme,
-                      icon: Icons.photo_library_rounded,
-                      title: 'Photos',
-                      subtitle: 'Add up to 5 clear photos of your item',
-                      child: _buildImageSelector(colorScheme),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSectionCard(
-                      colorScheme,
-                      icon: Icons.info_outline_rounded,
-                      title: 'Basic Information',
-                      subtitle:
-                          'Provide a catchy title and detailed description',
-                      child: Column(
-                        children: [
-                          _buildTextField(
-                            controller: _titleController,
-                            label: 'Item Title',
-                            hint: 'What are you selling?',
-                            icon: Icons.title_rounded,
-                            validator: (v) =>
-                                v?.isEmpty ?? true ? 'Title is required' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildTextField(
-                            controller: _descController,
-                            label: 'Description',
-                            hint: 'Describe the features, usage, etc.',
-                            icon: Icons.description_rounded,
-                            maxLines: 4,
-                            validator: (v) => v?.isEmpty ?? true
-                                ? 'Description is required'
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSectionCard(
-                      colorScheme,
-                      icon: Icons.category_rounded,
-                      title: 'Classification',
-                      subtitle: 'Help buyers find your item faster',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildLabel('Category'),
-                          const SizedBox(height: 12),
-                          _buildCategorySelector(colorScheme),
-                          const SizedBox(height: 24),
-                          _buildLabel('Condition'),
-                          const SizedBox(height: 12),
-                          _buildConditionSelector(colorScheme),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSectionCard(
-                      colorScheme,
-                      icon: Icons.payments_rounded,
-                      title: 'Pricing & Offer',
-                      subtitle: 'Set your price and negotiation preference',
-                      child: Column(
-                        children: [
-                          _buildTextField(
-                            controller: _priceController,
-                            label: 'Target Price',
-                            hint: '0.00',
-                            icon: Icons.attach_money_rounded,
-                            keyboardType: TextInputType.number,
-                            validator: (v) =>
-                                v?.isEmpty ?? true ? 'Required' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: colorScheme.primaryContainer.withValues(
-                                alpha: 0.2,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: colorScheme.primary.withValues(
-                                  alpha: 0.1,
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: colorScheme.primary,
-                                  child: const Icon(
-                                    Icons.handshake_outlined,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Open to Offers',
-                                        style: theme.textTheme.titleSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                      Text(
-                                        'Allow buyers to negotiate',
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Switch.adaptive(
-                                  value: true,
-                                  onChanged: (v) {},
-                                  activeColor: colorScheme.primary,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-                    _buildPublishButton(colorScheme),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionCard(
-    ColorScheme colorScheme, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Widget child,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      physics: const BouncingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, color: colorScheme.primary, size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                        letterSpacing: -0.5,
-                      ),
+          // Product name
+          _SectionLabel('Product Name'),
+          const SizedBox(height: 10),
+          _StyledField(
+            controller: nameController,
+            hint: 'e.g. iPad 9th Gen 64GB with case',
+            icon: Icons.title_rounded,
+          ),
+
+          const SizedBox(height: 24),
+
+          // Condition
+          _SectionLabel('Condition'),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: _conditions.map((c) {
+              final sel = selectedCondition == c;
+              return GestureDetector(
+                onTap: () => onConditionSelected(c),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: sel ? colors.primary : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: sel ? colors.primary : colors.outline.withOpacity(0.15),
                     ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: colorScheme.onSurfaceVariant,
-                        fontSize: 13,
-                      ),
+                    boxShadow: sel
+                        ? [
+                            BoxShadow(
+                              color: colors.primary.withOpacity(0.25),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Text(
+                    c,
+                    style: TextStyle(
+                      color: sel ? Colors.white : colors.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              );
+            }).toList(),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Price
+          _SectionLabel('Price (RM)'),
+          const SizedBox(height: 10),
+          _StyledField(
+            controller: priceController,
+            hint: '0.00',
+            icon: Icons.sell_rounded,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
             ],
+            prefixText: 'RM ',
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(height: 1),
+
+          const SizedBox(height: 20),
+
+          // Open to offers
+          _OfferToggle(
+            value: openToOffers,
+            onChanged: onOffersChanged,
           ),
-          child,
         ],
       ),
     );
   }
+}
 
-  Widget _buildAppBar(ColorScheme colorScheme, ThemeData theme) {
-    return SliverAppBar(
-      expandedHeight: 180,
-      pinned: true,
-      stretch: true,
-      backgroundColor: colorScheme.primary,
-      surfaceTintColor: colorScheme.primary,
-      foregroundColor: Colors.white,
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 3 – Trade Method
+// ─────────────────────────────────────────────────────────────────────────────
+class _Step3TradeMethod extends StatelessWidget {
+  final bool faceToFace;
+  final bool delivery;
+  final TextEditingController locationController;
+  final String? deliveryMethod;
+  final void Function(bool) onFaceToFaceChanged;
+  final void Function(bool) onDeliveryChanged;
+  final void Function(String) onDeliveryMethodChanged;
 
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: TextButton.icon(
-            onPressed: () {},
-            style: TextButton.styleFrom(
-              backgroundColor: Colors.white.withValues(alpha: 0.2),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            icon: const Icon(
-              Icons.save_outlined,
-              color: Colors.white,
-              size: 18,
-            ),
-            label: const Text(
-              'Draft',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
+  const _Step3TradeMethod({
+    required this.faceToFace,
+    required this.delivery,
+    required this.locationController,
+    required this.deliveryMethod,
+    required this.onFaceToFaceChanged,
+    required this.onDeliveryChanged,
+    required this.onDeliveryMethodChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Select at least one method',
+            style: TextStyle(
+              fontSize: 13,
+              color: colors.onSurface.withOpacity(0.55),
             ),
           ),
-        ),
-      ],
-      flexibleSpace: FlexibleSpaceBar(
-        stretchModes: const [StretchMode.zoomBackground, StretchMode.fadeTitle],
-        titlePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        title: LayoutBuilder(
-          builder: (context, constraints) {
-            final isCollapsed =
-                constraints.maxHeight <=
-                (MediaQuery.of(context).padding.top + kToolbarHeight + 20);
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 16),
+
+          // Face-to-face toggle card
+          _TradeOptionCard(
+            icon: Icons.handshake_rounded,
+            title: 'Face-to-Face',
+            subtitle: 'Meet the buyer in person at a safe location.',
+            selected: faceToFace,
+            onTap: () => onFaceToFaceChanged(!faceToFace),
+          ),
+
+          if (faceToFace) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: _StyledField(
+                controller: locationController,
+                hint: 'e.g. Campus Library, Ground Floor',
+                icon: Icons.location_on_rounded,
+                label: 'Meeting Location',
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 14),
+
+          // Delivery toggle card
+          _TradeOptionCard(
+            icon: Icons.local_shipping_rounded,
+            title: 'Delivery',
+            subtitle: 'Ship the item to the buyer.',
+            selected: delivery,
+            onTap: () => onDeliveryChanged(!delivery),
+          ),
+
+          if (delivery) ...[
+            const SizedBox(height: 12),
+            _SectionLabel('Delivery Method'),
+            const SizedBox(height: 10),
+            Row(
               children: [
-                Text(
-                  'Create Listing',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: isCollapsed ? 20 : 26,
-                    letterSpacing: -0.5,
+                Expanded(
+                  child: _DeliveryMethodTile(
+                    icon: Icons.business_center_rounded,
+                    label: 'Official Delivery',
+                    selected: deliveryMethod == 'official',
+                    onTap: () => onDeliveryMethodChanged('official'),
                   ),
                 ),
-                if (!isCollapsed)
-                  Text(
-                    'Sell your item to the campus community',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _DeliveryMethodTile(
+                    icon: Icons.directions_bike_rounded,
+                    label: 'Self-Delivery',
+                    selected: deliveryMethod == 'self',
+                    onTap: () => onDeliveryMethodChanged('self'),
                   ),
+                ),
               ],
-            );
-          },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TradeOptionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TradeOptionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? colors.primary.withOpacity(0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: selected ? colors.primary : colors.outline.withOpacity(0.15),
+            width: selected ? 1.5 : 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: colors.primary.withOpacity(0.12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [],
         ),
-        background: Stack(
-          fit: StackFit.expand,
+        child: Row(
           children: [
             Container(
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    colorScheme.primary,
-                    colorScheme.primary.withValues(alpha: 0.8),
-                    colorScheme.secondary.withValues(alpha: 0.9),
-                  ],
+                color: selected
+                    ? colors.primary
+                    : colors.primary.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                icon,
+                color: selected ? Colors.white : colors.primary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: selected ? colors.primary : colors.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.onSurface.withOpacity(0.55),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected ? colors.primary : Colors.transparent,
+                border: Border.all(
+                  color: selected ? colors.primary : colors.outline.withOpacity(0.3),
+                  width: 2,
                 ),
               ),
+              child: selected
+                  ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                  : null,
             ),
-            // Decorative elements
-            Positioned(
-              top: -20,
-              right: -20,
-              child: CircleAvatar(
-                radius: 60,
-                backgroundColor: Colors.white.withValues(alpha: 0.08),
-              ),
-            ),
-            Positioned(
-              bottom: 40,
-              left: -10,
-              child: CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.white.withValues(alpha: 0.05),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveryMethodTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DeliveryMethodTile({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        decoration: BoxDecoration(
+          color: selected ? colors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? colors.primary : colors.outline.withOpacity(0.15),
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: selected ? Colors.white : colors.primary, size: 26),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected ? Colors.white : colors.onSurface,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
               ),
             ),
           ],
@@ -391,272 +1405,371 @@ class _SellPageState extends State<SellPage> {
       ),
     );
   }
+}
 
-  Widget _buildImageSelector(ColorScheme colorScheme) {
-    return SizedBox(
-      height: 110,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.hardEdge,
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 4 – Review Listing
+// ─────────────────────────────────────────────────────────────────────────────
+class _Step4Review extends StatelessWidget {
+  final List<String> images;
+  final String? category;
+  final String? subcategory;
+  final String name;
+  final String? condition;
+  final String price;
+  final bool openToOffers;
+  final bool faceToFace;
+  final bool delivery;
+  final String location;
+  final String? deliveryMethod;
+  final void Function(int) onEdit;
+  final VoidCallback onPublish;
+
+  const _Step4Review({
+    required this.images,
+    required this.category,
+    required this.subcategory,
+    required this.name,
+    required this.condition,
+    required this.price,
+    required this.openToOffers,
+    required this.faceToFace,
+    required this.delivery,
+    required this.location,
+    required this.deliveryMethod,
+    required this.onEdit,
+    required this.onPublish,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
         children: [
-          _buildAddImageButton(colorScheme),
-          ...List.generate(3, (index) => _buildMockImageItem(colorScheme)),
+          // Image strip
+          if (images.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _ImageStrip(
+              images: images,
+              onAdd: () {},
+              onRemove: (_) {},
+              height: 100,
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              children: [
+                _ReviewSection(
+                  title: 'Photos',
+                  value:
+                      '${images.length} photo${images.length == 1 ? '' : 's'}',
+                  onEdit: () => onEdit(0),
+                ),
+                _ReviewSection(
+                  title: 'Category',
+                  value: [category, subcategory]
+                      .where((e) => e != null && e.isNotEmpty)
+                      .join(' › '),
+                  onEdit: () => onEdit(1),
+                ),
+                _ReviewSection(
+                  title: 'Product Name',
+                  value: name.isEmpty ? '—' : name,
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Condition',
+                  value: condition ?? '—',
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Price',
+                  value: price.isEmpty ? '—' : 'RM $price',
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Open to Offers',
+                  value: openToOffers ? 'Yes' : 'No',
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Trade Method',
+                  value: [
+                    if (faceToFace) 'Face-to-Face',
+                    if (delivery) 'Delivery',
+                  ].join(', ').isEmpty
+                      ? '—'
+                      : [
+                          if (faceToFace) 'Face-to-Face',
+                          if (delivery) 'Delivery',
+                        ].join(', '),
+                  onEdit: () => onEdit(3),
+                ),
+                if (faceToFace && location.isNotEmpty)
+                  _ReviewSection(
+                    title: 'Meeting Location',
+                    value: location,
+                    onEdit: () => onEdit(3),
+                  ),
+                if (delivery && deliveryMethod != null)
+                  _ReviewSection(
+                    title: 'Delivery Method',
+                    value: deliveryMethod == 'official'
+                        ? 'Official Delivery'
+                        : 'Self-Delivery',
+                    onEdit: () => onEdit(3),
+                  ),
+
+                const SizedBox(height: 24),
+
+                // Publish button
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.primary.withOpacity(0.28),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: FilledButton.icon(
+                    onPressed: onPublish,
+                    icon: const Icon(Icons.rocket_launch_rounded),
+                    label: const Text(
+                      'Complete & Publish',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildAddImageButton(ColorScheme colorScheme) {
-    return Container(
-      width: 110,
-      height: 110,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: colorScheme.primary.withValues(alpha: 0.2),
-          width: 2,
-          style: BorderStyle.solid, // Could use dashed if package available
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {},
-          borderRadius: BorderRadius.circular(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.add_a_photo_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Add Photo',
-                style: TextStyle(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+class _ReviewSection extends StatelessWidget {
+  final String title;
+  final String value;
+  final VoidCallback onEdit;
 
-  Widget _buildMockImageItem(ColorScheme colorScheme) {
+  const _ReviewSection({
+    required this.title,
+    required this.value,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
     return Container(
-      width: 110,
-      height: 110,
-      margin: const EdgeInsets.only(right: 12),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(24),
-        image: const DecorationImage(
-          image: NetworkImage('https://picsum.photos/300'),
-          fit: BoxFit.cover,
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.outline.withOpacity(0.10)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Stack(
+      child: Row(
         children: [
-          Positioned(
-            top: 8,
-            right: 8,
-            child: GestureDetector(
-              onTap: () {},
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  shape: BoxShape.circle,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.onSurface.withOpacity(0.5),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                  ),
                 ),
-                child: const Icon(Icons.close, color: Colors.white, size: 16),
-              ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onEdit,
+            style: TextButton.styleFrom(
+              foregroundColor: colors.primary,
+              minimumSize: Size.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'Edit',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    int maxLines = 1,
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared helpers
+// ─────────────────────────────────────────────────────────────────────────────
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+    );
+  }
+}
+
+class _StyledField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final String? label;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? prefixText;
+
+  const _StyledField({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.label,
+    this.keyboardType,
+    this.inputFormatters,
+    this.prefixText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return TextField(
       controller: controller,
-      maxLines: maxLines,
       keyboardType: keyboardType,
-      validator: validator,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        alignLabelWithHint: maxLines > 1,
-        prefixIcon: Icon(
-          icon,
-          size: 20,
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+        filled: true,
+        fillColor: const Color(0xFFF9FAFC),
+        prefixText: prefixText,
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 6, right: 2),
+          child: Icon(icon, color: colors.primary, size: 20),
         ),
-        floatingLabelBehavior: FloatingLabelBehavior.always,
+        prefixIconConstraints: const BoxConstraints(minWidth: 42),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: colors.outline.withOpacity(0.12)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: colors.outline.withOpacity(0.12)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: colors.primary, width: 1.5),
+        ),
       ),
     );
   }
+}
 
-  Widget _buildLabel(String text) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-        fontWeight: FontWeight.bold,
-        color: Theme.of(context).colorScheme.onSurface,
-        letterSpacing: 0.5,
-      ),
-    );
-  }
+class _OfferToggle extends StatelessWidget {
+  final bool value;
+  final void Function(bool) onChanged;
 
-  Widget _buildCategorySelector(ColorScheme colorScheme) {
-    return SizedBox(
-      height: 48,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.hardEdge,
-        itemCount: _categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final cat = _categories[index];
-          final isSelected = _selectedCategory == cat['name'];
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            child: ChoiceChip(
-              label: Text(cat['name']),
-              avatar: Icon(
-                cat['icon'],
-                size: 16,
-                color: isSelected ? Colors.white : colorScheme.primary,
-              ),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(
-                  () => _selectedCategory = selected ? cat['name'] : null,
-                );
-              },
-              showCheckmark: false,
-              selectedColor: colorScheme.primary,
-              backgroundColor: colorScheme.surface,
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : colorScheme.onSurface,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 13,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(
-                  color: isSelected
-                      ? Colors.transparent
-                      : colorScheme.outlineVariant,
-                  width: 1,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+  const _OfferToggle({required this.value, required this.onChanged});
 
-  Widget _buildConditionSelector(ColorScheme colorScheme) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: _conditions.map((condition) {
-        final isSelected = _selectedCondition == condition;
-        return ChoiceChip(
-          label: Text(condition),
-          selected: isSelected,
-          onSelected: (selected) {
-            setState(() => _selectedCondition = selected ? condition : null);
-          },
-          showCheckmark: false,
-          selectedColor: colorScheme.primary,
-          backgroundColor: colorScheme.surface,
-          labelStyle: TextStyle(
-            color: isSelected ? Colors.white : colorScheme.onSurface,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            fontSize: 13,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: isSelected
-                  ? Colors.transparent
-                  : colorScheme.outlineVariant,
-              width: 1,
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
 
-  Widget _buildPublishButton(ColorScheme colorScheme) {
-    return Container(
-      height: 64,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.3),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        color: value ? colors.primary.withOpacity(0.07) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: value
+              ? colors.primary.withOpacity(0.14)
+              : colors.outline.withOpacity(0.12),
+        ),
       ),
-      child: FilledButton(
-        onPressed: _onPublish,
-        style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.rocket_launch_rounded),
-            SizedBox(width: 12),
-            Text(
-              'Publish Listing',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.5,
-              ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: colors.primary,
+              borderRadius: BorderRadius.circular(14),
             ),
-          ],
-        ),
+            child: const Icon(
+              Icons.handshake_outlined,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Open to Offers',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Let buyers negotiate the price.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(value: value, onChanged: onChanged),
+        ],
       ),
     );
   }
