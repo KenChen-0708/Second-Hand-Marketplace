@@ -4,7 +4,7 @@ import 'json_utils.dart';
 
 class UserModel implements AppModel {
   @override
-  final String id; // This will hold your 'U0001' style IDs
+  final String id;
   final String email;
   final String name;
   final String? avatarUrl;
@@ -36,8 +36,9 @@ class UserModel implements AppModel {
     this.updatedAt,
   });
 
-  /// Updated copyWith to include all new table fields
   UserModel copyWith({
+    String? id,
+    String? email,
     String? name,
     String? avatarUrl,
     String? role,
@@ -48,11 +49,12 @@ class UserModel implements AppModel {
     String? postalCode,
     String? country,
     String? bio,
+    DateTime? createdAt,
     DateTime? updatedAt,
   }) {
     return UserModel(
-      id: this.id, // ID should usually never change
-      email: this.email, // Email is typically fixed as the Auth identifier
+      id: id ?? this.id,
+      email: email ?? this.email,
       name: name ?? this.name,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       role: role ?? this.role,
@@ -63,12 +65,11 @@ class UserModel implements AppModel {
       postalCode: postalCode ?? this.postalCode,
       country: country ?? this.country,
       bio: bio ?? this.bio,
-      createdAt: this.createdAt,
+      createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
-  /// Factory to safely parse the expanded PostgreSQL result
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
       id: JsonUtils.asString(map['id']) ?? '',
@@ -88,7 +89,6 @@ class UserModel implements AppModel {
     );
   }
 
-  /// Maps the object back to your public.users table format
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -103,8 +103,6 @@ class UserModel implements AppModel {
       'postal_code': postalCode,
       'country': country,
       'bio': bio,
-      // Timestamps are usually handled by Postgres 'DEFAULT' or 'ON UPDATE'
-      // but we include them here for full model consistency
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
