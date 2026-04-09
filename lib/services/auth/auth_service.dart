@@ -17,11 +17,24 @@ class AuthService {
   /// Bridging Logic: Fetches the 'U0001' style profile using email
   Future<UserModel> fetchProfileByEmail(String email) async {
     try {
-      final data = await supabase
+      var data = await supabase
           .from('users')
           .select()
           .eq('email', email)
-          .single();
+          .maybeSingle();
+
+      if (data == null) {
+        // Recovery logic if database was reset but Supabase Auth remains
+        data = await supabase
+            .from('users')
+            .insert({
+              'email': email,
+              'name': email.split('@').first,
+            })
+            .select()
+            .single();
+      }
+
       return UserModel.fromMap(data);
     } on PostgrestException catch (e) {
       throw Exception(e.message);
