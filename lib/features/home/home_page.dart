@@ -1094,7 +1094,7 @@ class _HomePageState extends State<HomePage> {
           final product = _filteredProducts[index];
           return GestureDetector(
             onTap: () {
-              context.push('/home/product/${product.id}');
+              context.push('/product/${product.id}');
             },
             child: Container(
               decoration: BoxDecoration(
