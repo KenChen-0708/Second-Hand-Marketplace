@@ -1,5 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'MapSelectionScreen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry screen – shown as the /sell shell branch
@@ -14,10 +19,13 @@ class SellPage extends StatelessWidget {
         pageBuilder: (_, __, ___) => const _SellWizard(),
         transitionsBuilder: (_, animation, __, child) {
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+            position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           );
         },
@@ -149,7 +157,9 @@ class _SellWizardState extends State<_SellWizard> {
   static const int _totalSteps = 5;
 
   // ── Shared state ──
-  final List<String> _selectedImages = []; // mock: store placeholder keys
+  final List<String> _selectedImages = [];
+  final ImagePicker _picker = ImagePicker();
+
   String? _selectedCategory;
   String? _selectedSubcategory;
   final _nameController = TextEditingController();
@@ -160,6 +170,20 @@ class _SellWizardState extends State<_SellWizard> {
   bool _delivery = false;
   final _locationController = TextEditingController();
   String? _deliveryMethod; // 'official' | 'self'
+
+  bool _isLoadingLocation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    void rebuild() {
+      if (mounted) setState(() {});
+    }
+
+    _nameController.addListener(rebuild);
+    _priceController.addListener(rebuild);
+    _locationController.addListener(rebuild);
+  }
 
   @override
   void dispose() {
@@ -218,6 +242,158 @@ class _SellWizardState extends State<_SellWizard> {
     }
   }
 
+  // ── Hardware Integration: Camera & Gallery ──
+  Future<void> _takePhoto() async {
+    try {
+      final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
+      if (photo != null && _selectedImages.length < 10) {
+        setState(() => _selectedImages.add(photo.path));
+      }
+    } catch (e) {
+      debugPrint("Error taking photo: $e");
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final List<XFile> images = await _picker.pickMultiImage();
+      if (images.isNotEmpty) {
+        setState(() {
+          for (var img in images) {
+            if (_selectedImages.length < 10 &&
+                !_selectedImages.contains(img.path)) {
+              _selectedImages.add(img.path);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error picking from gallery: $e");
+    }
+  }
+
+  // ── Hardware Integration: GPS Location ──
+  Future<void> _fetchGPSLocation() async {
+    setState(() => _isLoadingLocation = true);
+
+    try {
+      // 1. Check if GPS hardware is on
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('GPS is turned off. Opening location settings...'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        // Automatically open device location settings for the user
+        await Geolocator.openLocationSettings();
+        setState(() => _isLoadingLocation = false);
+        return; // Exit early since user went to settings
+      }
+
+      // 2. Check app permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permissions were denied by the user.');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        // Automatically open app settings if permissions are permanently denied
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Permissions denied forever. Opening app settings...',
+              ),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        await Geolocator.openAppSettings();
+        setState(() => _isLoadingLocation = false);
+        return;
+      }
+
+      // 3. Fetch location
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      // 4. Update the text field
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        String address = [
+          place.street,
+          place.subLocality,
+          place.locality,
+        ].where((e) => e != null && e.isNotEmpty).join(', ');
+
+        setState(() {
+          _locationController.text = address;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingLocation = false);
+      }
+    }
+  }
+
+  Future<void> _openInteractiveMap() async {
+    setState(() => _isLoadingLocation = true);
+
+    // Default fallback coordinates (Kuala Lumpur)
+    double lat = 3.1390;
+    double lng = 101.6869;
+
+    try {
+      // Try to center the map roughly on the user's current location
+      Position pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+      );
+      lat = pos.latitude;
+      lng = pos.longitude;
+    } catch (_) {
+      // Ignore errors; we'll just fall back to the default coordinates
+    }
+
+    setState(() => _isLoadingLocation = false);
+    if (!mounted) return;
+
+    // Open the map screen and await the selected address string
+    final selectedAddress = await Navigator.of(context, rootNavigator: true)
+        .push(
+          MaterialPageRoute(
+            builder: (_) =>
+                MapSelectionScreen(initialLat: lat, initialLng: lng),
+          ),
+        );
+
+    // If the user confirmed a location, update the text field
+    if (selectedAddress != null && selectedAddress is String) {
+      setState(() {
+        _locationController.text = selectedAddress;
+      });
+    }
+  }
+
   void _publish() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -231,7 +407,10 @@ class _SellWizardState extends State<_SellWizard> {
             SizedBox(width: 10),
             Text(
               'Listing published successfully!',
-              style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
             ),
           ],
         ),
@@ -242,8 +421,6 @@ class _SellWizardState extends State<_SellWizard> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
       body: SafeArea(
@@ -266,8 +443,10 @@ class _SellWizardState extends State<_SellWizard> {
                 children: [
                   _Step0Images(
                     images: _selectedImages,
-                    onAdd: _addImage,
-                    onRemove: (i) => setState(() => _selectedImages.removeAt(i)),
+                    onPickGallery: _pickFromGallery,
+                    onTakePhoto: _takePhoto,
+                    onRemove: (i) =>
+                        setState(() => _selectedImages.removeAt(i)),
                   ),
                   _Step1Category(
                     selectedCategory: _selectedCategory,
@@ -277,8 +456,9 @@ class _SellWizardState extends State<_SellWizard> {
                       _selectedCategory = cat;
                       _selectedSubcategory = sub;
                     }),
-                    onAdd: _addImage,
-                    onRemove: (i) => setState(() => _selectedImages.removeAt(i)),
+                    onPickGallery: _pickFromGallery,
+                    onRemove: (i) =>
+                        setState(() => _selectedImages.removeAt(i)),
                   ),
                   _Step2Details(
                     nameController: _nameController,
@@ -294,11 +474,13 @@ class _SellWizardState extends State<_SellWizard> {
                     delivery: _delivery,
                     locationController: _locationController,
                     deliveryMethod: _deliveryMethod,
-                    onFaceToFaceChanged: (v) =>
-                        setState(() => _faceToFace = v),
+                    isLoadingLocation: _isLoadingLocation,
+                    onFaceToFaceChanged: (v) => setState(() => _faceToFace = v),
                     onDeliveryChanged: (v) => setState(() => _delivery = v),
                     onDeliveryMethodChanged: (v) =>
                         setState(() => _deliveryMethod = v),
+                    onFetchLocation: _fetchGPSLocation,
+                    onOpenMap: _openInteractiveMap,
                   ),
                   _Step4Review(
                     images: _selectedImages,
@@ -323,7 +505,7 @@ class _SellWizardState extends State<_SellWizard> {
               ),
             ),
 
-            // ── Bottom next/publish bar (hidden on review step since it has its own) ──
+            // ── Bottom next/publish bar ──
             if (_currentStep < 4)
               _WizardBottomBar(
                 canProceed: _canProceed(_currentStep),
@@ -334,14 +516,6 @@ class _SellWizardState extends State<_SellWizard> {
         ),
       ),
     );
-  }
-
-  void _addImage() {
-    if (_selectedImages.length < 10) {
-      setState(() {
-        _selectedImages.add('photo_${DateTime.now().millisecondsSinceEpoch}');
-      });
-    }
   }
 }
 
@@ -381,7 +555,6 @@ class _WizardTopBar extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Back or close
               if (onBack != null)
                 IconButton(
                   onPressed: onBack,
@@ -419,7 +592,6 @@ class _WizardTopBar extends StatelessWidget {
                 ),
               ),
 
-              // Close button on right when back is shown
               if (onBack != null)
                 IconButton(
                   onPressed: onClose,
@@ -429,7 +601,6 @@ class _WizardTopBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          // Progress bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: ClipRRect(
@@ -506,7 +677,7 @@ class _WizardBottomBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Image grid strip (reused across steps 0 & 1)
+// Image grid strip
 // ─────────────────────────────────────────────────────────────────────────────
 class _ImageStrip extends StatelessWidget {
   final List<String> images;
@@ -541,10 +712,12 @@ class _ImageStrip extends StatelessWidget {
                 margin: const EdgeInsets.only(right: 10),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  gradient: LinearGradient(colors: [
-                    colors.primary.withOpacity(0.08),
-                    colors.primary.withOpacity(0.16),
-                  ]),
+                  gradient: LinearGradient(
+                    colors: [
+                      colors.primary.withOpacity(0.08),
+                      colors.primary.withOpacity(0.16),
+                    ],
+                  ),
                   border: Border.all(
                     color: colors.primary.withOpacity(0.25),
                     width: 1.5,
@@ -560,7 +733,11 @@ class _ImageStrip extends StatelessWidget {
                         color: colors.primary,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -576,16 +753,6 @@ class _ImageStrip extends StatelessWidget {
               ),
             ),
           ...List.generate(images.length, (i) {
-            // Mock colourful placeholder
-            final mockColors = [
-              const Color(0xFF10B981),
-              const Color(0xFF6366F1),
-              const Color(0xFFF59E0B),
-              const Color(0xFFEF4444),
-              const Color(0xFF8B5CF6),
-            ];
-            final bg = mockColors[i % mockColors.length];
-
             return Stack(
               clipBehavior: Clip.none,
               children: [
@@ -594,17 +761,13 @@ class _ImageStrip extends StatelessWidget {
                   margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
-                    color: bg.withOpacity(0.85),
+                    image: DecorationImage(
+                      image: FileImage(File(images[i])),
+                      fit: BoxFit.cover,
+                    ),
                   ),
                   child: Stack(
                     children: [
-                      Center(
-                        child: Icon(
-                          Icons.image_rounded,
-                          color: Colors.white.withOpacity(0.7),
-                          size: 36,
-                        ),
-                      ),
                       if (i == 0)
                         Positioned(
                           bottom: 6,
@@ -615,7 +778,7 @@ class _ImageStrip extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black38,
+                              color: Colors.black54,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(
@@ -665,12 +828,14 @@ class _ImageStrip extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _Step0Images extends StatelessWidget {
   final List<String> images;
-  final VoidCallback onAdd;
+  final VoidCallback onPickGallery;
+  final VoidCallback onTakePhoto;
   final void Function(int) onRemove;
 
   const _Step0Images({
     required this.images,
-    required this.onAdd,
+    required this.onPickGallery,
+    required this.onTakePhoto,
     required this.onRemove,
   });
 
@@ -682,11 +847,10 @@ class _Step0Images extends StatelessWidget {
       padding: const EdgeInsets.only(top: 24, bottom: 16),
       child: Column(
         children: [
-          // ── Big add button ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: GestureDetector(
-              onTap: onAdd,
+              onTap: onPickGallery,
               child: Container(
                 height: 220,
                 width: double.infinity,
@@ -751,14 +915,11 @@ class _Step0Images extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // ── Or take photo ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: OutlinedButton.icon(
-              onPressed: onAdd,
+              onPressed: onTakePhoto,
               icon: const Icon(Icons.camera_alt_rounded),
               label: const Text(
                 'Take a Photo',
@@ -774,7 +935,6 @@ class _Step0Images extends StatelessWidget {
               ),
             ),
           ),
-
           if (images.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Padding(
@@ -783,17 +943,14 @@ class _Step0Images extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'Selected Photos',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                 ),
               ),
             ),
             const SizedBox(height: 12),
             _ImageStrip(
               images: images,
-              onAdd: onAdd,
+              onAdd: onPickGallery,
               onRemove: onRemove,
             ),
           ],
@@ -811,7 +968,7 @@ class _Step1Category extends StatelessWidget {
   final String? selectedSubcategory;
   final List<String> images;
   final void Function(String cat, String? sub) onCategorySelected;
-  final VoidCallback onAdd;
+  final VoidCallback onPickGallery;
   final void Function(int) onRemove;
 
   const _Step1Category({
@@ -819,7 +976,7 @@ class _Step1Category extends StatelessWidget {
     required this.selectedSubcategory,
     required this.images,
     required this.onCategorySelected,
-    required this.onAdd,
+    required this.onPickGallery,
     required this.onRemove,
   });
 
@@ -880,12 +1037,11 @@ class _Step1Category extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image strip at top
           if (images.isNotEmpty) ...[
             const SizedBox(height: 12),
             _ImageStrip(
               images: images,
-              onAdd: onAdd,
+              onAdd: onPickGallery,
               onRemove: onRemove,
               height: 90,
             ),
@@ -902,7 +1058,6 @@ class _Step1Category extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Category grid
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Wrap(
@@ -919,9 +1074,7 @@ class _Step1Category extends StatelessWidget {
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: sel
-                          ? colors.primary
-                          : Colors.white,
+                      color: sel ? colors.primary : Colors.white,
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: sel
@@ -963,7 +1116,6 @@ class _Step1Category extends StatelessWidget {
             ),
           ),
 
-          // Subcategory
           if (subs.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Padding(
@@ -982,8 +1134,7 @@ class _Step1Category extends StatelessWidget {
                 children: subs.map((sub) {
                   final sel = selectedSubcategory == sub;
                   return GestureDetector(
-                    onTap: () =>
-                        onCategorySelected(selectedCategory!, sub),
+                    onTap: () => onCategorySelected(selectedCategory!, sub),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.symmetric(
@@ -1015,7 +1166,6 @@ class _Step1Category extends StatelessWidget {
               ),
             ),
           ],
-
           const SizedBox(height: 32),
         ],
       ),
@@ -1054,14 +1204,12 @@ class _Step2Details extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       physics: const BouncingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Product name
           _SectionLabel('Product Name'),
           const SizedBox(height: 10),
           _StyledField(
@@ -1069,10 +1217,7 @@ class _Step2Details extends StatelessWidget {
             hint: 'e.g. iPad 9th Gen 64GB with case',
             icon: Icons.title_rounded,
           ),
-
           const SizedBox(height: 24),
-
-          // Condition
           _SectionLabel('Condition'),
           const SizedBox(height: 12),
           Wrap(
@@ -1092,7 +1237,9 @@ class _Step2Details extends StatelessWidget {
                     color: sel ? colors.primary : Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: sel ? colors.primary : colors.outline.withOpacity(0.15),
+                      color: sel
+                          ? colors.primary
+                          : colors.outline.withOpacity(0.15),
                     ),
                     boxShadow: sel
                         ? [
@@ -1116,10 +1263,7 @@ class _Step2Details extends StatelessWidget {
               );
             }).toList(),
           ),
-
           const SizedBox(height: 24),
-
-          // Price
           _SectionLabel('Price (RM)'),
           const SizedBox(height: 10),
           _StyledField(
@@ -1132,14 +1276,8 @@ class _Step2Details extends StatelessWidget {
             ],
             prefixText: 'RM ',
           ),
-
           const SizedBox(height: 20),
-
-          // Open to offers
-          _OfferToggle(
-            value: openToOffers,
-            onChanged: onOffersChanged,
-          ),
+          _OfferToggle(value: openToOffers, onChanged: onOffersChanged),
         ],
       ),
     );
@@ -1154,18 +1292,24 @@ class _Step3TradeMethod extends StatelessWidget {
   final bool delivery;
   final TextEditingController locationController;
   final String? deliveryMethod;
+  final bool isLoadingLocation;
   final void Function(bool) onFaceToFaceChanged;
   final void Function(bool) onDeliveryChanged;
   final void Function(String) onDeliveryMethodChanged;
+  final VoidCallback onFetchLocation;
+  final VoidCallback onOpenMap; // <-- ADDED THIS FIELD
 
   const _Step3TradeMethod({
     required this.faceToFace,
     required this.delivery,
     required this.locationController,
     required this.deliveryMethod,
+    required this.isLoadingLocation,
     required this.onFaceToFaceChanged,
     required this.onDeliveryChanged,
     required this.onDeliveryMethodChanged,
+    required this.onFetchLocation,
+    required this.onOpenMap, // <-- ADDED THIS TO CONSTRUCTOR
   });
 
   @override
@@ -1187,7 +1331,6 @@ class _Step3TradeMethod extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Face-to-face toggle card
           _TradeOptionCard(
             icon: Icons.handshake_rounded,
             title: 'Face-to-Face',
@@ -1205,13 +1348,43 @@ class _Step3TradeMethod extends StatelessWidget {
                 hint: 'e.g. Campus Library, Ground Floor',
                 icon: Icons.location_on_rounded,
                 label: 'Meeting Location',
+                // Updated suffix icon to show both GPS and Map buttons
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isLoadingLocation)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 14),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      IconButton(
+                        icon: Icon(
+                          Icons.my_location_rounded,
+                          color: colors.primary,
+                        ),
+                        onPressed: onFetchLocation,
+                        tooltip: 'Use Current GPS',
+                      ),
+                    IconButton(
+                      // <-- MAP BUTTON ADDED HERE
+                      icon: Icon(Icons.map_rounded, color: colors.primary),
+                      onPressed: onOpenMap,
+                      tooltip: 'Select on Map',
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
               ),
             ),
           ],
 
           const SizedBox(height: 14),
 
-          // Delivery toggle card
           _TradeOptionCard(
             icon: Icons.local_shipping_rounded,
             title: 'Delivery',
@@ -1252,6 +1425,169 @@ class _Step3TradeMethod extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 4 – Review Listing
+// ─────────────────────────────────────────────────────────────────────────────
+class _Step4Review extends StatelessWidget {
+  final List<String> images;
+  final String? category;
+  final String? subcategory;
+  final String name;
+  final String? condition;
+  final String price;
+  final bool openToOffers;
+  final bool faceToFace;
+  final bool delivery;
+  final String location;
+  final String? deliveryMethod;
+  final void Function(int) onEdit;
+  final VoidCallback onPublish;
+
+  const _Step4Review({
+    required this.images,
+    required this.category,
+    required this.subcategory,
+    required this.name,
+    required this.condition,
+    required this.price,
+    required this.openToOffers,
+    required this.faceToFace,
+    required this.delivery,
+    required this.location,
+    required this.deliveryMethod,
+    required this.onEdit,
+    required this.onPublish,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        children: [
+          if (images.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _ImageStrip(
+              images: images,
+              onAdd: () {},
+              onRemove: (_) {},
+              height: 100,
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              children: [
+                _ReviewSection(
+                  title: 'Photos',
+                  value:
+                      '${images.length} photo${images.length == 1 ? '' : 's'}',
+                  onEdit: () => onEdit(0),
+                ),
+                _ReviewSection(
+                  title: 'Category',
+                  value: [
+                    category,
+                    subcategory,
+                  ].where((e) => e != null && e.isNotEmpty).join(' › '),
+                  onEdit: () => onEdit(1),
+                ),
+                _ReviewSection(
+                  title: 'Product Name',
+                  value: name.isEmpty ? '—' : name,
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Condition',
+                  value: condition ?? '—',
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Price',
+                  value: price.isEmpty ? '—' : 'RM $price',
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Open to Offers',
+                  value: openToOffers ? 'Yes' : 'No',
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Trade Method',
+                  value:
+                      [
+                        if (faceToFace) 'Face-to-Face',
+                        if (delivery) 'Delivery',
+                      ].join(', ').isEmpty
+                      ? '—'
+                      : [
+                          if (faceToFace) 'Face-to-Face',
+                          if (delivery) 'Delivery',
+                        ].join(', '),
+                  onEdit: () => onEdit(3),
+                ),
+                if (faceToFace && location.isNotEmpty)
+                  _ReviewSection(
+                    title: 'Meeting Location',
+                    value: location,
+                    onEdit: () => onEdit(3),
+                  ),
+                if (delivery && deliveryMethod != null)
+                  _ReviewSection(
+                    title: 'Delivery Method',
+                    value: deliveryMethod == 'official'
+                        ? 'Official Delivery'
+                        : 'Self-Delivery',
+                    onEdit: () => onEdit(3),
+                  ),
+
+                const SizedBox(height: 24),
+
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.primary.withOpacity(0.28),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: FilledButton.icon(
+                    onPressed: onPublish,
+                    icon: const Icon(Icons.rocket_launch_rounded),
+                    label: const Text(
+                      'Complete & Publish',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 class _TradeOptionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1343,12 +1679,18 @@ class _TradeOptionCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: selected ? colors.primary : Colors.transparent,
                 border: Border.all(
-                  color: selected ? colors.primary : colors.outline.withOpacity(0.3),
+                  color: selected
+                      ? colors.primary
+                      : colors.outline.withOpacity(0.3),
                   width: 2,
                 ),
               ),
               child: selected
-                  ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    )
                   : null,
             ),
           ],
@@ -1389,7 +1731,11 @@ class _DeliveryMethodTile extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(icon, color: selected ? Colors.white : colors.primary, size: 26),
+            Icon(
+              icon,
+              color: selected ? Colors.white : colors.primary,
+              size: 26,
+            ),
             const SizedBox(height: 6),
             Text(
               label,
@@ -1402,166 +1748,6 @@ class _DeliveryMethodTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Step 4 – Review Listing
-// ─────────────────────────────────────────────────────────────────────────────
-class _Step4Review extends StatelessWidget {
-  final List<String> images;
-  final String? category;
-  final String? subcategory;
-  final String name;
-  final String? condition;
-  final String price;
-  final bool openToOffers;
-  final bool faceToFace;
-  final bool delivery;
-  final String location;
-  final String? deliveryMethod;
-  final void Function(int) onEdit;
-  final VoidCallback onPublish;
-
-  const _Step4Review({
-    required this.images,
-    required this.category,
-    required this.subcategory,
-    required this.name,
-    required this.condition,
-    required this.price,
-    required this.openToOffers,
-    required this.faceToFace,
-    required this.delivery,
-    required this.location,
-    required this.deliveryMethod,
-    required this.onEdit,
-    required this.onPublish,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        children: [
-          // Image strip
-          if (images.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _ImageStrip(
-              images: images,
-              onAdd: () {},
-              onRemove: (_) {},
-              height: 100,
-            ),
-            const SizedBox(height: 8),
-          ],
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-            child: Column(
-              children: [
-                _ReviewSection(
-                  title: 'Photos',
-                  value:
-                      '${images.length} photo${images.length == 1 ? '' : 's'}',
-                  onEdit: () => onEdit(0),
-                ),
-                _ReviewSection(
-                  title: 'Category',
-                  value: [category, subcategory]
-                      .where((e) => e != null && e.isNotEmpty)
-                      .join(' › '),
-                  onEdit: () => onEdit(1),
-                ),
-                _ReviewSection(
-                  title: 'Product Name',
-                  value: name.isEmpty ? '—' : name,
-                  onEdit: () => onEdit(2),
-                ),
-                _ReviewSection(
-                  title: 'Condition',
-                  value: condition ?? '—',
-                  onEdit: () => onEdit(2),
-                ),
-                _ReviewSection(
-                  title: 'Price',
-                  value: price.isEmpty ? '—' : 'RM $price',
-                  onEdit: () => onEdit(2),
-                ),
-                _ReviewSection(
-                  title: 'Open to Offers',
-                  value: openToOffers ? 'Yes' : 'No',
-                  onEdit: () => onEdit(2),
-                ),
-                _ReviewSection(
-                  title: 'Trade Method',
-                  value: [
-                    if (faceToFace) 'Face-to-Face',
-                    if (delivery) 'Delivery',
-                  ].join(', ').isEmpty
-                      ? '—'
-                      : [
-                          if (faceToFace) 'Face-to-Face',
-                          if (delivery) 'Delivery',
-                        ].join(', '),
-                  onEdit: () => onEdit(3),
-                ),
-                if (faceToFace && location.isNotEmpty)
-                  _ReviewSection(
-                    title: 'Meeting Location',
-                    value: location,
-                    onEdit: () => onEdit(3),
-                  ),
-                if (delivery && deliveryMethod != null)
-                  _ReviewSection(
-                    title: 'Delivery Method',
-                    value: deliveryMethod == 'official'
-                        ? 'Official Delivery'
-                        : 'Self-Delivery',
-                    onEdit: () => onEdit(3),
-                  ),
-
-                const SizedBox(height: 24),
-
-                // Publish button
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors.primary.withOpacity(0.28),
-                        blurRadius: 24,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: FilledButton.icon(
-                    onPressed: onPublish,
-                    icon: const Icon(Icons.rocket_launch_rounded),
-                    label: const Text(
-                      'Complete & Publish',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1642,9 +1828,6 @@ class _ReviewSection extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared helpers
-// ─────────────────────────────────────────────────────────────────────────────
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -1666,6 +1849,7 @@ class _StyledField extends StatelessWidget {
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
   final String? prefixText;
+  final Widget? suffixIcon;
 
   const _StyledField({
     required this.controller,
@@ -1675,6 +1859,7 @@ class _StyledField extends StatelessWidget {
     this.keyboardType,
     this.inputFormatters,
     this.prefixText,
+    this.suffixIcon,
   });
 
   @override
@@ -1695,8 +1880,12 @@ class _StyledField extends StatelessWidget {
           padding: const EdgeInsets.only(left: 6, right: 2),
           child: Icon(icon, color: colors.primary, size: 20),
         ),
+        suffixIcon: suffixIcon,
         prefixIconConstraints: const BoxConstraints(minWidth: 42),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: colors.outline.withOpacity(0.12)),
