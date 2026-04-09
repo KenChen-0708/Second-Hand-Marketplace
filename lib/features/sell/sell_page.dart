@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'MapSelectionScreen.dart';
+import '../../services/auth/auth_service.dart';
+import '../../services/product/product_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry screen – shown as the /sell shell branch
@@ -43,7 +45,6 @@ class SellPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Simple header ──
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
               child: Row(
@@ -60,10 +61,7 @@ class SellPage extends StatelessWidget {
                 ],
               ),
             ),
-
             const Spacer(),
-
-            // ── Hero create-listing button ──
             Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -114,9 +112,7 @@ class SellPage extends StatelessWidget {
                 ],
               ),
             ),
-
             const Spacer(),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
               child: FilledButton.icon(
@@ -163,32 +159,79 @@ class _SellWizardState extends State<_SellWizard> {
   String? _selectedCategory;
   String? _selectedSubcategory;
   final _nameController = TextEditingController();
+  final _descriptionController =
+      TextEditingController(); // <-- Added Description
   String? _selectedCondition;
   final _priceController = TextEditingController();
   bool _openToOffers = true;
   bool _faceToFace = false;
   bool _delivery = false;
   final _locationController = TextEditingController();
-  String? _deliveryMethod; // 'official' | 'self'
+  String? _deliveryMethod;
 
   bool _isLoadingLocation = false;
+  bool _isPublishing = false; // <-- Added publishing state
+
+  List<Map<String, dynamic>> _categoriesList = [];
+  List<Map<String, dynamic>> _subcategoriesList = [];
+  bool _isLoadingCategories = true;
+  bool _isLoadingSubcategories = false;
 
   @override
   void initState() {
     super.initState();
+    _fetchCategories();
     void rebuild() {
       if (mounted) setState(() {});
     }
 
     _nameController.addListener(rebuild);
+    _descriptionController.addListener(rebuild);
     _priceController.addListener(rebuild);
     _locationController.addListener(rebuild);
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final productService = ProductService();
+      final cats = await productService.fetchCategories();
+      if (mounted) {
+        setState(() {
+          _categoriesList = cats;
+          _isLoadingCategories = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  Future<void> _fetchSubcategories(String categoryId) async {
+    setState(() {
+      _isLoadingSubcategories = true;
+      _subcategoriesList = [];
+      _selectedSubcategory = null;
+    });
+
+    try {
+      final productService = ProductService();
+      final subs = await productService.fetchSubcategories(categoryId);
+      if (mounted) {
+        setState(() {
+          _subcategoriesList = subs;
+          _isLoadingSubcategories = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingSubcategories = false);
+    }
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
+    _descriptionController.dispose();
     _priceController.dispose();
     _locationController.dispose();
     super.dispose();
@@ -217,9 +260,10 @@ class _SellWizardState extends State<_SellWizard> {
   }
 
   bool get _canProceedStep0 => _selectedImages.isNotEmpty;
-  bool get _canProceedStep1 => _selectedCategory != null;
+  bool get _canProceedStep1 => _selectedCategory != null && _selectedSubcategory != null;
   bool get _canProceedStep2 =>
       _nameController.text.trim().isNotEmpty &&
+      _descriptionController.text.trim().isNotEmpty && // Require description
       _selectedCondition != null &&
       _priceController.text.trim().isNotEmpty;
   bool get _canProceedStep3 =>
@@ -245,7 +289,10 @@ class _SellWizardState extends State<_SellWizard> {
   // ── Hardware Integration: Camera & Gallery ──
   Future<void> _takePhoto() async {
     try {
-      final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
       if (photo != null && _selectedImages.length < 10) {
         setState(() => _selectedImages.add(photo.path));
       }
@@ -256,7 +303,7 @@ class _SellWizardState extends State<_SellWizard> {
 
   Future<void> _pickFromGallery() async {
     try {
-      final List<XFile> images = await _picker.pickMultiImage();
+      final List<XFile> images = await _picker.pickMultiImage(imageQuality: 80);
       if (images.isNotEmpty) {
         setState(() {
           for (var img in images) {
@@ -277,24 +324,20 @@ class _SellWizardState extends State<_SellWizard> {
     setState(() => _isLoadingLocation = true);
 
     try {
-      // 1. Check if GPS hardware is on
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('GPS is turned off. Opening location settings...'),
-              duration: Duration(seconds: 3),
             ),
           );
         }
-        // Automatically open device location settings for the user
         await Geolocator.openLocationSettings();
         setState(() => _isLoadingLocation = false);
-        return; // Exit early since user went to settings
+        return;
       }
 
-      // 2. Check app permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -304,14 +347,12 @@ class _SellWizardState extends State<_SellWizard> {
       }
 
       if (permission == LocationPermission.deniedForever) {
-        // Automatically open app settings if permissions are permanently denied
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
                 'Permissions denied forever. Opening app settings...',
               ),
-              duration: Duration(seconds: 3),
             ),
           );
         }
@@ -320,17 +361,14 @@ class _SellWizardState extends State<_SellWizard> {
         return;
       }
 
-      // 3. Fetch location
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
 
-      // 4. Update the text field
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         String address = [
@@ -338,10 +376,7 @@ class _SellWizardState extends State<_SellWizard> {
           place.subLocality,
           place.locality,
         ].where((e) => e != null && e.isNotEmpty).join(', ');
-
-        setState(() {
-          _locationController.text = address;
-        });
+        setState(() => _locationController.text = address);
       }
     } catch (e) {
       if (mounted) {
@@ -350,34 +385,26 @@ class _SellWizardState extends State<_SellWizard> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingLocation = false);
-      }
+      if (mounted) setState(() => _isLoadingLocation = false);
     }
   }
 
   Future<void> _openInteractiveMap() async {
     setState(() => _isLoadingLocation = true);
-
-    // Default fallback coordinates (Kuala Lumpur)
     double lat = 3.1390;
     double lng = 101.6869;
 
     try {
-      // Try to center the map roughly on the user's current location
       Position pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.low,
       );
       lat = pos.latitude;
       lng = pos.longitude;
-    } catch (_) {
-      // Ignore errors; we'll just fall back to the default coordinates
-    }
+    } catch (_) {}
 
     setState(() => _isLoadingLocation = false);
     if (!mounted) return;
 
-    // Open the map screen and await the selected address string
     final selectedAddress = await Navigator.of(context, rootNavigator: true)
         .push(
           MaterialPageRoute(
@@ -386,37 +413,132 @@ class _SellWizardState extends State<_SellWizard> {
           ),
         );
 
-    // If the user confirmed a location, update the text field
     if (selectedAddress != null && selectedAddress is String) {
-      setState(() {
-        _locationController.text = selectedAddress;
-      });
+      setState(() => _locationController.text = selectedAddress);
     }
   }
 
-  void _publish() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.all(16),
-        content: const Row(
-          children: [
-            Icon(Icons.check_circle_rounded, color: Colors.white),
-            SizedBox(width: 10),
-            Text(
-              'Listing published successfully!',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
+  // ───────────────────────────────────────────────────────────────────────────
+  // ── Database Publish Logic
+  // ───────────────────────────────────────────────────────────────────────────
+  Future<void> _publish() async {
+    if (_isPublishing) return;
+    setState(() => _isPublishing = true);
+
+    try {
+      final authService = AuthService();
+      final productService = ProductService();
+
+      final authUser = authService.supabase.auth.currentUser;
+
+      if (authUser == null) throw 'You must be logged in to create a listing.';
+
+      // 1. Get the custom U000X User ID from the users table
+      final userProfile = await authService.fetchProfileByEmail(
+        authUser.email!,
+      );
+      final sellerId = userProfile.id;
+
+      // 2. Resolve Category ID & Subcategory ID
+      final categoryId = await productService.getOrCreateCategory(_selectedCategory!);
+      String? subcategoryId;
+      if (_selectedSubcategory != null && _selectedSubcategory!.isNotEmpty) {
+        subcategoryId = await productService.getOrCreateSubcategory(categoryId, _selectedSubcategory!);
+      }
+
+      // 3. Map Condition to Database Enum
+      String dbCondition = 'good';
+      switch (_selectedCondition) {
+        case 'New':
+        case 'Like New':
+          dbCondition = 'like_new';
+          break;
+        case 'Excellent':
+          dbCondition = 'excellent';
+          break;
+        case 'Good':
+          dbCondition = 'good';
+          break;
+        case 'Fair':
+          dbCondition = 'fair';
+          break;
+      }
+
+      // 4. Upload Images to Supabase Storage (Bucket: 'product_images')
+      final imageUrls = await productService.uploadImages(
+        _selectedImages,
+        authUser.id,
+      );
+
+      // 5. Format Description (Appending trade method & offers)
+      String finalDescription = _descriptionController.text.trim();
+      finalDescription += '\n\n---\nTrade Preferences:\n';
+      if (_faceToFace)
+        finalDescription += '• Face-to-Face: ${_locationController.text}\n';
+      if (_delivery)
+        finalDescription +=
+            '• Delivery: ${_deliveryMethod == 'official' ? 'Official Delivery' : 'Self-Delivery'}\n';
+      if (_openToOffers) finalDescription += '• Open to Offers: Yes';
+
+      // 6. Insert Product into Database
+      final productData = <String, dynamic>{
+        'title': _nameController.text.trim(),
+        'description': finalDescription,
+        'price': double.parse(_priceController.text.trim()),
+        'category_id': categoryId,
+        'seller_id': sellerId,
+        'condition': dbCondition,
+        'image_urls': imageUrls,
+        'status': 'active',
+      };
+      
+      if (subcategoryId != null) {
+        productData['subcategory_id'] = subcategoryId;
+      }
+
+      await productService.createProduct(productData);
+
+      // Success
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-          ],
-        ),
-      ),
-    );
-    Navigator.of(context, rootNavigator: true).pop();
+            margin: const EdgeInsets.all(16),
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Text(
+                  'Listing published successfully!',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    } catch (e) {
+      debugPrint('Publish Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.redAccent,
+            content: Text('Failed to publish: ${e.toString()}'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPublishing = false);
+    }
   }
 
   @override
@@ -426,15 +548,12 @@ class _SellWizardState extends State<_SellWizard> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Top bar ──
             _WizardTopBar(
               currentStep: _currentStep,
               totalSteps: _totalSteps,
               onClose: () => Navigator.of(context, rootNavigator: true).pop(),
               onBack: _currentStep > 0 ? _prev : null,
             ),
-
-            // ── Pages ──
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -452,9 +571,19 @@ class _SellWizardState extends State<_SellWizard> {
                     selectedCategory: _selectedCategory,
                     selectedSubcategory: _selectedSubcategory,
                     images: _selectedImages,
-                    onCategorySelected: (cat, sub) => setState(() {
-                      _selectedCategory = cat;
-                      _selectedSubcategory = sub;
+                    dbCategories: _categoriesList,
+                    dbSubcategories: _subcategoriesList,
+                    isLoading: _isLoadingCategories,
+                    isLoadingSubcategories: _isLoadingSubcategories,
+                    onCategorySelected: (catName) {
+                      final cat = _categoriesList.firstWhere((c) => c['name'] == catName);
+                      setState(() {
+                        _selectedCategory = catName;
+                      });
+                      _fetchSubcategories(cat['id']);
+                    },
+                    onSubcategorySelected: (subName) => setState(() {
+                      _selectedSubcategory = subName;
                     }),
                     onPickGallery: _pickFromGallery,
                     onRemove: (i) =>
@@ -462,6 +591,7 @@ class _SellWizardState extends State<_SellWizard> {
                   ),
                   _Step2Details(
                     nameController: _nameController,
+                    descriptionController: _descriptionController,
                     priceController: _priceController,
                     selectedCondition: _selectedCondition,
                     openToOffers: _openToOffers,
@@ -487,6 +617,7 @@ class _SellWizardState extends State<_SellWizard> {
                     category: _selectedCategory,
                     subcategory: _selectedSubcategory,
                     name: _nameController.text,
+                    description: _descriptionController.text,
                     condition: _selectedCondition,
                     price: _priceController.text,
                     openToOffers: _openToOffers,
@@ -494,6 +625,7 @@ class _SellWizardState extends State<_SellWizard> {
                     delivery: _delivery,
                     location: _locationController.text,
                     deliveryMethod: _deliveryMethod,
+                    isPublishing: _isPublishing,
                     onEdit: (step) => _pageController.animateToPage(
                       step,
                       duration: const Duration(milliseconds: 350),
@@ -504,8 +636,6 @@ class _SellWizardState extends State<_SellWizard> {
                 ],
               ),
             ),
-
-            // ── Bottom next/publish bar ──
             if (_currentStep < 4)
               _WizardBottomBar(
                 canProceed: _canProceed(_currentStep),
@@ -567,7 +697,6 @@ class _WizardTopBar extends StatelessWidget {
                   icon: const Icon(Icons.close_rounded),
                   tooltip: 'Close',
                 ),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -591,7 +720,6 @@ class _WizardTopBar extends StatelessWidget {
                   ],
                 ),
               ),
-
               if (onBack != null)
                 IconButton(
                   onPressed: onClose,
@@ -620,9 +748,6 @@ class _WizardTopBar extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared: Bottom bar
-// ─────────────────────────────────────────────────────────────────────────────
 class _WizardBottomBar extends StatelessWidget {
   final bool canProceed;
   final bool isLastBeforeReview;
@@ -676,9 +801,6 @@ class _WizardBottomBar extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Image grid strip
-// ─────────────────────────────────────────────────────────────────────────────
 class _ImageStrip extends StatelessWidget {
   final List<String> images;
   final VoidCallback onAdd;
@@ -824,7 +946,7 @@ class _ImageStrip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Step 0 – Image selection
+// Steps
 // ─────────────────────────────────────────────────────────────────────────────
 class _Step0Images extends StatelessWidget {
   final List<String> images;
@@ -842,7 +964,6 @@ class _Step0Images extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.only(top: 24, bottom: 16),
       child: Column(
@@ -960,14 +1081,16 @@ class _Step0Images extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Step 1 – Category
-// ─────────────────────────────────────────────────────────────────────────────
 class _Step1Category extends StatelessWidget {
   final String? selectedCategory;
   final String? selectedSubcategory;
   final List<String> images;
-  final void Function(String cat, String? sub) onCategorySelected;
+  final List<Map<String, dynamic>> dbCategories;
+  final List<Map<String, dynamic>> dbSubcategories;
+  final bool isLoading;
+  final bool isLoadingSubcategories;
+  final void Function(String catName) onCategorySelected;
+  final void Function(String subName) onSubcategorySelected;
   final VoidCallback onPickGallery;
   final void Function(int) onRemove;
 
@@ -975,62 +1098,38 @@ class _Step1Category extends StatelessWidget {
     required this.selectedCategory,
     required this.selectedSubcategory,
     required this.images,
+    required this.dbCategories,
+    required this.dbSubcategories,
+    required this.isLoading,
+    required this.isLoadingSubcategories,
     required this.onCategorySelected,
+    required this.onSubcategorySelected,
     required this.onPickGallery,
     required this.onRemove,
   });
 
-  static const List<Map<String, dynamic>> _categories = [
-    {
-      'name': 'Textbooks',
-      'icon': Icons.menu_book_rounded,
-      'sub': ['Science', 'Arts', 'Engineering', 'Business', 'Law', 'Medicine'],
-    },
-    {
-      'name': 'Electronics',
-      'icon': Icons.devices_rounded,
-      'sub': ['Laptops', 'Phones', 'Tablets', 'Accessories', 'Gaming'],
-    },
-    {
-      'name': 'Dorm Gear',
-      'icon': Icons.bed_rounded,
-      'sub': ['Furniture', 'Bedding', 'Kitchen', 'Storage'],
-    },
-    {
-      'name': 'Clothing',
-      'icon': Icons.checkroom_rounded,
-      'sub': ['Tops', 'Bottoms', 'Shoes', 'Bags', 'Accessories'],
-    },
-    {
-      'name': 'Sports',
-      'icon': Icons.sports_basketball_rounded,
-      'sub': ['Equipment', 'Apparel', 'Outdoor'],
-    },
-    {
-      'name': 'Beauty',
-      'icon': Icons.face_retouching_natural_rounded,
-      'sub': ['Skincare', 'Makeup', 'Haircare', 'Fragrance'],
-    },
-    {
-      'name': 'Stationery',
-      'icon': Icons.edit_rounded,
-      'sub': ['Pens & Pencils', 'Notebooks', 'Art Supplies'],
-    },
-    {
-      'name': 'Other',
-      'icon': Icons.category_rounded,
-      'sub': ['Miscellaneous'],
-    },
-  ];
+  IconData _getCategoryIcon(String name) {
+    final lowerName = name.toLowerCase();
+    if (lowerName.contains(RegExp(r'book|text')))
+      return Icons.menu_book_rounded;
+    if (lowerName.contains(RegExp(r'electronic|device|phone|laptop|pc')))
+      return Icons.devices_rounded;
+    if (lowerName.contains(RegExp(r'dorm|furniture|bedding')))
+      return Icons.bed_rounded;
+    if (lowerName.contains(RegExp(r'cloth|shirt|pant|shoe|fashion')))
+      return Icons.checkroom_rounded;
+    if (lowerName.contains(RegExp(r'sport|gym|basket')))
+      return Icons.sports_basketball_rounded;
+    if (lowerName.contains(RegExp(r'beaut|makeup|skin')))
+      return Icons.face_retouching_natural_rounded;
+    if (lowerName.contains(RegExp(r'station|pen|pencil|paper')))
+      return Icons.edit_rounded;
+    return Icons.category_rounded;
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final selectedData = _categories.firstWhere(
-      (c) => c['name'] == selectedCategory,
-      orElse: () => {},
-    );
-    final subs = (selectedData['sub'] as List<String>?) ?? [];
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -1048,7 +1147,6 @@ class _Step1Category extends StatelessWidget {
             const SizedBox(height: 16),
           ] else
             const SizedBox(height: 16),
-
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Text(
@@ -1057,67 +1155,79 @@ class _Step1Category extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _categories.map((cat) {
-                final sel = selectedCategory == cat['name'];
-                return GestureDetector(
-                  onTap: () => onCategorySelected(cat['name'] as String, null),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: sel ? colors.primary : Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: sel
-                            ? colors.primary
-                            : colors.outline.withOpacity(0.15),
+          if (isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (dbCategories.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text('No categories available.'),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: dbCategories.map((cat) {
+                  final catName = cat['name'] as String;
+                  final sel = selectedCategory == catName;
+                  return GestureDetector(
+                    onTap: () => onCategorySelected(catName),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
                       ),
-                      boxShadow: sel
-                          ? [
-                              BoxShadow(
-                                color: colors.primary.withOpacity(0.25),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : [],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          cat['icon'] as IconData,
-                          size: 18,
-                          color: sel ? Colors.white : colors.primary,
+                      decoration: BoxDecoration(
+                        color: sel ? colors.primary : Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: sel
+                              ? colors.primary
+                              : colors.outline.withOpacity(0.15),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          cat['name'] as String,
-                          style: TextStyle(
-                            color: sel ? Colors.white : colors.onSurface,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
+                        boxShadow: sel
+                            ? [
+                                BoxShadow(
+                                  color: colors.primary.withOpacity(0.25),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _getCategoryIcon(catName),
+                            size: 18,
+                            color: sel ? Colors.white : colors.primary,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Text(
+                            catName,
+                            style: TextStyle(
+                              color: sel ? Colors.white : colors.onSurface,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
-
-          if (subs.isNotEmpty) ...[
-            const SizedBox(height: 24),
+          if (selectedCategory != null) ...[
+            const SizedBox(height: 32),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Text(
@@ -1126,45 +1236,66 @@ class _Step1Category extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: subs.map((sub) {
-                  final sel = selectedSubcategory == sub;
-                  return GestureDetector(
-                    onTap: () => onCategorySelected(selectedCategory!, sub),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: sel
-                            ? colors.primary.withOpacity(0.12)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: sel
-                              ? colors.primary
-                              : colors.outline.withOpacity(0.15),
+            if (isLoadingSubcategories)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (dbSubcategories.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text('No subcategories available for this category.'),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: dbSubcategories.map((sub) {
+                    final subName = sub['name'] as String;
+                    final sel = selectedSubcategory == subName;
+                    return GestureDetector(
+                      onTap: () => onSubcategorySelected(subName),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: sel ? colors.secondary : Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: sel
+                                ? colors.secondary
+                                : colors.outline.withOpacity(0.15),
+                          ),
+                          boxShadow: sel
+                              ? [
+                                  BoxShadow(
+                                    color: colors.secondary.withOpacity(0.25),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        child: Text(
+                          subName,
+                          style: TextStyle(
+                            color: sel ? colors.onSecondary : colors.onSurface,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
-                      child: Text(
-                        sub,
-                        style: TextStyle(
-                          color: sel ? colors.primary : colors.onSurface,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
-            ),
           ],
           const SizedBox(height: 32),
         ],
@@ -1173,11 +1304,10 @@ class _Step1Category extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Step 2 – Product Details
-// ─────────────────────────────────────────────────────────────────────────────
 class _Step2Details extends StatelessWidget {
   final TextEditingController nameController;
+  final TextEditingController
+  descriptionController; // <-- Added Description Controller
   final TextEditingController priceController;
   final String? selectedCondition;
   final bool openToOffers;
@@ -1186,6 +1316,7 @@ class _Step2Details extends StatelessWidget {
 
   const _Step2Details({
     required this.nameController,
+    required this.descriptionController,
     required this.priceController,
     required this.selectedCondition,
     required this.openToOffers,
@@ -1214,10 +1345,21 @@ class _Step2Details extends StatelessWidget {
           const SizedBox(height: 10),
           _StyledField(
             controller: nameController,
-            hint: 'e.g. iPad 9th Gen 64GB with case',
+            hint: 'e.g. iPad 9th Gen 64GB',
             icon: Icons.title_rounded,
           ),
           const SizedBox(height: 24),
+
+          _SectionLabel('Description'), // <-- Added Description UI
+          const SizedBox(height: 10),
+          _StyledField(
+            controller: descriptionController,
+            hint: 'Describe your item (flaws, specs, reason for selling)...',
+            icon: Icons.notes_rounded,
+            maxLines: 4,
+          ),
+          const SizedBox(height: 24),
+
           _SectionLabel('Condition'),
           const SizedBox(height: 12),
           Wrap(
@@ -1284,9 +1426,6 @@ class _Step2Details extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Step 3 – Trade Method
-// ─────────────────────────────────────────────────────────────────────────────
 class _Step3TradeMethod extends StatelessWidget {
   final bool faceToFace;
   final bool delivery;
@@ -1297,7 +1436,7 @@ class _Step3TradeMethod extends StatelessWidget {
   final void Function(bool) onDeliveryChanged;
   final void Function(String) onDeliveryMethodChanged;
   final VoidCallback onFetchLocation;
-  final VoidCallback onOpenMap; // <-- ADDED THIS FIELD
+  final VoidCallback onOpenMap;
 
   const _Step3TradeMethod({
     required this.faceToFace,
@@ -1309,13 +1448,12 @@ class _Step3TradeMethod extends StatelessWidget {
     required this.onDeliveryChanged,
     required this.onDeliveryMethodChanged,
     required this.onFetchLocation,
-    required this.onOpenMap, // <-- ADDED THIS TO CONSTRUCTOR
+    required this.onOpenMap,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       physics: const BouncingScrollPhysics(),
@@ -1330,7 +1468,6 @@ class _Step3TradeMethod extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-
           _TradeOptionCard(
             icon: Icons.handshake_rounded,
             title: 'Face-to-Face',
@@ -1338,7 +1475,6 @@ class _Step3TradeMethod extends StatelessWidget {
             selected: faceToFace,
             onTap: () => onFaceToFaceChanged(!faceToFace),
           ),
-
           if (faceToFace) ...[
             const SizedBox(height: 12),
             Padding(
@@ -1348,7 +1484,6 @@ class _Step3TradeMethod extends StatelessWidget {
                 hint: 'e.g. Campus Library, Ground Floor',
                 icon: Icons.location_on_rounded,
                 label: 'Meeting Location',
-                // Updated suffix icon to show both GPS and Map buttons
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1371,7 +1506,6 @@ class _Step3TradeMethod extends StatelessWidget {
                         tooltip: 'Use Current GPS',
                       ),
                     IconButton(
-                      // <-- MAP BUTTON ADDED HERE
                       icon: Icon(Icons.map_rounded, color: colors.primary),
                       onPressed: onOpenMap,
                       tooltip: 'Select on Map',
@@ -1382,9 +1516,7 @@ class _Step3TradeMethod extends StatelessWidget {
               ),
             ),
           ],
-
           const SizedBox(height: 14),
-
           _TradeOptionCard(
             icon: Icons.local_shipping_rounded,
             title: 'Delivery',
@@ -1392,7 +1524,6 @@ class _Step3TradeMethod extends StatelessWidget {
             selected: delivery,
             onTap: () => onDeliveryChanged(!delivery),
           ),
-
           if (delivery) ...[
             const SizedBox(height: 12),
             _SectionLabel('Delivery Method'),
@@ -1425,14 +1556,12 @@ class _Step3TradeMethod extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Step 4 – Review Listing
-// ─────────────────────────────────────────────────────────────────────────────
 class _Step4Review extends StatelessWidget {
   final List<String> images;
   final String? category;
   final String? subcategory;
   final String name;
+  final String description; // <-- Added
   final String? condition;
   final String price;
   final bool openToOffers;
@@ -1440,6 +1569,7 @@ class _Step4Review extends StatelessWidget {
   final bool delivery;
   final String location;
   final String? deliveryMethod;
+  final bool isPublishing; // <-- Added for loading state
   final void Function(int) onEdit;
   final VoidCallback onPublish;
 
@@ -1448,6 +1578,7 @@ class _Step4Review extends StatelessWidget {
     required this.category,
     required this.subcategory,
     required this.name,
+    required this.description,
     required this.condition,
     required this.price,
     required this.openToOffers,
@@ -1455,6 +1586,7 @@ class _Step4Review extends StatelessWidget {
     required this.delivery,
     required this.location,
     required this.deliveryMethod,
+    required this.isPublishing,
     required this.onEdit,
     required this.onPublish,
   });
@@ -1462,7 +1594,6 @@ class _Step4Review extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       child: Column(
@@ -1477,7 +1608,6 @@ class _Step4Review extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
             child: Column(
@@ -1544,9 +1674,7 @@ class _Step4Review extends StatelessWidget {
                         : 'Self-Delivery',
                     onEdit: () => onEdit(3),
                   ),
-
                 const SizedBox(height: 24),
-
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
@@ -1559,11 +1687,22 @@ class _Step4Review extends StatelessWidget {
                     ],
                   ),
                   child: FilledButton.icon(
-                    onPressed: onPublish,
-                    icon: const Icon(Icons.rocket_launch_rounded),
-                    label: const Text(
-                      'Complete & Publish',
-                      style: TextStyle(
+                    onPressed: isPublishing
+                        ? null
+                        : onPublish, // Prevent double taps
+                    icon: isPublishing
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.rocket_launch_rounded),
+                    label: Text(
+                      isPublishing ? 'Publishing...' : 'Complete & Publish',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1606,7 +1745,6 @@ class _TradeOptionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1716,7 +1854,6 @@ class _DeliveryMethodTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1767,7 +1904,6 @@ class _ReviewSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1850,6 +1986,7 @@ class _StyledField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final String? prefixText;
   final Widget? suffixIcon;
+  final int maxLines; // <-- Added to support description
 
   const _StyledField({
     required this.controller,
@@ -1860,16 +1997,17 @@ class _StyledField extends StatelessWidget {
     this.inputFormatters,
     this.prefixText,
     this.suffixIcon,
+    this.maxLines = 1,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
+      maxLines: maxLines, // <-- Supports tall text area
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -1912,7 +2050,6 @@ class _OfferToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.all(14),
