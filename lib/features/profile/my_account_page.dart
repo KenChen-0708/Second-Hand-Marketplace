@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../state/state.dart';
 
 class MyAccountPage extends StatefulWidget {
@@ -12,25 +13,40 @@ class MyAccountPage extends StatefulWidget {
 class _MyAccountPageState extends State<MyAccountPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // 1. Controllers to hold the "live" text input
+  // Controllers for all editable fields in your UserModel
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
+  late TextEditingController _bioController;
+  late TextEditingController _addressController;
+  late TextEditingController _cityController;
+  late TextEditingController _postalController;
+  late TextEditingController _countryController;
 
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // 2. Initialize with real data from State
     final user = context.read<UserState>().currentUser;
+
     _nameController = TextEditingController(text: user?.name ?? '');
     _phoneController = TextEditingController(text: user?.phoneNumber ?? '');
+    _bioController = TextEditingController(text: user?.bio ?? '');
+    _addressController = TextEditingController(text: user?.address ?? '');
+    _cityController = TextEditingController(text: user?.city ?? '');
+    _postalController = TextEditingController(text: user?.postalCode ?? '');
+    _countryController = TextEditingController(text: user?.country ?? '');
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _bioController.dispose();
+    _addressController.dispose();
+    _cityController.dispose();
+    _postalController.dispose();
+    _countryController.dispose();
     super.dispose();
   }
 
@@ -40,16 +56,22 @@ class _MyAccountPageState extends State<MyAccountPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 🔥 UI -> STATE: Page tells State to handle the update
+      // Syncing all controllers to the State layer
       await context.read<UserState>().updateProfile(
         name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        bio: _bioController.text.trim(),
+        address: _addressController.text.trim(),
+        city: _cityController.text.trim(),
+        postalCode: _postalController.text.trim(),
+        country: _countryController.text.trim(),
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully!')),
         );
+        context.pop(); // Return to profile overview
       }
     } catch (e) {
       if (mounted) {
@@ -64,7 +86,6 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 3. Watch the state for the current user object
     final user = context.watch<UserState>().currentUser;
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -83,37 +104,19 @@ class _MyAccountPageState extends State<MyAccountPage> {
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Avatar Section
               Center(
-                child: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 60,
-                      backgroundImage: NetworkImage(user.avatarUrl ?? 'https://i.pravatar.cc/150'),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: colorScheme.surface, width: 3),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 20),
-                          onPressed: () {
-                            // Logic for image picking would go into UserState too!
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
+                child: CircleAvatar(
+                  radius: 60,
+                  backgroundImage: NetworkImage(user.avatarUrl ?? 'https://i.pravatar.cc/150'),
+                  backgroundColor: colorScheme.surfaceContainerHighest,
                 ),
               ),
               const SizedBox(height: 32),
 
+              _buildSectionTitle(context, 'Basic Information'),
               _buildTextField(
                 context,
                 'Full Name',
@@ -124,26 +127,43 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
               _buildTextField(
                 context,
-                'Student Email',
-                TextEditingController(text: user.email),
-                enabled: false,
+                'Phone Number',
+                _phoneController,
+                hintText: 'e.g. +60123456789',
               ),
               const SizedBox(height: 16),
 
               _buildTextField(
                 context,
-                'Phone Number',
-                _phoneController,
-                hintText: 'e.g. +60123456789',
+                'Bio',
+                _bioController,
+                hintText: 'Tell other students about yourself...',
+                maxLines: 3,
               ),
 
               const SizedBox(height: 32),
+              _buildSectionTitle(context, 'Address Details'),
+
+              _buildTextField(context, 'Street Address', _addressController),
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  Expanded(child: _buildTextField(context, 'City', _cityController)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildTextField(context, 'Postal Code', _postalController)),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              _buildTextField(context, 'Country', _countryController),
+
+              const SizedBox(height: 40),
 
               FilledButton(
                 onPressed: _isLoading ? null : _handleSave,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 child: _isLoading
@@ -154,8 +174,22 @@ class _MyAccountPageState extends State<MyAccountPage> {
                 )
                     : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
+              const SizedBox(height: 24),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
     );
@@ -167,6 +201,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
       TextEditingController controller, {
         bool enabled = true,
         String? hintText,
+        int maxLines = 1,
         String? Function(String?)? validator,
       }) {
     return Column(
@@ -184,13 +219,11 @@ class _MyAccountPageState extends State<MyAccountPage> {
           controller: controller,
           enabled: enabled,
           validator: validator,
+          maxLines: maxLines,
           decoration: InputDecoration(
             hintText: hintText,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-            filled: !enabled,
-            fillColor: !enabled
-                ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
-                : null,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
       ],

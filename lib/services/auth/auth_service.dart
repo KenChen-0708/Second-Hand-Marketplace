@@ -8,79 +8,69 @@ class AuthService {
 
   final SupabaseClient supabase = Supabase.instance.client;
 
-  /// UPDATE: Saves the full UserModel back to the database
-  Future<void> updateUserProfile(UserModel user) async {
+  /// Returns the internal Supabase UUID
+  /// Required for session tracking in other states like CartState
+  String? getCurrentUserId() {
+    return supabase.auth.currentUser?.id;
+  }
+
+  /// Bridging Logic: Fetches the 'U0001' style profile using email
+  Future<UserModel> fetchProfileByEmail(String email) async {
     try {
-      // We use the custom ID (e.g., 'U0001') to perform the update
-      await supabase
+      final data = await supabase
           .from('users')
-          .update(user.toMap())
-          .eq('id', user.id);
+          .select()
+          .eq('email', email)
+          .single();
+      return UserModel.fromMap(data);
     } on PostgrestException catch (e) {
       throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Update failed: $e');
     }
   }
 
-  /// REGISTER: Auth SignUp + Fetch custom Profile
+  /// LOGIN: Authenticates via Auth and then pulls the custom Profile
+  Future<UserModel> loginUser(String email, String password) async {
+    try {
+      await supabase.auth.signInWithPassword(email: email, password: password);
+      return await fetchProfileByEmail(email);
+    } on AuthException catch (e) {
+      throw Exception(e.message);
+    }
+  }
+
+  /// REGISTER: Auth SignUp -> Wait for Trigger -> Fetch Profile
   Future<UserModel> registerUser({
     required String email,
     required String password,
     required String name,
   }) async {
     try {
-      final AuthResponse response = await supabase.auth.signUp(
+      final response = await supabase.auth.signUp(
         email: email,
         password: password,
         data: {'name': name},
       );
 
-      final authUser = response.user;
-      if (authUser == null) throw Exception('Registration failed');
+      if (response.user == null) throw Exception('Registration failed');
 
-      // Wait for your SQL Trigger to finish inserting into public.users
-      await Future.delayed(const Duration(milliseconds: 800));
+      // 1.2s delay ensures the Postgres Trigger has finished creating the 'Uxxx' ID
+      await Future.delayed(const Duration(milliseconds: 1200));
 
-      // IMPORTANT: Search by EMAIL because authUser.id is a UUID
-      // but your users.id is 'Uxxxx'
-      final data = await supabase
-          .from('users')
-          .select()
-          .eq('email', email)
-          .single();
-
-      return UserModel.fromMap(data);
+      return await fetchProfileByEmail(email);
     } on AuthException catch (e) {
       throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Registration error: $e');
     }
   }
 
-  /// LOGIN: Authenticates and fetches the custom ID profile
-  Future<UserModel> loginUser(String email, String password) async {
+  /// UPDATE: Saves the full UserModel back to the 'users' table
+  Future<void> updateUserProfile(UserModel user) async {
     try {
-      final AuthResponse response = await supabase.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-
-      final authUser = response.user;
-      if (authUser == null) throw Exception('Invalid credentials');
-
-      // Again, fetch by EMAIL to bridge the UUID vs Custom ID gap
-      final data = await supabase
+      await supabase
           .from('users')
-          .select()
-          .eq('email', email)
-          .single();
-
-      return UserModel.fromMap(data);
-    } on AuthException catch (e) {
+          .update(user.toMap())
+          .eq('id', user.id);
+    } on PostgrestException catch (e) {
       throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Login error: $e');
     }
   }
 
