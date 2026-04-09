@@ -260,8 +260,7 @@ class _SellWizardState extends State<_SellWizard> {
   }
 
   bool get _canProceedStep0 => _selectedImages.isNotEmpty;
-  bool get _canProceedStep1 =>
-      _selectedCategory != null && _selectedSubcategory != null;
+  bool get _canProceedStep1 => _selectedCategory != null && _selectedSubcategory != null;
   bool get _canProceedStep2 =>
       _nameController.text.trim().isNotEmpty &&
       _descriptionController.text.trim().isNotEmpty && // Require description
@@ -441,15 +440,10 @@ class _SellWizardState extends State<_SellWizard> {
       final sellerId = userProfile.id;
 
       // 2. Resolve Category ID & Subcategory ID
-      final categoryId = await productService.getOrCreateCategory(
-        _selectedCategory!,
-      );
+      final categoryId = await productService.getOrCreateCategory(_selectedCategory!);
       String? subcategoryId;
       if (_selectedSubcategory != null && _selectedSubcategory!.isNotEmpty) {
-        subcategoryId = await productService.getOrCreateSubcategory(
-          categoryId,
-          _selectedSubcategory!,
-        );
+        subcategoryId = await productService.getOrCreateSubcategory(categoryId, _selectedSubcategory!);
       }
 
       // 3. Map Condition to Database Enum
@@ -497,7 +491,7 @@ class _SellWizardState extends State<_SellWizard> {
         'image_urls': imageUrls,
         'status': 'active',
       };
-
+      
       if (subcategoryId != null) {
         productData['subcategory_id'] = subcategoryId;
       }
@@ -582,9 +576,7 @@ class _SellWizardState extends State<_SellWizard> {
                     isLoading: _isLoadingCategories,
                     isLoadingSubcategories: _isLoadingSubcategories,
                     onCategorySelected: (catName) {
-                      final cat = _categoriesList.firstWhere(
-                        (c) => c['name'] == catName,
-                      );
+                      final cat = _categoriesList.firstWhere((c) => c['name'] == catName);
                       setState(() {
                         _selectedCategory = catName;
                       });
@@ -1353,16 +1345,16 @@ class _Step2Details extends StatelessWidget {
           const SizedBox(height: 10),
           _StyledField(
             controller: nameController,
-            hint: 'product name',
+            hint: 'e.g. iPad 9th Gen 64GB',
             icon: Icons.title_rounded,
           ),
           const SizedBox(height: 24),
 
-          _SectionLabel('Description'),
+          _SectionLabel('Description'), // <-- Added Description UI
           const SizedBox(height: 10),
           _StyledField(
             controller: descriptionController,
-            hint: 'describe your item',
+            hint: 'Describe your item (flaws, specs, reason for selling)...',
             icon: Icons.notes_rounded,
             maxLines: 4,
           ),

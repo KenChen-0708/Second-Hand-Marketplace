@@ -118,7 +118,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
         ),
         title: GestureDetector(
           // Tapping the header row navigates to the product detail
-          onTap: () => context.push('/product/${product.id}'),
+          onTap: () => context.push('/home/product/${product.id}'),
           child: Row(
             children: [
               CircleAvatar(

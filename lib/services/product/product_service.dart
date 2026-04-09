@@ -9,19 +9,15 @@ class ProductService {
 
   final SupabaseClient _supabase;
 
-  Future<List<ProductModel>> fetchProducts({String? status, String? sellerId}) async {
+  Future<List<ProductModel>> fetchProducts({String? status}) async {
     try {
-      var query = _supabase.from('products').select();
-
-      if (status != null && status.isNotEmpty) {
-        query = query.eq('status', status);
-      }
-
-      if (sellerId != null && sellerId.isNotEmpty) {
-        query = query.eq('seller_id', sellerId);
-      }
-
-      final data = await query.order('created_at', ascending: false);
+      final data = status != null && status.isNotEmpty
+          ? await _supabase
+                .from('products')
+                .select()
+                .eq('status', status)
+                .order('created_at')
+          : await _supabase.from('products').select().order('created_at');
 
       return (data as List)
           .map(
@@ -150,30 +146,6 @@ class ProductService {
       await _supabase.from('products').insert(productData);
     } catch (e) {
       throw Exception('Failed to create product: $e');
-    }
-  }
-
-  Future<void> deleteProduct(String productId) async {
-    try {
-      await _supabase.from('products').delete().eq('id', productId);
-    } on PostgrestException catch (e) {
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Failed to delete product: $e');
-    }
-  }
-
-  Future<void> updateProduct(String productId, Map<String, dynamic> updateData) async {
-    try {
-      final data = {
-        ...updateData,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-      await _supabase.from('products').update(data).eq('id', productId);
-    } on PostgrestException catch (e) {
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception('Failed to update product: $e');
     }
   }
 }

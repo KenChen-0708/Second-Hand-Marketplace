@@ -320,7 +320,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           final product = activeListings[index];
           return GestureDetector(
             onTap: () {
-              context.push('/product/${product.id}');
+              context.push('/home/product/${product.id}');
             },
             child: Container(
               decoration: BoxDecoration(

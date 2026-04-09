@@ -40,39 +40,4 @@ class ProductState extends EntityState<ProductModel> {
       setLoading(false);
     }
   }
-  Future<void> deleteProduct(String productId) async {
-    try {
-      await _productService.deleteProduct(productId);
-      removeById(productId);
-    } catch (e) {
-      setError(e.toString());
-      rethrow;
-    }
-  }
-  Future<void> updateProduct(String productId, Map<String, dynamic> updateData) async {
-    try {
-      await _productService.updateProduct(productId, updateData);
-
-      // Update local state if the item exists
-      final existing = getById(productId);
-      if (existing != null) {
-        final updated = existing.copyWith(
-          title: updateData['title'],
-          description: updateData['description'],
-          price: (updateData['price'] as num?)?.toDouble(),
-          condition: updateData['condition'],
-          status: updateData['status'],
-          categoryId: updateData['category_id'],
-          updatedAt: DateTime.now(),
-        );
-        upsertItem(updated);
-        if (selectedItem?.id == productId) {
-          setSelectedItem(updated);
-        }
-      }
-    } catch (e) {
-      setError(e.toString());
-      rethrow;
-    }
-  }
 }

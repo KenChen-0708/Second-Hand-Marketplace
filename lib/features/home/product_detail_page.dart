@@ -179,37 +179,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      product.title,
-                                      style: Theme.of(context).textTheme.headlineSmall
-                                          ?.copyWith(fontWeight: FontWeight.bold),
-                                    ),
-                                    if (product.updatedAt != null &&
-                                        product.createdAt != null &&
-                                        product.updatedAt!.isAfter(
-                                          product.createdAt!.add(const Duration(seconds: 10)),
-                                        ))
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 4),
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[200],
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          'EDITED',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.grey[600],
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                                child: Text(
+                                  product.title,
+                                  style: Theme.of(context).textTheme.headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
                               ),
                               Container(
@@ -336,186 +309,67 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                child: Consumer2<UserState, ProductState>(
-                  builder: (context, userState, productState, child) {
-                    final isOwner = userState.currentUser?.id == product.sellerId;
-
-                    if (isOwner) {
-                      return Container(
-                        padding: const EdgeInsets.all(24.0),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              offset: const Offset(0, -4),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  side: BorderSide(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                  foregroundColor: Theme.of(context).colorScheme.error,
-                                ),
-                                onPressed: () async {
-                                  final confirm = await showDialog<bool>(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      title: const Text('Remove Listing?'),
-                                      content: const Text(
-                                        'Are you sure you want to remove this listing? This action cannot be undone.',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          style: TextButton.styleFrom(
-                                            foregroundColor: Theme.of(context).colorScheme.error,
-                                          ),
-                                          onPressed: () => Navigator.pop(context, true),
-                                          child: const Text('Remove'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-
-                                  if (confirm == true && context.mounted) {
-                                    try {
-                                      await productState.deleteProduct(product.id);
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Listing removed successfully'),
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
-                                        );
-                                        context.pop(); // Go back after deletion
-                                      }
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Error: $e'),
-                                            backgroundColor: Theme.of(context).colorScheme.error,
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  }
-                                },
-                                child: const Text(
-                                  'Remove',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                onPressed: () async {
-                                  await context.push('/edit-product', extra: product);
-                                  // The details will automatically update because of ProductState and FutureBuilder reload
-                                  _reloadProduct();
-                                },
-                                child: const Text(
-                                  'Edit Details',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return Container(
-                      padding: const EdgeInsets.all(24.0),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            offset: const Offset(0, -4),
-                            blurRadius: 10,
-                          ),
-                        ],
+                child: Container(
+                  padding: const EdgeInsets.all(24.0),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        offset: const Offset(0, -4),
+                        blurRadius: 10,
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: Theme.of(context).colorScheme.primary,
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.add_shopping_cart_rounded),
+                          color: Theme.of(context).colorScheme.primary,
+                          onPressed: () async {
+                            final result = await context.read<CartState>()
+                                .addToCart(product);
+                            if (!context.mounted) {
+                              return;
+                            }
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(result.message),
+                                behavior: SnackBarBehavior.floating,
                               ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: IconButton(
-                              icon: const Icon(Icons.add_shopping_cart_rounded),
-                              color: Theme.of(context).colorScheme.primary,
-                              onPressed: () async {
-                                final result = await context.read<CartState>()
-                                    .addToCart(product);
-                                if (!context.mounted) {
-                                  return;
-                                }
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(result.message),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              },
+                          ),
+                          onPressed: () => context.push('/checkout'),
+                          child: const Text(
+                            'Buy Now',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: FilledButton(
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              onPressed: () => context.push('/checkout'),
-                              child: const Text(
-                                'Buy Now',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
               ),
             ],
