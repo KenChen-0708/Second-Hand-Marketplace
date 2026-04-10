@@ -81,6 +81,50 @@ class OrderService {
     }
   }
 
+  Future<List<OrderModel>> getUserOrders(String userId) async {
+    try {
+      // For a marketplace, a user can be both a buyer and a seller.
+      // We fetch orders where the user is the buyer OR where the user is the seller of at least one item.
+      
+      // 1. Fetch orders as buyer
+      final buyerResponse = await _supabase
+          .from('orders')
+          .select('*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*)))')
+          .eq('buyer_id', userId)
+          .order('created_at', ascending: false);
+
+      // 2. Fetch orders where any item belongs to the user (seller)
+      // Note: We use a separate query because Supabase/PostgREST .or() filter 
+      // is limited across deep nested relations.
+      final sellerResponse = await _supabase
+          .from('orders')
+          .select('*, buyer:users!orders_buyer_id_fkey(*), order_items!inner(*, products!inner(*, seller:users(*)))')
+          .eq('order_items.products.seller_id', userId)
+          .order('created_at', ascending: false);
+
+      final List<dynamic> combinedRaw = [...(buyerResponse as List), ...(sellerResponse as List)];
+      
+      // Remove duplicates by ID
+      final Map<String, dynamic> uniqueOrders = {};
+      for (var o in combinedRaw) {
+        uniqueOrders[o['id'].toString()] = o;
+      }
+
+      final List<OrderModel> orders = uniqueOrders.values
+          .map((order) => OrderModel.fromMap(Map<String, dynamic>.from(order)))
+          .toList();
+
+      // Sort by date again after merging
+      orders.sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
+
+      return orders;
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to fetch orders: $e');
+    }
+  }
+
   String _generateOrderNumber() {
     final now = DateTime.now().millisecondsSinceEpoch;
     return 'ORD-$now';

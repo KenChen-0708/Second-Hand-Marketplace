@@ -61,6 +61,19 @@ class OrderState extends EntityState<OrderModel> {
     }
   }
 
+  Future<void> fetchUserOrders(String userId) async {
+    setLoading(true);
+    setError(null);
+    try {
+      final orders = await _orderService.getUserOrders(userId);
+      setItems(orders);
+    } catch (e) {
+      setError(e.toString());
+    } finally {
+      setLoading(false);
+    }
+  }
+
   void clearCheckoutState() {
     _lastCheckoutOrders = [];
     _lastOrderNumber = null;

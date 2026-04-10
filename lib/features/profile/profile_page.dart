@@ -53,10 +53,14 @@ class ProfilePage extends StatelessWidget {
               child: Column(
                 children: [
                   GestureDetector(
-                    onTap: () => context.push('/profile/edit'), // Navigate to MyAccountPage
+                    onTap: () => context.push(
+                      '/profile/edit',
+                    ), // Navigate to MyAccountPage
                     child: CircleAvatar(
                       radius: 56,
-                      backgroundImage: NetworkImage(user.avatarUrl ?? 'https://i.pravatar.cc/150'),
+                      backgroundImage: NetworkImage(
+                        user.avatarUrl ?? 'https://i.pravatar.cc/150',
+                      ),
                       backgroundColor: cs.surfaceContainerHighest,
                     ),
                   ),
@@ -77,7 +81,10 @@ class ProfilePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: cs.primaryContainer,
                       borderRadius: BorderRadius.circular(20),
@@ -136,9 +143,23 @@ class ProfilePage extends StatelessWidget {
                   const Divider(height: 1),
                   _buildMenuItem(
                     context,
+                    icon: Icons.settings_outlined,
+                    title: 'Settings',
+                    onTap: () => context.push('/profile/settings'),
+                  ),
+                  const Divider(height: 1),
+                  _buildMenuItem(
+                    context,
                     icon: Icons.list_alt_rounded,
                     title: 'My Listings',
                     onTap: () => context.push('/profile/listings'),
+                  ),
+                  const Divider(height: 1),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.bar_chart_rounded,
+                    title: 'Seller Dashboard',
+                    onTap: () => context.push('/profile/dashboard'),
                   ),
                 ],
               ),
@@ -172,7 +193,11 @@ class ProfilePage extends StatelessWidget {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.logout_rounded, color: Colors.redAccent, size: 22),
+                        Icon(
+                          Icons.logout_rounded,
+                          color: Colors.redAccent,
+                          size: 22,
+                        ),
                         SizedBox(width: 12),
                         Text(
                           'Log Out',
@@ -198,7 +223,12 @@ class ProfilePage extends StatelessWidget {
 
   // --- UI Helper Methods (Keep as is, but ensure clean styling) ---
 
-  Widget _buildActionIcon(BuildContext context, {required IconData icon, required VoidCallback onTap, int? badgeCount}) {
+  Widget _buildActionIcon(
+    BuildContext context, {
+    required IconData icon,
+    required VoidCallback onTap,
+    int? badgeCount,
+  }) {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
@@ -226,7 +256,14 @@ class ProfilePage extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: Text('$badgeCount', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
         ],
@@ -234,18 +271,29 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuItem(BuildContext context, {required IconData icon, required String title, required VoidCallback onTap, int badgeCount = 0}) {
+  Widget _buildMenuItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+  }) {
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+          color: Theme.of(
+            context,
+          ).colorScheme.primaryContainer.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, color: Theme.of(context).colorScheme.primary),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      trailing: Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       onTap: onTap,
     );
