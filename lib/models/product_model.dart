@@ -10,6 +10,7 @@ class ProductModel implements AppModel {
   final double price;
   final String? categoryId;
   final String sellerId;
+  final String? sellerName;
   final String condition;
   final String? imageUrl;
   final List<String>? images;
@@ -26,6 +27,7 @@ class ProductModel implements AppModel {
     required this.price,
     this.categoryId,
     required this.sellerId,
+    this.sellerName,
     required this.condition,
     this.imageUrl,
     this.images,
@@ -43,6 +45,7 @@ class ProductModel implements AppModel {
     double? price,
     String? categoryId,
     String? sellerId,
+    String? sellerName,
     String? condition,
     String? imageUrl,
     List<String>? images,
@@ -59,6 +62,7 @@ class ProductModel implements AppModel {
       price: price ?? this.price,
       categoryId: categoryId ?? this.categoryId,
       sellerId: sellerId ?? this.sellerId,
+      sellerName: sellerName ?? this.sellerName,
       condition: condition ?? this.condition,
       imageUrl: imageUrl ?? this.imageUrl,
       images: images ?? this.images,
@@ -78,9 +82,15 @@ class ProductModel implements AppModel {
       price: JsonUtils.asDouble(map['price']) ?? 0,
       categoryId: JsonUtils.asString(map['category_id']),
       sellerId: JsonUtils.asString(map['seller_id']) ?? '',
+      sellerName: map['seller'] != null
+          ? JsonUtils.asString(map['seller']['name'])
+          : null,
       condition: JsonUtils.asString(map['condition']) ?? '',
-      imageUrl: JsonUtils.asString(map['image_url']) ?? 
-          (JsonUtils.asStringList(map['image_urls'])?.isNotEmpty == true ? JsonUtils.asStringList(map['image_urls'])![0] : null),
+      imageUrl:
+          JsonUtils.asString(map['image_url']) ??
+          (JsonUtils.asStringList(map['image_urls'])?.isNotEmpty == true
+              ? JsonUtils.asStringList(map['image_urls'])![0]
+              : null),
       images: JsonUtils.asStringList(map['image_urls']),
       status: JsonUtils.asString(map['status']) ?? 'active',
       viewCount: JsonUtils.asInt(map['view_count']) ?? 0,
@@ -98,6 +108,7 @@ class ProductModel implements AppModel {
       'price': price,
       'category_id': categoryId,
       'seller_id': sellerId,
+      'seller': sellerName != null ? {'name': sellerName} : null,
       'condition': condition,
       'image_url': imageUrl,
       'image_urls': images,

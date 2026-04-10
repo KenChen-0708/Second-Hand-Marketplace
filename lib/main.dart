@@ -17,7 +17,7 @@ import 'features/profile/notifications_page.dart';
 import 'features/profile/settings_page.dart';
 import 'features/cart/cart_page.dart';
 import 'features/checkout/checkout_page.dart';
-import 'features/profile/order_status_page.dart';
+import 'features/profile/order_detail_page.dart';
 import 'features/profile/order_history_page.dart';
 import 'features/chat/chat_inbox_page.dart';
 import 'features/chat/chat_room_page.dart';
@@ -233,8 +233,7 @@ final _router = GoRouter(
             GoRoute(
               path: '/home',
               builder: (context, state) => const HomePage(),
-              routes: const [
-              ],
+              routes: const [],
             ),
           ],
         ),

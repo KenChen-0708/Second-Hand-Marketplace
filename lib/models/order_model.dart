@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'app_model.dart';
 import 'json_utils.dart';
 import 'order_item_model.dart';
+import 'user_model.dart';
 
 class OrderModel implements AppModel {
   @override
@@ -17,6 +18,7 @@ class OrderModel implements AppModel {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final List<OrderItemModel> orderItems;
+  final UserModel? buyer;
 
   const OrderModel({
     required this.id,
@@ -31,10 +33,20 @@ class OrderModel implements AppModel {
     this.createdAt,
     this.updatedAt,
     this.orderItems = const [],
+    this.buyer,
   });
 
   String? get primaryProductId =>
       orderItems.isEmpty ? null : orderItems.first.productId;
+
+  String? get primarySellerId =>
+      orderItems.isEmpty ? null : orderItems.first.product?.sellerId;
+
+  String? get primarySellerName =>
+      orderItems.isEmpty ? null : orderItems.first.product?.sellerName;
+
+  bool isBuyer(String userId) => buyerId == userId;
+  bool isSeller(String userId) => primarySellerId == userId;
 
   OrderModel copyWith({
     String? id,
@@ -49,6 +61,7 @@ class OrderModel implements AppModel {
     DateTime? createdAt,
     DateTime? updatedAt,
     List<OrderItemModel>? orderItems,
+    UserModel? buyer,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -63,6 +76,7 @@ class OrderModel implements AppModel {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       orderItems: orderItems ?? this.orderItems,
+      buyer: buyer ?? this.buyer,
     );
   }
 
@@ -89,6 +103,9 @@ class OrderModel implements AppModel {
                 )
                 .toList()
           : const [],
+      buyer: map['buyer'] != null
+          ? UserModel.fromMap(Map<String, dynamic>.from(map['buyer']))
+          : null,
     );
   }
 
@@ -106,6 +123,7 @@ class OrderModel implements AppModel {
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
       'order_items': orderItems.map((item) => item.toMap()).toList(),
+      'buyer': buyer?.toMap(),
     };
   }
 
