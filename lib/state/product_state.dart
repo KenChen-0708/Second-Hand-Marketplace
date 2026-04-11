@@ -61,6 +61,8 @@ class ProductState extends EntityState<ProductModel> {
           description: updateData['description'],
           price: (updateData['price'] as num?)?.toDouble(),
           condition: updateData['condition'],
+          tradePreference: updateData['trade_preference'],
+          openToOffers: updateData['open_to_offers'],
           status: updateData['status'],
           categoryId: updateData['category_id'],
           images: updateData['image_urls'] != null 
