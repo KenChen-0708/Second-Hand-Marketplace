@@ -1,4 +1,4 @@
-import '../models/order_model.dart';
+import '../models/models.dart';
 import '../services/auth/auth_service.dart';
 import '../services/order/order_service.dart';
 import 'cart_state.dart';
@@ -21,13 +21,17 @@ class OrderState extends EntityState<OrderModel> {
       List.unmodifiable(_lastCheckoutOrders);
   String? get lastOrderNumber => _lastOrderNumber;
 
-  Future<List<OrderModel>> checkout({
-    required CartState cartState,
+  Future<List<OrderModel>> checkoutItems({
+    required List<CartModel> items,
+    CartState? cartState,
+    bool clearCartAfterSuccess = false,
     String? handoverLocation,
     DateTime? handoverDate,
     String? notes,
+    String status = 'pending',
+    String paymentStatus = 'pending',
   }) async {
-    if (cartState.isEmpty) {
+    if (items.isEmpty) {
       throw Exception('Your cart is empty.');
     }
 
@@ -42,16 +46,30 @@ class OrderState extends EntityState<OrderModel> {
     try {
       final orders = await _orderService.createOrder(
         buyerId: buyerId,
-        orderItems: cartState.toOrderItems(),
+        orderItems: items
+            .map(
+              (item) => OrderItemModel(
+                id: item.id,
+                productId: item.product.id,
+                quantity: item.quantity,
+                unitPrice: item.product.price,
+                subtotal: item.totalPrice,
+              ),
+            )
+            .toList(),
         handoverLocation: handoverLocation,
         handoverDate: handoverDate,
         notes: notes,
+        status: status,
+        paymentStatus: paymentStatus,
       );
 
       addItems(orders);
       _lastCheckoutOrders = orders;
       _lastOrderNumber = orders.isNotEmpty ? orders.first.orderNumber : null;
-      await cartState.clearCart();
+      if (clearCartAfterSuccess && cartState != null) {
+        await cartState.clearCart();
+      }
       return orders;
     } catch (e) {
       setError(e.toString());
@@ -59,6 +77,22 @@ class OrderState extends EntityState<OrderModel> {
     } finally {
       setLoading(false);
     }
+  }
+
+  Future<List<OrderModel>> checkout({
+    required CartState cartState,
+    String? handoverLocation,
+    DateTime? handoverDate,
+    String? notes,
+  }) async {
+    return checkoutItems(
+      items: cartState.items,
+      cartState: cartState,
+      clearCartAfterSuccess: true,
+      handoverLocation: handoverLocation,
+      handoverDate: handoverDate,
+      notes: notes,
+    );
   }
 
   Future<void> fetchUserOrders(String userId) async {

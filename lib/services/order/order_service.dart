@@ -14,8 +14,8 @@ class OrderService {
     String? handoverLocation,
     DateTime? handoverDate,
     String? notes,
-    String status = 'Pending',
-    String paymentStatus = 'Pending',
+    String status = 'pending',
+    String paymentStatus = 'pending',
   }) async {
     if (orderItems.isEmpty) {
       throw Exception('Cannot create an order with an empty cart.');

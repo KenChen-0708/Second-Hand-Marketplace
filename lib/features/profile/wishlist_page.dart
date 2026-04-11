@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../state/state.dart';
+import '../../shared/utils/snackbar_helper.dart';
 
 class WishlistPage extends StatefulWidget {
   const WishlistPage({super.key});
@@ -32,15 +33,7 @@ class _WishlistPageState extends State<WishlistPage> {
   }
 
   void _showMessage(String message) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    SnackbarHelper.showTopMessage(context, message);
   }
 
   Future<void> _toggleWishlist(ProductModel product) async {

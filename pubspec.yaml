@@ -50,6 +50,7 @@ dependencies:
   google_maps_flutter_ios: ^2.12.3
   http: ^1.6.0
   local_auth: ^3.0.1
+  flutter_stripe: ^11.5.0
 
 dev_dependencies:
   flutter_test:

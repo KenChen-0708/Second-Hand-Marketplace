@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'state/state.dart';
 import 'models/models.dart';
+import 'services/payment/stripe_service.dart';
 
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
@@ -45,6 +48,10 @@ const String supabaseKey =
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  if (StripeService.isSupportedPlatform && !kIsWeb) {
+    Stripe.publishableKey = StripeService.publishableKey;
+    await Stripe.instance.applySettings();
+  }
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
 
   runApp(const MyApp());
@@ -94,7 +101,11 @@ final _router = GoRouter(
     GoRoute(
       path: '/checkout',
       parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const CheckoutPage(),
+      builder: (context, state) => CheckoutPage(
+        session: state.extra is CheckoutSessionModel
+            ? state.extra as CheckoutSessionModel
+            : null,
+      ),
     ),
     GoRoute(
       path: '/messages',
