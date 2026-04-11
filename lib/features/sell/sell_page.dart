@@ -470,23 +470,27 @@ class _SellWizardState extends State<_SellWizard> {
           break;
       }
 
-      // 4. Upload Images to Supabase Storage (Bucket: 'product_images')
+      // 5. Upload Images to Supabase Storage (Bucket: 'product_images')
       final imageUrls = await productService.uploadImages(
         _selectedImages,
         authUser.id,
       );
 
-      // 5. Format Description (Appending trade method & offers)
-      String finalDescription = _descriptionController.text.trim();
-      finalDescription += '\n\n---\nTrade Preferences:\n';
-      if (_faceToFace)
-        finalDescription += '• Face-to-Face: ${_locationController.text}\n';
-      if (_delivery)
-        finalDescription +=
-            '• Delivery: ${_deliveryMethod == 'official' ? 'Official Delivery' : 'Self-Delivery'}\n';
-      if (_openToOffers) finalDescription += '• Open to Offers: Yes';
+      // 6. Determine Trade Preference
+      String tradePreference = 'face_to_face';
+      if (_delivery) {
+        tradePreference = _deliveryMethod == 'official' 
+            ? 'delivery_official' 
+            : 'delivery_self';
+      }
 
-      // 6. Insert Product into Database
+      // 7. Format Description (Appending meeting location if face-to-face)
+      String finalDescription = _descriptionController.text.trim();
+      if (_faceToFace && _locationController.text.isNotEmpty) {
+        finalDescription += '\n\n---\nMeeting Location:\n• ${_locationController.text}';
+      }
+
+      // 8. Insert Product into Database
       final productData = <String, dynamic>{
         'title': _nameController.text.trim(),
         'description': finalDescription,
@@ -495,6 +499,8 @@ class _SellWizardState extends State<_SellWizard> {
         'seller_id': sellerId,
         'condition': dbCondition,
         'image_urls': imageUrls,
+        'trade_preference': tradePreference,
+        'open_to_offers': _openToOffers,
         'status': 'active',
       };
 
@@ -613,8 +619,21 @@ class _SellWizardState extends State<_SellWizard> {
                     locationController: _locationController,
                     deliveryMethod: _deliveryMethod,
                     isLoadingLocation: _isLoadingLocation,
-                    onFaceToFaceChanged: (v) => setState(() => _faceToFace = v),
-                    onDeliveryChanged: (v) => setState(() => _delivery = v),
+                    onFaceToFaceChanged: (v) => setState(() {
+                      _faceToFace = v;
+                      if (v) {
+                        _delivery = false;
+                      }
+                    }),
+                    onDeliveryChanged: (v) => setState(() {
+                      _delivery = v;
+                      if (v) {
+                        _faceToFace = false;
+                        if (_deliveryMethod == null) {
+                          _deliveryMethod = 'official';
+                        }
+                      }
+                    }),
                     onDeliveryMethodChanged: (v) =>
                         setState(() => _deliveryMethod = v),
                     onFetchLocation: _fetchGPSLocation,
@@ -1656,16 +1675,13 @@ class _Step4Review extends StatelessWidget {
                 ),
                 _ReviewSection(
                   title: 'Trade Method',
-                  value:
-                      [
-                        if (faceToFace) 'Face-to-Face',
-                        if (delivery) 'Delivery',
-                      ].join(', ').isEmpty
-                      ? '—'
-                      : [
-                          if (faceToFace) 'Face-to-Face',
-                          if (delivery) 'Delivery',
-                        ].join(', '),
+                  value: faceToFace
+                      ? 'Face-to-Face'
+                      : (delivery
+                          ? (deliveryMethod == 'official'
+                              ? 'Official Delivery'
+                              : 'Self-Delivery')
+                          : '—'),
                   onEdit: () => onEdit(3),
                 ),
                 if (faceToFace && location.isNotEmpty)

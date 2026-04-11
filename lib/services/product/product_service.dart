@@ -159,7 +159,14 @@ class ProductService {
     try {
       await _supabase.from('products').delete().eq('id', productId);
     } on PostgrestException catch (e) {
-      throw Exception(e.message);
+      // 23503 is the code for foreign key violation in PostgreSQL
+      if (e.code == '23503') {
+        await _supabase
+            .from('products')
+            .update({'status': 'inactive'}).eq('id', productId);
+      } else {
+        throw Exception(e.message);
+      }
     } catch (e) {
       throw Exception('Failed to delete product: $e');
     }
