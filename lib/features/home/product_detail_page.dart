@@ -42,6 +42,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ? null
         : UserModel.fromMap(Map<String, dynamic>.from(sellerData));
 
+    await context.read<FavoriteState>().syncFavoriteStatus(product.id);
+
     return _ProductDetailData(product: product, seller: seller);
   }
 
@@ -49,6 +51,69 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     setState(() {
       _productDetailFuture = _loadProductDetail();
     });
+  }
+
+  Future<bool> _promptLoginIfNeeded(BuildContext context) async {
+    final isLoggedIn = context.read<UserState>().currentUser != null;
+    if (isLoggedIn) {
+      return true;
+    }
+
+    final shouldLogin = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Required'),
+        content: const Text(
+          'Please log in to use your wishlist or add items to cart.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Login'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogin == true && context.mounted) {
+      context.go('/');
+    }
+
+    return false;
+  }
+
+  void _showMessage(BuildContext context, String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  Future<void> _handleBuyNow(BuildContext context, ProductModel product) async {
+    if (!await _promptLoginIfNeeded(context)) {
+      return;
+    }
+
+    final result = await context.read<CartState>().addToCart(product);
+    if (!context.mounted) {
+      return;
+    }
+
+    if (!result.success) {
+      _showMessage(context, result.message);
+      return;
+    }
+
+    context.push('/checkout');
   }
 
   @override
@@ -108,6 +173,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final seller = detail.seller;
         final sellerName = seller?.name ?? 'Seller';
         final sellerAvatar = seller?.avatarUrl ?? 'https://i.pravatar.cc/150';
+        final favoriteState = context.watch<FavoriteState>();
+        final isFavorite = favoriteState.isFavorite(product.id);
 
         return Scaffold(
           backgroundColor: Theme.of(context).colorScheme.surface,
@@ -146,8 +213,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            icon: const Icon(Icons.favorite_border_rounded),
-                            onPressed: () {},
+                            onPressed: favoriteState.isLoading
+                                ? null
+                                : () async {
+                                    if (!await _promptLoginIfNeeded(context)) {
+                                      return;
+                                    }
+
+                                    try {
+                                      final message = await context
+                                          .read<FavoriteState>()
+                                          .toggleFavorite(product.id);
+                                      if (!context.mounted) {
+                                        return;
+                                      }
+                                      _showMessage(context, message);
+                                    } catch (e) {
+                                      if (!context.mounted) {
+                                        return;
+                                      }
+                                      _showMessage(
+                                        context,
+                                        e.toString().replaceFirst(
+                                          'Exception: ',
+                                          '',
+                                        ),
+                                      );
+                                    }
+                                  },
+                            icon: Icon(
+                              isFavorite
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              color: isFavorite
+                                  ? Colors.redAccent
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
                         ),
                       ),
@@ -184,20 +285,31 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   children: [
                                     Text(
                                       product.title,
-                                      style: Theme.of(context).textTheme.headlineSmall
-                                          ?.copyWith(fontWeight: FontWeight.bold),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
                                     if (product.updatedAt != null &&
                                         product.createdAt != null &&
                                         product.updatedAt!.isAfter(
-                                          product.createdAt!.add(const Duration(seconds: 10)),
+                                          product.createdAt!.add(
+                                            const Duration(seconds: 10),
+                                          ),
                                         ))
                                       Container(
                                         margin: const EdgeInsets.only(top: 4),
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: Colors.grey[200],
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         child: Text(
                                           'EDITED',
@@ -284,10 +396,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               const SizedBox(width: 16),
                               Expanded(
                                 child: GestureDetector(
-                                  onTap: () =>
-                                      context.push('/seller/${product.sellerId}'),
+                                  onTap: () => context.push(
+                                    '/seller/${product.sellerId}',
+                                  ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         sellerName,
@@ -338,7 +452,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 right: 0,
                 child: Consumer2<UserState, ProductState>(
                   builder: (context, userState, productState, child) {
-                    final isOwner = userState.currentUser?.id == product.sellerId;
+                    final isOwner =
+                        userState.currentUser?.id == product.sellerId;
 
                     if (isOwner) {
                       return Container(
@@ -358,14 +473,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             Expanded(
                               child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   side: BorderSide(
                                     color: Theme.of(context).colorScheme.error,
                                   ),
-                                  foregroundColor: Theme.of(context).colorScheme.error,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.error,
                                 ),
                                 onPressed: () async {
                                   final confirm = await showDialog<bool>(
@@ -377,14 +496,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                       ),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
+                                          onPressed: () =>
+                                              Navigator.pop(context, false),
                                           child: const Text('Cancel'),
                                         ),
                                         TextButton(
                                           style: TextButton.styleFrom(
-                                            foregroundColor: Theme.of(context).colorScheme.error,
+                                            foregroundColor: Theme.of(
+                                              context,
+                                            ).colorScheme.error,
                                           ),
-                                          onPressed: () => Navigator.pop(context, true),
+                                          onPressed: () =>
+                                              Navigator.pop(context, true),
                                           child: const Text('Remove'),
                                         ),
                                       ],
@@ -393,11 +516,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
                                   if (confirm == true && context.mounted) {
                                     try {
-                                      await productState.deleteProduct(product.id);
+                                      await productState.deleteProduct(
+                                        product.id,
+                                      );
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           const SnackBar(
-                                            content: Text('Listing removed successfully'),
+                                            content: Text(
+                                              'Listing removed successfully',
+                                            ),
                                             behavior: SnackBarBehavior.floating,
                                           ),
                                         );
@@ -405,10 +534,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                       }
                                     } catch (e) {
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
                                             content: Text('Error: $e'),
-                                            backgroundColor: Theme.of(context).colorScheme.error,
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).colorScheme.error,
                                             behavior: SnackBarBehavior.floating,
                                           ),
                                         );
@@ -429,13 +562,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             Expanded(
                               child: FilledButton(
                                 style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                 ),
                                 onPressed: () async {
-                                  await context.push('/edit-product', extra: product);
+                                  await context.push(
+                                    '/edit-product',
+                                    extra: product,
+                                  );
                                   // The details will automatically update because of ProductState and FutureBuilder reload
                                   _reloadProduct();
                                 },
@@ -467,43 +605,48 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                       child: Row(
                         children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: Theme.of(context).colorScheme.primary,
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.add_shopping_cart_rounded),
-                              color: Theme.of(context).colorScheme.primary,
                               onPressed: () async {
-                                final result = await context.read<CartState>()
+                                if (!await _promptLoginIfNeeded(context)) {
+                                  return;
+                                }
+
+                                final result = await context
+                                    .read<CartState>()
                                     .addToCart(product);
                                 if (!context.mounted) {
                                   return;
                                 }
 
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(result.message),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
+                                _showMessage(context, result.message);
                               },
+                              icon: const Icon(Icons.add_shopping_cart_rounded),
+                              label: const Text('Add to Cart'),
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           Expanded(
-                            child: FilledButton(
+                            child: FilledButton.icon(
                               style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
-                              onPressed: () => context.push('/checkout'),
-                              child: const Text(
+                              onPressed: () => _handleBuyNow(context, product),
+                              icon: const Icon(Icons.flash_on_rounded),
+                              label: const Text(
                                 'Buy Now',
                                 style: TextStyle(
                                   fontSize: 18,
@@ -527,10 +670,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 }
 
 class _ProductDetailData {
-  const _ProductDetailData({
-    required this.product,
-    required this.seller,
-  });
+  const _ProductDetailData({required this.product, required this.seller});
 
   final ProductModel product;
   final UserModel? seller;

@@ -19,7 +19,10 @@ class CartPage extends StatelessWidget {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
       SnackBar(
         content: Text(cartState.error!),
         behavior: SnackBarBehavior.floating,

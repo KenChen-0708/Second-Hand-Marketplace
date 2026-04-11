@@ -7,6 +7,7 @@ class ProductService {
   ProductService({SupabaseClient? client})
     : _supabase = client ?? Supabase.instance.client;
 
+  static const String _productImageBucket = 'product_images';
   final SupabaseClient _supabase;
 
   Future<List<ProductModel>> fetchProducts({String? status, String? sellerId}) async {
@@ -25,8 +26,9 @@ class ProductService {
 
       return (data as List)
           .map(
-            (item) =>
-                ProductModel.fromMap(Map<String, dynamic>.from(item as Map)),
+            (item) => ProductModel.fromMap(
+              _resolveProductImageFields(Map<String, dynamic>.from(item as Map)),
+            ),
           )
           .toList();
     } on PostgrestException catch (e) {
@@ -44,7 +46,9 @@ class ProductService {
           .eq('id', productId)
           .single();
 
-      return ProductModel.fromMap(Map<String, dynamic>.from(data));
+      return ProductModel.fromMap(
+        _resolveProductImageFields(Map<String, dynamic>.from(data)),
+      );
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
@@ -57,20 +61,18 @@ class ProductService {
     String userId,
   ) async {
     try {
-      List<String> imageUrls = [];
-      for (String path in imagePaths) {
+      final imagePathsInBucket = <String>[];
+      for (var index = 0; index < imagePaths.length; index++) {
+        final path = imagePaths[index];
         final file = File(path);
         final fileExt = path.split('.').last;
         final fileName =
-            '${DateTime.now().millisecondsSinceEpoch}_$userId.$fileExt';
+            '${DateTime.now().millisecondsSinceEpoch}_${userId}_$index.$fileExt';
 
-        await _supabase.storage.from('product_images').upload(fileName, file);
-        final publicUrl = _supabase.storage
-            .from('product_images')
-            .getPublicUrl(fileName);
-        imageUrls.add(publicUrl);
+        await _supabase.storage.from(_productImageBucket).upload(fileName, file);
+        imagePathsInBucket.add(fileName);
       }
-      return imageUrls;
+      return imagePathsInBucket;
     } catch (e) {
       throw Exception('Failed to upload images: $e');
     }
@@ -182,5 +184,42 @@ class ProductService {
     } catch (e) {
       throw Exception('Failed to update product: $e');
     }
+  }
+
+  Map<String, dynamic> _resolveProductImageFields(Map<String, dynamic> data) {
+    final resolvedImages = _resolveImageList(data['image_urls']);
+    final resolvedImageUrl =
+        _resolveImagePath(data['image_url']) ??
+        (resolvedImages.isNotEmpty ? resolvedImages.first : null);
+
+    return {
+      ...data,
+      'image_url': resolvedImageUrl,
+      'image_urls': resolvedImages,
+    };
+  }
+
+  List<String> _resolveImageList(dynamic rawImages) {
+    if (rawImages is! List) {
+      return const [];
+    }
+
+    return rawImages
+        .map((image) => _resolveImagePath(image))
+        .whereType<String>()
+        .toList();
+  }
+
+  String? _resolveImagePath(dynamic rawPath) {
+    final path = rawPath?.toString().trim();
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+
+    return _supabase.storage.from(_productImageBucket).getPublicUrl(path);
   }
 }
