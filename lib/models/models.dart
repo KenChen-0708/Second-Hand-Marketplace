@@ -15,5 +15,6 @@ export 'app_notification_model.dart';
 export 'review_model.dart';
 export 'seller_profile_model.dart';
 export 'favorite_model.dart';
+export 'wishlist_item_model.dart';
 export 'dispute_model.dart';
 export 'admin_log_model.dart';

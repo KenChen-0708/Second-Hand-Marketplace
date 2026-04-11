@@ -136,6 +136,13 @@ class ProfilePage extends StatelessWidget {
                   const Divider(height: 1),
                   _buildMenuItem(
                     context,
+                    icon: Icons.favorite_border_rounded,
+                    title: 'Wishlist',
+                    onTap: () => context.push('/profile/wishlist'),
+                  ),
+                  const Divider(height: 1),
+                  _buildMenuItem(
+                    context,
                     icon: Icons.shopping_bag_outlined,
                     title: 'Order History',
                     onTap: () => context.push('/profile/orders'),

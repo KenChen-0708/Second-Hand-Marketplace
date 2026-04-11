@@ -8,10 +8,20 @@ class AuthService {
 
   final SupabaseClient supabase = Supabase.instance.client;
 
-  /// Returns the internal Supabase UUID
-  /// Required for session tracking in other states like CartState
-  String? getCurrentUserId() {
+  /// Returns the current Supabase Auth user UUID for session checks.
+  String? getCurrentAuthUserId() {
     return supabase.auth.currentUser?.id;
+  }
+
+  /// Returns the app profile ID (for example `U0001`) used by foreign keys.
+  Future<String?> getCurrentUserId() async {
+    final email = supabase.auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return null;
+    }
+
+    final profile = await fetchProfileByEmail(email);
+    return profile.id;
   }
 
   /// Bridging Logic: Fetches the 'U0001' style profile using email

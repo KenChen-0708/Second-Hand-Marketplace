@@ -31,7 +31,7 @@ class OrderState extends EntityState<OrderModel> {
       throw Exception('Your cart is empty.');
     }
 
-    final buyerId = _authService.getCurrentUserId();
+    final buyerId = await _authService.getCurrentUserId();
     if (buyerId == null || buyerId.isEmpty) {
       throw Exception('A logged-in user is required to checkout.');
     }

@@ -1,207 +1,395 @@
-Database Schema:
+-- =========================
+-- DROP OBJECTS
+-- =========================
+drop table if exists admin_logs cascade;
+drop table if exists disputes cascade;
+drop table if exists favorites cascade;
+drop table if exists seller_profiles cascade;
+drop table if exists reviews cascade;
+drop table if exists notifications cascade;
+drop table if exists chat_messages cascade;
+drop table if exists chat_conversations cascade;
+drop table if exists payments cascade;
+drop table if exists order_items cascade;
+drop table if exists orders cascade;
+drop table if exists cart_items cascade;
+drop table if exists products cascade;
+drop table if exists categories cascade;
+drop table if exists subcategories cascade;
+drop table if exists users cascade;
 
-Table users:
-* id (uuid, primary key)
-* email (varchar)
-* name (varchar)
-* avatar_url (text)
-* role (varchar)
-* is_active (boolean)
-* phone_number (varchar)
-* address (text)
-* city (varchar)
-* postal_code (varchar)
-* country (varchar)
-* bio (text)
-* created_at (timestamp)
+drop function if exists generate_prefixed_id(text, text, integer) cascade;
 
----
+drop sequence if exists users_id_seq cascade;
+drop sequence if exists categories_id_seq cascade;
+drop sequence if exists subcategories_id_seq cascade;
+drop sequence if exists products_id_seq cascade;
+drop sequence if exists cart_items_id_seq cascade;
+drop sequence if exists orders_id_seq cascade;
+drop sequence if exists order_items_id_seq cascade;
+drop sequence if exists payments_id_seq cascade;
+drop sequence if exists chat_conversations_id_seq cascade;
+drop sequence if exists chat_messages_id_seq cascade;
+drop sequence if exists notifications_id_seq cascade;
+drop sequence if exists reviews_id_seq cascade;
+drop sequence if exists seller_profiles_id_seq cascade;
+drop sequence if exists favorites_id_seq cascade;
+drop sequence if exists disputes_id_seq cascade;
+drop sequence if exists admin_logs_id_seq cascade;
 
-Table seller_profiles:
-* id (uuid, primary key)
-* user_id (uuid, unique, foreign key → users.id)
-* total_sales (integer)
-* average_rating (numeric)
-* total_reviews (integer)
-* total_products (integer)
-* is_verified (boolean)
-* verification_date (timestamp)
-* created_at (timestamp)
+-- =========================
+-- GENERIC ID GENERATOR
+-- Example:
+-- U0001, N0001, OI0001
+-- =========================
+create or replace function generate_prefixed_id(seq_name text, prefix text, pad_length integer default 4)
+returns varchar(20)
+language plpgsql
+as $$
+declare
+  next_num bigint;
+begin
+  execute format('select nextval(%L)', seq_name) into next_num;
+  return prefix || lpad(next_num::text, pad_length, '0');
+end;
+$$;
 
----
+-- =========================
+-- SEQUENCES PER TABLE
+-- =========================
+create sequence users_id_seq start 1;
+create sequence categories_id_seq start 1;
+create sequence subcategories_id_seq start 1;
+create sequence products_id_seq start 1;
+create sequence cart_items_id_seq start 1;
+create sequence orders_id_seq start 1;
+create sequence order_items_id_seq start 1;
+create sequence payments_id_seq start 1;
+create sequence chat_conversations_id_seq start 1;
+create sequence chat_messages_id_seq start 1;
+create sequence notifications_id_seq start 1;
+create sequence reviews_id_seq start 1;
+create sequence seller_profiles_id_seq start 1;
+create sequence favorites_id_seq start 1;
+create sequence disputes_id_seq start 1;
+create sequence admin_logs_id_seq start 1;
 
-Table admin_logs:
-* id (uuid, primary key)
-* admin_id (uuid, foreign key → users.id)
-* action (varchar)
-* entity_type (varchar)
-* entity_id (uuid)
-* details (jsonb)
-* created_at (timestamp)
+-- =========================
+-- USERS
+-- Prefix: U
+-- =========================
+create table users (
+  id varchar(20) primary key default generate_prefixed_id('users_id_seq', 'U', 4),
+  email varchar(255) unique not null,
+  name varchar(255) not null,
+  avatar_url text,
+  role varchar(20) not null default 'user'
+    check (role in ('user', 'seller', 'admin')),
+  is_active boolean not null default true,
+  phone_number varchar(20),
+  address text,
+  city varchar(100),
+  postal_code varchar(20),
+  country varchar(100),
+  bio text,
+  created_at timestamptz not null default current_timestamp
+);
 
----
+-- =========================
+-- CATEGORIES
+-- Prefix: CAT
+-- =========================
+create table categories (
+  id varchar(20) primary key default generate_prefixed_id('categories_id_seq', 'CAT', 4),
+  name varchar(100) unique not null,
+  description text,
+  created_at timestamptz not null default current_timestamp
+);
 
-Table categories:
-* id (uuid, primary key)
-* name (varchar)
-* description (text)
-* created_at (timestamp)
+-- =========================
+-- SUBCATEGORIES
+-- Prefix: SCAT
+-- =========================
+create table subcategories (
+  id varchar(20) primary key default generate_prefixed_id('subcategories_id_seq', 'SCAT', 4),
+  category_id varchar(20) not null references categories(id) on delete cascade,
+  name varchar(100) not null,
+  description text,
+  created_at timestamptz not null default current_timestamp,
+  unique(category_id, name)
+);
 
----
+-- =========================
+-- PRODUCTS
+-- Prefix: P
+-- =========================
+create table products (
+  id varchar(20) primary key default generate_prefixed_id('products_id_seq', 'P', 4),
+  title varchar(255) not null,
+  description text not null,
+  price numeric(10,2) not null check (price > 0),
+  category_id varchar(20) references categories(id) on delete set null,
+  subcategory_id varchar(20) references subcategories(id) on delete set null,
+  seller_id varchar(20) not null references users(id) on delete cascade,
+  condition varchar(20) not null
+    check (condition in ('like_new', 'excellent', 'good', 'fair')),
+  image_urls text[], -- <-- UPDATED TO ARRAY
+  status varchar(20) not null default 'active'
+    check (status in ('draft', 'active', 'reserved', 'sold', 'inactive')),
+  view_count integer not null default 0 check (view_count >= 0),
+  likes_count integer not null default 0 check (likes_count >= 0),
+  created_at timestamptz not null default current_timestamp,
+  updated_at timestamptz not null default current_timestamp
+);
 
-Table products:
-* id (uuid, primary key)
-* title (varchar)
-* description (text)
-* price (numeric)
-* category_id (uuid, foreign key → categories.id)
-* seller_id (uuid, foreign key → users.id)
-* condition (varchar)
-* image_url (text)
-* images (jsonb)
-* status (varchar)
-* view_count (integer)
-* likes_count (integer)
-* created_at (timestamp)
-* updated_at (timestamp)
+-- =========================
+-- CART ITEMS
+-- Prefix: CI
+-- =========================
+create table cart_items (
+  id varchar(20) primary key default generate_prefixed_id('cart_items_id_seq', 'CI', 4),
+  user_id varchar(20) not null references users(id) on delete cascade,
+  product_id varchar(20) not null references products(id) on delete cascade,
+  quantity integer not null default 1 check (quantity > 0),
+  added_at timestamptz not null default current_timestamp,
+  unique(user_id, product_id)
+);
 
----
+-- =========================
+-- ORDERS
+-- Prefix: O
+-- =========================
+create table orders (
+  id varchar(20) primary key default generate_prefixed_id('orders_id_seq', 'O', 4),
+  order_number varchar(50) unique not null,
+  buyer_id varchar(20) not null references users(id) on delete restrict,
+  total_price numeric(10,2) not null default 0 check (total_price >= 0),
+  status varchar(30) not null default 'pending'
+    check (status in ('pending', 'paid', 'pending_handover', 'completed', 'cancelled', 'disputed')),
+  payment_status varchar(20) not null default 'pending'
+    check (payment_status in ('pending', 'paid', 'failed', 'refunded')),
+  handover_location text,
+  handover_date timestamptz,
+  notes text,
+  created_at timestamptz not null default current_timestamp,
+  updated_at timestamptz not null default current_timestamp
+);
 
-Table cart_items:
-* id (uuid, primary key)
-* user_id (uuid, foreign key → users.id)
-* product_id (uuid, foreign key → products.id)
-* quantity (integer)
-* added_at (timestamp)
-* unique(user_id, product_id)
+-- =========================
+-- ORDER ITEMS
+-- Prefix: OI
+-- =========================
+create table order_items (
+  id varchar(20) primary key default generate_prefixed_id('order_items_id_seq', 'OI', 4),
+  order_id varchar(20) not null references orders(id) on delete cascade,
+  product_id varchar(20) not null references products(id) on delete restrict,
+  quantity integer not null default 1 check (quantity > 0),
+  unit_price numeric(10,2) not null check (unit_price > 0),
+  subtotal numeric(10,2) not null check (subtotal = round((quantity * unit_price)::numeric, 2)),
+  created_at timestamptz not null default current_timestamp,
+  unique(order_id, product_id)
+);
 
----
+-- =========================
+-- PAYMENTS
+-- Prefix: PAY
+-- =========================
+create table payments (
+  id varchar(20) primary key default generate_prefixed_id('payments_id_seq', 'PAY', 4),
+  order_id varchar(20) not null references orders(id) on delete cascade,
+  user_id varchar(20) not null references users(id) on delete restrict,
+  amount numeric(10,2) not null check (amount > 0),
+  payment_method varchar(30)
+    check (
+      payment_method is null
+      or payment_method in ('card', 'apple_google_pay', 'campus_wallet', 'bank_transfer', 'cash')
+    ),
+  payment_status varchar(20) not null default 'pending'
+    check (payment_status in ('pending', 'paid', 'failed', 'refunded')),
+  transaction_id varchar(255) unique,
+  gateway_response jsonb,
+  created_at timestamptz not null default current_timestamp,
+  updated_at timestamptz not null default current_timestamp
+);
 
-Table orders:
-* id (uuid, primary key)
-* order_number (varchar)
-* buyer_id (uuid, foreign key → users.id)
-* total_price (numeric)
-* status (varchar)
-* payment_status (varchar)
-* handover_location (text)
-* handover_date (timestamp)
-* notes (text)
-* created_at (timestamp)
-* updated_at (timestamp)
+-- =========================
+-- CHAT CONVERSATIONS
+-- Prefix: CC
+-- =========================
+create table chat_conversations (
+  id varchar(20) primary key default generate_prefixed_id('chat_conversations_id_seq', 'CC', 4),
+  product_id varchar(20) not null references products(id) on delete cascade,
+  buyer_id varchar(20) not null references users(id) on delete cascade,
+  seller_id varchar(20) not null references users(id) on delete cascade,
+  deal_agreed boolean not null default false,
+  last_message_at timestamptz,
+  created_at timestamptz not null default current_timestamp,
+  unique(product_id, buyer_id, seller_id),
+  check (buyer_id <> seller_id)
+);
 
----
+-- =========================
+-- CHAT MESSAGES
+-- Prefix: CM
+-- =========================
+create table chat_messages (
+  id varchar(20) primary key default generate_prefixed_id('chat_messages_id_seq', 'CM', 4),
+  conversation_id varchar(20) not null references chat_conversations(id) on delete cascade,
+  sender_id varchar(20) not null references users(id) on delete cascade,
+  message_text text,
+  is_image boolean not null default false,
+  image_url text,
+  is_read boolean not null default false,
+  created_at timestamptz not null default current_timestamp,
+  check (
+    nullif(btrim(coalesce(message_text, '')), '') is not null
+    or image_url is not null
+  ),
+  check (
+    (is_image = true and image_url is not null)
+    or (is_image = false)
+  )
+);
 
-Table order_items:
-* id (uuid, primary key)
-* order_id (uuid, foreign key → orders.id)
-* product_id (uuid, foreign key → products.id)
-* quantity (integer)
-* unit_price (numeric)
-* subtotal (numeric)
-* created_at (timestamp)
-* unique(order_id, product_id)
+-- =========================
+-- NOTIFICATIONS
+-- Prefix: N
+-- =========================
+create table notifications (
+  id varchar(20) primary key default generate_prefixed_id('notifications_id_seq', 'N', 4),
+  user_id varchar(20) not null references users(id) on delete cascade,
+  title varchar(255) not null,
+  message text not null,
+  notification_type varchar(30)
+    check (
+      notification_type is null
+      or notification_type in ('order', 'message', 'system', 'item_sold', 'item_bought')
+    ),
+  related_order_id varchar(20) references orders(id) on delete set null,
+  related_product_id varchar(20) references products(id) on delete set null,
+  is_read boolean not null default false,
+  created_at timestamptz not null default current_timestamp
+);
 
----
+-- =========================
+-- REVIEWS
+-- Prefix: R
+-- =========================
+create table reviews (
+  id varchar(20) primary key default generate_prefixed_id('reviews_id_seq', 'R', 4),
+  order_id varchar(20) not null references orders(id) on delete cascade,
+  reviewer_id varchar(20) not null references users(id) on delete cascade,
+  reviewee_id varchar(20) not null references users(id) on delete cascade,
+  product_id varchar(20) not null references products(id) on delete cascade,
+  rating integer not null check (rating between 1 and 5),
+  title varchar(255),
+  comment text,
+  created_at timestamptz not null default current_timestamp,
+  unique(order_id, reviewer_id),
+  check (reviewer_id <> reviewee_id)
+);
 
-Table payments:
-* id (uuid, primary key)
-* order_id (uuid, foreign key → orders.id)
-* user_id (uuid, foreign key → users.id)
-* amount (numeric)
-* payment_method (varchar)
-* payment_status (varchar)
-* transaction_id (varchar)
-* gateway_response (jsonb)
-* created_at (timestamp)
-* updated_at (timestamp)
+-- =========================
+-- SELLER PROFILES
+-- Prefix: SP
+-- =========================
+create table seller_profiles (
+  id varchar(20) primary key default generate_prefixed_id('seller_profiles_id_seq', 'SP', 4),
+  user_id varchar(20) not null unique references users(id) on delete cascade,
+  total_sales integer not null default 0 check (total_sales >= 0),
+  average_rating numeric(3,2) not null default 0 check (average_rating >= 0 and average_rating <= 5),
+  total_reviews integer not null default 0 check (total_reviews >= 0),
+  total_products integer not null default 0 check (total_products >= 0),
+  is_verified boolean not null default false,
+  verification_date timestamptz,
+  created_at timestamptz not null default current_timestamp
+);
 
----
+-- =========================
+-- FAVORITES
+-- Prefix: F
+-- =========================
+create table favorites (
+  id varchar(20) primary key default generate_prefixed_id('favorites_id_seq', 'F', 4),
+  user_id varchar(20) not null references users(id) on delete cascade,
+  product_id varchar(20) not null references products(id) on delete cascade,
+  created_at timestamptz not null default current_timestamp,
+  unique(user_id, product_id)
+);
 
-Table chat_conversations:
-* id (uuid, primary key)
-* product_id (uuid, foreign key → products.id)
-* buyer_id (uuid, foreign key → users.id)
-* seller_id (uuid, foreign key → users.id)
-* deal_agreed (boolean)
-* last_message_at (timestamp)
-* created_at (timestamp)
-* unique(product_id, buyer_id, seller_id)
+-- =========================
+-- DISPUTES
+-- Prefix: D
+-- =========================
+create table disputes (
+  id varchar(20) primary key default generate_prefixed_id('disputes_id_seq', 'D', 4),
+  order_id varchar(20) not null references orders(id) on delete cascade,
+  reporter_id varchar(20) not null references users(id) on delete restrict,
+  accused_id varchar(20) not null references users(id) on delete restrict,
+  reason varchar(255) not null,
+  description text not null,
+  status varchar(20) not null default 'open'
+    check (status in ('open', 'in_review', 'resolved', 'closed')),
+  admin_notes text,
+  resolution_notes text,
+  created_at timestamptz not null default current_timestamp,
+  updated_at timestamptz not null default current_timestamp,
+  resolved_at timestamptz,
+  check (reporter_id <> accused_id)
+);
 
----
+-- =========================
+-- ADMIN LOGS
+-- Prefix: AL
+-- =========================
+create table admin_logs (
+  id varchar(20) primary key default generate_prefixed_id('admin_logs_id_seq', 'AL', 4),
+  admin_id varchar(20) not null references users(id) on delete restrict,
+  action varchar(100) not null,
+  entity_type varchar(20)
+    check (
+      entity_type is null
+      or entity_type in ('user', 'product', 'order', 'dispute')
+    ),
+  entity_id varchar(20),
+  details jsonb,
+  created_at timestamptz not null default current_timestamp
+);
 
-Table chat_messages:
-* id (uuid, primary key)
-* conversation_id (uuid, foreign key → chat_conversations.id)
-* sender_id (uuid, foreign key → users.id)
-* message_text (text)
-* is_image (boolean)
-* image_url (text)
-* is_read (boolean)
-* created_at (timestamp)
+-- =========================
+-- INDEXES
+-- =========================
+create index idx_products_status on products(status);
+create index idx_products_seller_id on products(seller_id);
+create index idx_orders_buyer_id on orders(buyer_id);
+create index idx_order_items_order_id on order_items(order_id);
+create index idx_chat_messages_conversation_id on chat_messages(conversation_id);
+create index idx_reviews_reviewee_id on reviews(reviewee_id);
+create index if not exists idx_products_category_id on products(category_id);
 
----
+create index if not exists idx_cart_items_user_id on cart_items(user_id);
+create index if not exists idx_cart_items_product_id on cart_items(product_id);
 
-Table notifications:
-* id (uuid, primary key)
-* user_id (uuid, foreign key → users.id)
-* title (varchar)
-* message (text)
-* notification_type (varchar)
-* related_order_id (uuid, foreign key → orders.id)
-* related_product_id (uuid, foreign key → products.id)
-* is_read (boolean)
-* created_at (timestamp)
+create index if not exists idx_payments_order_id on payments(order_id);
+create index if not exists idx_payments_user_id on payments(user_id);
 
----
+create index if not exists idx_notifications_user_id on notifications(user_id);
 
-Table reviews:
-* id (uuid, primary key)
-* order_id (uuid, foreign key → orders.id)
-* reviewer_id (uuid, foreign key → users.id)
-* reviewee_id (uuid, foreign key → users.id)
-* product_id (uuid, foreign key → products.id)
-* rating (integer)
-* title (varchar)
-* comment (text)
-* created_at (timestamp)
+create index if not exists idx_chat_conversations_product_id on chat_conversations(product_id);
+create index if not exists idx_chat_conversations_buyer_id on chat_conversations(buyer_id);
+create index if not exists idx_chat_conversations_seller_id on chat_conversations(seller_id);
 
----
+create index if not exists idx_reviews_order_id on reviews(order_id);
+create index if not exists idx_reviews_product_id on reviews(product_id);
 
-Table favorites:
-* id (uuid, primary key)
-* user_id (uuid, foreign key → users.id)
-* product_id (uuid, foreign key → products.id)
-* created_at (timestamp)
-* unique(user_id, product_id)
+create index if not exists idx_disputes_order_id on disputes(order_id);
+create index if not exists idx_disputes_reporter_id on disputes(reporter_id);
+create index if not exists idx_disputes_accused_id on disputes(accused_id);
 
----
+create index idx_subcategories_category_id on subcategories(category_id);
+create index if not exists idx_products_subcategory_id on products(subcategory_id);
 
-Table disputes:
-* id (uuid, primary key)
-* order_id (uuid, foreign key → orders.id)
-* reporter_id (uuid, foreign key → users.id)
-* accused_id (uuid, foreign key → users.id)
-* reason (varchar)
-* description (text)
-* status (varchar)
-* admin_notes (text)
-* resolution_notes (text)
-* created_at (timestamp)
-* updated_at (timestamp)
-* resolved_at (timestamp)
 
----
-
-Relationships Summary:
-
-* users is the central table (buyers, sellers, admins, senders)
-* products belong to categories and sellers
-* cart_items store user shopping cart (1 user → many items)
-* orders store checkout (1 order per transaction)
-* order_items store products inside an order (1 order → many items)
-* payments belong to orders
-* chat system links users and products
-* favorites connect users and products
-* reviews are based on completed orders
-* disputes handle order issues
+//product image
+Bucket = product_images
+https://yqvgeownycvbzelukmfp.supabase.co/storage/v1/object/public/product_images/example.jpg
