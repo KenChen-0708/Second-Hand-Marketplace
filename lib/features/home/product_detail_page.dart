@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
 import '../../state/state.dart';
+import '../../shared/utils/snackbar_helper.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -87,15 +88,57 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _showMessage(BuildContext context, String message) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    SnackbarHelper.showTopMessage(context, message);
+  }
+
+  Future<_PurchaseSelection?> _showPurchaseOptionsSheet(
+    BuildContext context,
+    ProductModel product, {
+    required String actionLabel,
+    required IconData actionIcon,
+  }) {
+    return showModalBottomSheet<_PurchaseSelection>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return _PurchaseOptionsSheet(
+          product: product,
+          actionLabel: actionLabel,
+          actionIcon: actionIcon,
+        );
+      },
+    );
+  }
+
+  Future<void> _handleAddToCart(BuildContext context, ProductModel product) async {
+    if (!await _promptLoginIfNeeded(context)) {
+      return;
+    }
+
+    final selection = await _showPurchaseOptionsSheet(
+      context,
+      product,
+      actionLabel: 'Add to Cart',
+      actionIcon: Icons.add_shopping_cart_rounded,
+    );
+
+    if (selection == null || !context.mounted) {
+      return;
+    }
+
+    final result = await context.read<CartState>().addToCart(
+      product,
+      quantity: selection.quantity,
+    );
+    if (!context.mounted) {
+      return;
+    }
+
+    final variantMessage = selection.selectedOption == null
+        ? result.message
+        : '${result.message} (${selection.selectedOption})';
+    _showMessage(context, variantMessage);
   }
 
   Future<void> _handleBuyNow(BuildContext context, ProductModel product) async {
@@ -103,17 +146,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return;
     }
 
-    final result = await context.read<CartState>().addToCart(product);
-    if (!context.mounted) {
+    final selection = await _showPurchaseOptionsSheet(
+      context,
+      product,
+      actionLabel: 'Buy Now',
+      actionIcon: Icons.flash_on_rounded,
+    );
+
+    if (selection == null || !context.mounted) {
       return;
     }
 
-    if (!result.success) {
-      _showMessage(context, result.message);
-      return;
-    }
-
-    context.push('/checkout');
+    await context.push(
+      '/checkout',
+      extra: CheckoutSessionModel(
+        items: [
+          CartModel(
+            id: 'buy_now_${product.id}_${selection.selectedOption ?? 'default'}',
+            product: product,
+            quantity: selection.quantity,
+          ),
+        ],
+        isBuyNow: true,
+      ),
+    );
   }
 
   @override
@@ -520,30 +576,20 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                         product.id,
                                       );
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(
+                                        _showMessage(
                                           context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Listing removed successfully',
-                                            ),
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
+                                          'Listing removed successfully',
                                         );
                                         context.pop(); // Go back after deletion
                                       }
                                     } catch (e) {
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(
+                                        SnackbarHelper.showTopMessage(
                                           context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Error: $e'),
-                                            backgroundColor: Theme.of(
-                                              context,
-                                            ).colorScheme.error,
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
+                                          'Error: $e',
+                                          backgroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
                                         );
                                       }
                                     }
@@ -616,18 +662,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 ),
                               ),
                               onPressed: () async {
-                                if (!await _promptLoginIfNeeded(context)) {
-                                  return;
-                                }
-
-                                final result = await context
-                                    .read<CartState>()
-                                    .addToCart(product);
-                                if (!context.mounted) {
-                                  return;
-                                }
-
-                                _showMessage(context, result.message);
+                                await _handleAddToCart(context, product);
                               },
                               icon: const Icon(Icons.add_shopping_cart_rounded),
                               label: const Text('Add to Cart'),
@@ -674,4 +709,229 @@ class _ProductDetailData {
 
   final ProductModel product;
   final UserModel? seller;
+}
+
+class _PurchaseSelection {
+  const _PurchaseSelection({
+    required this.quantity,
+    this.selectedOption,
+  });
+
+  final int quantity;
+  final String? selectedOption;
+}
+
+class _PurchaseOptionsSheet extends StatefulWidget {
+  const _PurchaseOptionsSheet({
+    required this.product,
+    required this.actionLabel,
+    required this.actionIcon,
+  });
+
+  final ProductModel product;
+  final String actionLabel;
+  final IconData actionIcon;
+
+  @override
+  State<_PurchaseOptionsSheet> createState() => _PurchaseOptionsSheetState();
+}
+
+class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
+  late final List<String> _options;
+  late String _selectedOption;
+  int _quantity = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _options = _buildOptions(widget.product);
+    _selectedOption = _options.first;
+  }
+
+  List<String> _buildOptions(ProductModel product) {
+    final options = <String>[
+      if (product.condition.isNotEmpty) product.condition,
+      if (product.tradePreference.isNotEmpty)
+        _formatTradePreference(product.tradePreference),
+      if (product.openToOffers) 'Negotiable',
+    ].toSet().toList();
+
+    if (options.isEmpty) {
+      return const ['Standard'];
+    }
+
+    return options;
+  }
+
+  String _formatTradePreference(String tradePreference) {
+    return tradePreference
+        .split('_')
+        .map((word) => word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}')
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final product = widget.product;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: Material(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(28),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.network(
+                        product.imageUrl ?? 'https://via.placeholder.com/120',
+                        width: 92,
+                        height: 92,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            product.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '\$${product.price.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Variation',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _options.map((option) {
+                    final isSelected = option == _selectedOption;
+                    return ChoiceChip(
+                      label: Text(option),
+                      selected: isSelected,
+                      onSelected: (_) => setState(() => _selectedOption = option),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Text(
+                      'Quantity',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    _QuantityButton(
+                      icon: Icons.remove_rounded,
+                      onPressed: _quantity > 1
+                          ? () => setState(() => _quantity -= 1)
+                          : null,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        '$_quantity',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                    _QuantityButton(
+                      icon: Icons.add_rounded,
+                      onPressed: () => setState(() => _quantity += 1),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(
+                      context,
+                      _PurchaseSelection(
+                        quantity: _quantity,
+                        selectedOption: _selectedOption,
+                      ),
+                    ),
+                    icon: Icon(widget.actionIcon),
+                    label: Text(widget.actionLabel),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuantityButton extends StatelessWidget {
+  const _QuantityButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Icon(icon, size: 18),
+      ),
+    );
+  }
 }

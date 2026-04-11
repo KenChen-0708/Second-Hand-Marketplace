@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../state/state.dart';
+import '../../shared/utils/snackbar_helper.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -19,15 +20,7 @@ class CartPage extends StatelessWidget {
       return;
     }
 
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-      SnackBar(
-        content: Text(cartState.error!),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    SnackbarHelper.showTopMessage(context, cartState.error!);
   }
 
   @override
