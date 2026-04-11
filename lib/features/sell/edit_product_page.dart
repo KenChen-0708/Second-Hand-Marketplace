@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../state/state.dart';
+import '../../services/product/product_service.dart';
 
 class EditProductPage extends StatefulWidget {
   final ProductModel product;
@@ -18,6 +21,8 @@ class _EditProductPageState extends State<EditProductPage> {
   late TextEditingController _descriptionController;
   late TextEditingController _priceController;
   late String _selectedCondition;
+  final List<String> _images = [];
+  final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
 
   @override
@@ -27,6 +32,44 @@ class _EditProductPageState extends State<EditProductPage> {
     _descriptionController = TextEditingController(text: widget.product.description);
     _priceController = TextEditingController(text: widget.product.price.toString());
     _selectedCondition = widget.product.condition;
+    
+    // Initialize images
+    if (widget.product.images != null && widget.product.images!.isNotEmpty) {
+      _images.addAll(widget.product.images!);
+    } else if (widget.product.imageUrl != null) {
+      _images.add(widget.product.imageUrl!);
+    }
+  }
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> picked = await _picker.pickMultiImage(imageQuality: 80);
+      if (picked.isNotEmpty) {
+        setState(() {
+          for (var img in picked) {
+            if (_images.length < 10 && !_images.contains(img.path)) {
+              _images.add(img.path);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking images: $e');
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
+      if (photo != null && _images.length < 10) {
+        setState(() => _images.add(photo.path));
+      }
+    } catch (e) {
+      debugPrint('Error taking photo: $e');
+    }
   }
 
   @override
@@ -58,11 +101,29 @@ class _EditProductPageState extends State<EditProductPage> {
     setState(() => _isSaving = true);
 
     try {
+      final userState = context.read<UserState>();
+      final userId = userState.currentUser?.id;
+      if (userId == null) throw Exception('User not logged in');
+
+      final productService = ProductService();
+      
+      // Separate existing URLs from new local paths
+      final existingUrls = _images.where((img) => img.startsWith('http')).toList();
+      final newPaths = _images.where((img) => !img.startsWith('http')).toList();
+
+      List<String> uploadedUrls = [];
+      if (newPaths.isNotEmpty) {
+        uploadedUrls = await productService.uploadImages(newPaths, userId);
+      }
+
+      final allImageUrls = [...existingUrls, ...uploadedUrls];
+
       final updateData = {
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'price': price,
         'condition': _selectedCondition,
+        'image_urls': allImageUrls,
       };
 
       await context.read<ProductState>().updateProduct(widget.product.id, updateData);
@@ -111,6 +172,13 @@ class _EditProductPageState extends State<EditProductPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              'Photos',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            _buildImageSection(),
+            const SizedBox(height: 24),
             Text(
               'Item title',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
@@ -199,6 +267,157 @@ class _EditProductPageState extends State<EditProductPage> {
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildImageSection() {
+    final colors = Theme.of(context).colorScheme;
+    
+    return Column(
+      children: [
+        if (_images.isEmpty)
+          GestureDetector(
+            onTap: _pickImages,
+            child: Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: colors.primary.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colors.primary.withOpacity(0.2),
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_photo_alternate_rounded, color: colors.primary, size: 32),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add up to 10 photos',
+                    style: TextStyle(color: colors.primary, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _images.length + (_images.length < 10 ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _images.length) {
+                  return GestureDetector(
+                    onTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (ctx) => Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              leading: const Icon(Icons.photo_library_rounded),
+                              title: const Text('Choose from Gallery'),
+                              onTap: () {
+                                Navigator.pop(ctx);
+                                _pickImages();
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.camera_alt_rounded),
+                              title: const Text('Take a Photo'),
+                              onTap: () {
+                                Navigator.pop(ctx);
+                                _takePhoto();
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: 100,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: colors.primary.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: colors.primary.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Icon(Icons.add_rounded, color: colors.primary),
+                    ),
+                  );
+                }
+
+                final imagePath = _images[index];
+                final isUrl = imagePath.startsWith('http');
+
+                return Stack(
+                  children: [
+                    Container(
+                      width: 100,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        image: DecorationImage(
+                          image: isUrl 
+                              ? NetworkImage(imagePath) as ImageProvider
+                              : FileImage(File(imagePath)),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 16,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _images.removeAt(index)),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    if (index == 0)
+                      Positioned(
+                        bottom: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Cover',
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.info_outline_rounded, size: 14, color: Colors.grey[600]),
+            const SizedBox(width: 4),
+            Text(
+              'The first photo will be used as the cover.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
