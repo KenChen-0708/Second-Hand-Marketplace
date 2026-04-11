@@ -23,9 +23,10 @@ class _HomePageState extends State<HomePage> {
   List<ProductModel> _filteredProducts = [];
   bool _isLoadingProducts = true;
   String? _productLoadError;
+  ProductState? _productState;
 
   // --- Filter State ---
-  RangeValues _priceRange = const RangeValues(0, 600);
+  RangeValues _priceRange = const RangeValues(0, 2000);
   final Set<String> _selectedConditions = {};
 
   final List<String> _conditions = [
@@ -42,13 +43,35 @@ class _HomePageState extends State<HomePage> {
     _searchFocus.addListener(() {
       setState(() => _searchFocused = _searchFocus.hasFocus);
     });
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProducts();
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newProductState = context.read<ProductState>();
+    if (_productState != newProductState) {
+      _productState?.removeListener(_onProductStateChanged);
+      _productState = newProductState;
+      _productState?.addListener(_onProductStateChanged);
+    }
+  }
+
+  void _onProductStateChanged() {
+    if (mounted && _productState != null) {
+      setState(() {
+        _allProducts = _productState!.items;
+        _applyAllFilters();
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    _productState?.removeListener(_onProductStateChanged);
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -118,7 +141,7 @@ class _HomePageState extends State<HomePage> {
 
   void _resetFilters() {
     setState(() {
-      _priceRange = const RangeValues(0, 600);
+      _priceRange = const RangeValues(0, 2000);
       _selectedConditions.clear();
       _selectedCategories.clear();
       _selectedSort = 'Relevance';
@@ -149,7 +172,7 @@ class _HomePageState extends State<HomePage> {
       _selectedConditions.isNotEmpty ||
       _selectedCategories.isNotEmpty ||
       _selectedSort != 'Relevance' ||
-      _priceRange != const RangeValues(0, 600);
+      _priceRange != const RangeValues(0, 2000);
 
   // --- Filter Modal ---
   void _showFilterModal() {
@@ -247,7 +270,7 @@ class _HomePageState extends State<HomePage> {
                                 if (tempConditions.isNotEmpty ||
                                     tempCategories.isNotEmpty ||
                                     tempSort != 'Relevance' ||
-                                    tempPrice != const RangeValues(0, 600))
+                                    tempPrice != const RangeValues(0, 2000))
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 10,
@@ -268,7 +291,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 TextButton(
                                   onPressed: () => setModalState(() {
-                                    tempPrice = const RangeValues(0, 600);
+                                    tempPrice = const RangeValues(0, 2000);
                                     tempConditions.clear();
                                     tempCategories.clear();
                                     tempSort = 'Relevance';
@@ -415,8 +438,8 @@ class _HomePageState extends State<HomePage> {
                               child: RangeSlider(
                                 values: tempPrice,
                                 min: 0,
-                                max: 600,
-                                divisions: 60,
+                                max: 2000,
+                                divisions: 200,
                                 onChanged: (v) =>
                                     setModalState(() => tempPrice = v),
                               ),
@@ -427,29 +450,29 @@ class _HomePageState extends State<HomePage> {
                               children: [
                                 _pricePreset(
                                   ctx,
-                                  'Under \$50',
-                                  const RangeValues(0, 50),
+                                  'Under \$100',
+                                  const RangeValues(0, 100),
                                   tempPrice,
                                   (v) => setModalState(() => tempPrice = v),
                                 ),
                                 _pricePreset(
                                   ctx,
-                                  '\$50–\$150',
-                                  const RangeValues(50, 150),
+                                  '\$100–\$500',
+                                  const RangeValues(100, 500),
                                   tempPrice,
                                   (v) => setModalState(() => tempPrice = v),
                                 ),
                                 _pricePreset(
                                   ctx,
-                                  '\$150–\$400',
-                                  const RangeValues(150, 400),
+                                  '\$500–\$1000',
+                                  const RangeValues(500, 1000),
                                   tempPrice,
                                   (v) => setModalState(() => tempPrice = v),
                                 ),
                                 _pricePreset(
                                   ctx,
-                                  'Over \$400',
-                                  const RangeValues(400, 600),
+                                  'Any',
+                                  const RangeValues(0, 2000),
                                   tempPrice,
                                   (v) => setModalState(() => tempPrice = v),
                                 ),
@@ -645,7 +668,7 @@ class _HomePageState extends State<HomePage> {
     Set<String> categories,
   ) {
     return _allProducts.where((p) {
-      final inPrice = p.price >= price.start && p.price <= price.end;
+      final inPrice = p.price >= price.start && (price.end >= 2000 ? true : p.price <= price.end);
       final inCondition =
           conditions.isEmpty || conditions.contains(p.condition);
       final inCategory = categories.isEmpty || categories.contains(_getCategoryName(p.categoryId));
@@ -657,7 +680,7 @@ class _HomePageState extends State<HomePage> {
   void _applyAllFilters() {
     List<ProductModel> result = _allProducts.where((p) {
       final inPrice =
-          p.price >= _priceRange.start && p.price <= _priceRange.end;
+          p.price >= _priceRange.start && (_priceRange.end >= 2000 ? true : p.price <= _priceRange.end);
       final inCondition =
           _selectedConditions.isEmpty ||
           _selectedConditions.contains(p.condition);
@@ -697,52 +720,55 @@ class _HomePageState extends State<HomePage> {
                   ? _buildLoadErrorState(context)
                   : _filteredProducts.isEmpty
                   ? _buildEmptyState(context)
-                  : CustomScrollView(
-                      slivers: [
-                        SliverToBoxAdapter(child: _buildCategories(context)),
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 8.0,
-                          ),
-                          sliver: SliverToBoxAdapter(
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Popular Products',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
+                  : RefreshIndicator(
+                      onRefresh: _loadProducts,
+                      child: CustomScrollView(
+                        slivers: [
+                          SliverToBoxAdapter(child: _buildCategories(context)),
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 8.0,
+                            ),
+                            sliver: SliverToBoxAdapter(
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'Popular Products',
+                                    style: Theme.of(context).textTheme.titleLarge
+                                        ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    '${_filteredProducts.length}',
-                                    style: TextStyle(
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                                      ).colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '${_filteredProducts.length}',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        _buildPopularProducts(context),
-                        const SliverToBoxAdapter(child: SizedBox(height: 80)),
-                      ],
+                          _buildPopularProducts(context),
+                          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                        ],
+                      ),
                     ),
             ),
           ],

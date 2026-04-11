@@ -14,6 +14,8 @@ class ProductModel implements AppModel {
   final String condition;
   final String? imageUrl;
   final List<String>? images;
+  final String tradePreference;
+  final bool openToOffers;
   final String status;
   final int viewCount;
   final int likesCount;
@@ -32,6 +34,8 @@ class ProductModel implements AppModel {
     this.imageUrl,
     this.images,
     this.status = 'active',
+    this.tradePreference = 'face_to_face',
+    this.openToOffers = false,
     this.viewCount = 0,
     this.likesCount = 0,
     this.createdAt,
@@ -50,6 +54,8 @@ class ProductModel implements AppModel {
     String? imageUrl,
     List<String>? images,
     String? status,
+    String? tradePreference,
+    bool? openToOffers,
     int? viewCount,
     int? likesCount,
     DateTime? createdAt,
@@ -67,6 +73,8 @@ class ProductModel implements AppModel {
       imageUrl: imageUrl ?? this.imageUrl,
       images: images ?? this.images,
       status: status ?? this.status,
+      tradePreference: tradePreference ?? this.tradePreference,
+      openToOffers: openToOffers ?? this.openToOffers,
       viewCount: viewCount ?? this.viewCount,
       likesCount: likesCount ?? this.likesCount,
       createdAt: createdAt ?? this.createdAt,
@@ -93,6 +101,8 @@ class ProductModel implements AppModel {
               : null),
       images: JsonUtils.asStringList(map['image_urls']),
       status: JsonUtils.asString(map['status']) ?? 'active',
+      tradePreference: JsonUtils.asString(map['trade_preference']) ?? 'face_to_face',
+      openToOffers: map['open_to_offers'] == true,
       viewCount: JsonUtils.asInt(map['view_count']) ?? 0,
       likesCount: JsonUtils.asInt(map['likes_count']) ?? 0,
       createdAt: JsonUtils.asDateTime(map['created_at']),
@@ -113,6 +123,8 @@ class ProductModel implements AppModel {
       'image_url': imageUrl,
       'image_urls': images,
       'status': status,
+      'trade_preference': tradePreference,
+      'open_to_offers': openToOffers,
       'view_count': viewCount,
       'likes_count': likesCount,
       'created_at': createdAt?.toIso8601String(),
