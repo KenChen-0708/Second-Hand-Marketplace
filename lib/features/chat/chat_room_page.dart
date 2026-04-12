@@ -8,6 +8,7 @@ import '../../services/chat/chat_service.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../shared/utils/snackbar_helper.dart';
 import '../../state/state.dart';
+import 'chat_models.dart';
 
 class ChatRoomPage extends StatefulWidget {
   const ChatRoomPage({super.key, required this.conversationId});
