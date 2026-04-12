@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../services/chat/chat_service.dart';
+import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/snackbar_helper.dart';
+import '../../state/state.dart';
 import 'chat_models.dart';
 
 class ChatInboxPage extends StatefulWidget {
@@ -12,6 +18,14 @@ class ChatInboxPage extends StatefulWidget {
 class _ChatInboxPageState extends State<ChatInboxPage> {
   final _searchController = TextEditingController();
   String _query = '';
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadConversations());
+  }
 
   @override
   void dispose() {
@@ -19,117 +33,163 @@ class _ChatInboxPageState extends State<ChatInboxPage> {
     super.dispose();
   }
 
-  List<ChatConversation> get _filtered {
-    if (_query.isEmpty) return mockConversations;
-    final q = _query.toLowerCase();
-    return mockConversations.where((c) {
-      return c.otherUser.name.toLowerCase().contains(q) ||
-          c.product.title.toLowerCase().contains(q);
+  Future<void> _loadConversations() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      await context.read<ChatConversationState>().fetchUserConversations();
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  List<ChatConversationBundle> _filtered(List<ChatConversationBundle> bundles) {
+    if (_query.isEmpty) {
+      return bundles;
+    }
+
+    final query = _query.toLowerCase();
+    return bundles.where((bundle) {
+      return bundle.otherUser.name.toLowerCase().contains(query) ||
+          bundle.product.title.toLowerCase().contains(query);
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final colorScheme = theme.colorScheme;
+    final chatConversationState = context.watch<ChatConversationState>();
+    final userId = context.watch<UserState>().currentUser?.id ?? '';
+    final conversations = _filtered(chatConversationState.bundles);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          'Messages',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+            color: colorScheme.onSurface,
+          ),
+        ),
+      ),
       body: SafeArea(
+        top: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Large title ──────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-              child: Text(
-                'Messages',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                  color: cs.onSurface,
-                ),
-              ),
-            ),
-
-            // ── Search bar ───────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
               child: TextField(
                 controller: _searchController,
-                onChanged: (v) => setState(() => _query = v),
-                style: const TextStyle(fontSize: 14),
+                onChanged: (value) => setState(() => _query = value),
                 decoration: InputDecoration(
-                  hintText: 'Search by name or product…',
-                  hintStyle: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.4),
-                    fontSize: 14,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                    color: cs.onSurface.withValues(alpha: 0.4),
-                    size: 20,
-                  ),
+                  hintText: 'Search by name or product...',
+                  prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: _query.isNotEmpty
                       ? IconButton(
-                          icon: Icon(
-                            Icons.close_rounded,
-                            size: 18,
-                            color: cs.onSurface.withValues(alpha: 0.5),
-                          ),
+                          icon: const Icon(Icons.close_rounded, size: 18),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _query = '');
                           },
                         )
                       : null,
-                  filled: true,
-                  fillColor: cs.surfaceContainerHighest,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
                 ),
               ),
             ),
-
-            // ── Conversation list ────────────────────────────────
             Expanded(
-              child: _filtered.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+              child: RefreshIndicator(
+                onRefresh: _loadConversations,
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                    ? ListView(
                         children: [
-                          Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 64,
-                            color: cs.onSurface.withValues(alpha: 0.15),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No conversations found',
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.4),
+                          SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.55,
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.chat_bubble_outline_rounded, size: 64),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _error!,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    FilledButton.icon(
+                                      onPressed: _loadConversations,
+                                      icon: const Icon(Icons.refresh_rounded),
+                                      label: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],
+                      )
+                    : conversations.isEmpty
+                    ? ListView(
+                        children: [
+                          SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.55,
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.chat_bubble_outline_rounded,
+                                    size: 64,
+                                    color: colorScheme.onSurface.withValues(alpha: 0.15),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No conversations found',
+                                    style: TextStyle(
+                                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: conversations.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          indent: 80,
+                          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                        itemBuilder: (context, index) => _ConversationTile(
+                          bundle: conversations[index],
+                          currentUserId: userId,
+                        ),
                       ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _filtered.length,
-                      separatorBuilder: (_, __) => Divider(
-                        height: 1,
-                        indent: 80,
-                        color: cs.outlineVariant.withValues(alpha: 0.5),
-                      ),
-                      itemBuilder: (context, i) =>
-                          _ConversationTile(conversation: _filtered[i]),
-                    ),
+              ),
             ),
           ],
         ),
@@ -138,80 +198,62 @@ class _ChatInboxPageState extends State<ChatInboxPage> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Single conversation tile
-// ─────────────────────────────────────────────────────────────────────────────
 class _ConversationTile extends StatelessWidget {
-  final ChatConversation conversation;
-  const _ConversationTile({required this.conversation});
+  const _ConversationTile({
+    required this.bundle,
+    required this.currentUserId,
+  });
+
+  final ChatConversationBundle bundle;
+  final String currentUserId;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final last = conversation.lastMessage;
-    final hasUnread = conversation.hasUnread;
+    final colorScheme = Theme.of(context).colorScheme;
+    final lastMessage = bundle.lastMessage;
+    final unreadCount = bundle.unreadCountFor(currentUserId);
+    final hasUnread = unreadCount > 0;
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => context.push('/chat/${conversation.id}'),
+      onTap: () => context.push('/chat/${bundle.conversation.id}'),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // ── Avatar + Product thumbnail overlay ────────────────
             SizedBox(
               width: 60,
               height: 60,
               child: Stack(
                 children: [
-                  // Avatar
                   CircleAvatar(
                     radius: 28,
                     backgroundImage: NetworkImage(
-                      conversation.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
+                      bundle.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
                     ),
-                    backgroundColor: cs.surfaceContainerHighest,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
                   ),
-                  // Product thumbnail – bottom-right badge
                   Positioned(
                     right: 0,
                     bottom: 0,
                     child: Container(
                       width: 24,
                       height: 24,
+                      clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: cs.surface, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 4,
-                          ),
-                        ],
+                        border: Border.all(color: colorScheme.surface, width: 1.5),
                       ),
-                      clipBehavior: Clip.antiAlias,
                       child: Image.network(
-                        conversation.product.imageUrl ?? 'https://via.placeholder.com/400',
+                        ImageHelper.productOrDefault(bundle.product.imageUrl),
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: cs.primaryContainer,
-                          child: Icon(
-                            Icons.image_not_supported_rounded,
-                            size: 12,
-                            color: cs.primary,
-                          ),
-                        ),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(width: 14),
-
-            // ── Content ───────────────────────────────────────────
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,81 +262,72 @@ class _ConversationTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          conversation.otherUser.name,
-                          style: TextStyle(
-                            fontWeight: hasUnread
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                            fontSize: 15,
-                            color: cs.onSurface,
-                          ),
+                          bundle.otherUser.name,
                           overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
-                      if (last != null) ...[
+                      if (lastMessage != null) ...[
                         const SizedBox(width: 8),
                         Text(
-                          relativeTime(last.timestamp),
+                          relativeTime(lastMessage.createdAt),
                           style: TextStyle(
                             fontSize: 11,
                             color: hasUnread
-                                ? cs.primary
-                                : cs.onSurface.withValues(alpha: 0.45),
-                            fontWeight: hasUnread
-                                ? FontWeight.w600
-                                : FontWeight.normal,
+                                ? colorScheme.primary
+                                : colorScheme.onSurface.withValues(alpha: 0.45),
                           ),
                         ),
                       ],
                     ],
                   ),
                   const SizedBox(height: 3),
-                  // Product name in small muted text
                   Text(
-                    conversation.product.title,
+                    bundle.product.title,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11,
-                      color: cs.primary.withValues(alpha: 0.8),
+                      color: colorScheme.primary.withValues(alpha: 0.8),
                       fontWeight: FontWeight.w500,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 3),
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          last?.text ?? 'No messages yet',
+                          lastMessage?.messageText ?? 'No messages yet',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,
                             color: hasUnread
-                                ? cs.onSurface.withValues(alpha: 0.85)
-                                : cs.onSurface.withValues(alpha: 0.5),
-                            fontWeight: hasUnread
-                                ? FontWeight.w500
-                                : FontWeight.normal,
+                                ? colorScheme.onSurface.withValues(alpha: 0.85)
+                                : colorScheme.onSurface.withValues(alpha: 0.5),
+                            fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
                           ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
                         ),
                       ),
                       if (hasUnread) ...[
                         const SizedBox(width: 8),
                         Container(
-                          width: 10,
-                          height: 10,
+                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFF10B981),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF10B981,
-                                ).withValues(alpha: 0.4),
-                                blurRadius: 6,
-                                spreadRadius: 1,
-                              ),
-                            ],
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '$unreadCount',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../services/payment/stripe_service.dart';
+import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
 
@@ -310,8 +311,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Image.network(
-                        cartItem.product.imageUrl ??
-                            'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=200',
+                        ImageHelper.productOrDefault(cartItem.product.imageUrl),
                         width: 50,
                         height: 50,
                         fit: BoxFit.cover,

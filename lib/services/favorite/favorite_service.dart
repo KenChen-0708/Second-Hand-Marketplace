@@ -1,12 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
+import '../../shared/utils/image_helper.dart';
 
 class FavoriteService {
   FavoriteService({SupabaseClient? client})
     : _supabase = client ?? Supabase.instance.client;
 
-  static const String _productImageBucket = 'product_images';
   final SupabaseClient _supabase;
 
   Future<FavoriteModel?> fetchFavorite({
@@ -96,16 +96,15 @@ class FavoriteService {
     }
 
     final productMap = Map<String, dynamic>.from(product);
-    final rawImages = productMap['image_urls'];
-    final resolvedImages = rawImages is List
-        ? rawImages
-              .map((image) => _resolveImagePath(image))
-              .whereType<String>()
-              .toList()
-        : const <String>[];
+    final resolvedImages = ImageHelper.resolveProductImageUrls(
+      productMap['image_urls'],
+    );
 
     final resolvedImageUrl =
-        _resolveImagePath(productMap['image_url']) ??
+        ImageHelper.resolveProductImageUrl(
+          productMap['image_url']?.toString(),
+          fallbackToDefault: false,
+        ) ??
         (resolvedImages.isNotEmpty ? resolvedImages.first : null);
 
     return {
@@ -116,18 +115,5 @@ class FavoriteService {
         'image_urls': resolvedImages,
       },
     };
-  }
-
-  String? _resolveImagePath(dynamic rawPath) {
-    final path = rawPath?.toString().trim();
-    if (path == null || path.isEmpty) {
-      return null;
-    }
-
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-
-    return _supabase.storage.from(_productImageBucket).getPublicUrl(path);
   }
 }

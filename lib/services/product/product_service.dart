@@ -2,12 +2,13 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
+import '../../shared/utils/image_helper.dart';
 
 class ProductService {
   ProductService({SupabaseClient? client})
     : _supabase = client ?? Supabase.instance.client;
 
-  static const String _productImageBucket = 'product_images';
+  static const String _productImageBucket = ImageHelper.productImageBucket;
   final SupabaseClient _supabase;
 
   Future<List<ProductModel>> fetchProducts({String? status, String? sellerId}) async {
@@ -187,9 +188,12 @@ class ProductService {
   }
 
   Map<String, dynamic> _resolveProductImageFields(Map<String, dynamic> data) {
-    final resolvedImages = _resolveImageList(data['image_urls']);
+    final resolvedImages = ImageHelper.resolveProductImageUrls(data['image_urls']);
     final resolvedImageUrl =
-        _resolveImagePath(data['image_url']) ??
+        ImageHelper.resolveProductImageUrl(
+          data['image_url']?.toString(),
+          fallbackToDefault: false,
+        ) ??
         (resolvedImages.isNotEmpty ? resolvedImages.first : null);
 
     return {
@@ -197,29 +201,5 @@ class ProductService {
       'image_url': resolvedImageUrl,
       'image_urls': resolvedImages,
     };
-  }
-
-  List<String> _resolveImageList(dynamic rawImages) {
-    if (rawImages is! List) {
-      return const [];
-    }
-
-    return rawImages
-        .map((image) => _resolveImagePath(image))
-        .whereType<String>()
-        .toList();
-  }
-
-  String? _resolveImagePath(dynamic rawPath) {
-    final path = rawPath?.toString().trim();
-    if (path == null || path.isEmpty) {
-      return null;
-    }
-
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-
-    return _supabase.storage.from(_productImageBucket).getPublicUrl(path);
   }
 }

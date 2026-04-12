@@ -1,4 +1,145 @@
-import 'entity_state.dart';
 import '../models/chat_conversation_model.dart';
+import '../services/auth/auth_service.dart';
+import '../services/chat/chat_service.dart';
+import 'entity_state.dart';
 
-class ChatConversationState extends EntityState<ChatConversationModel> {}
+class ChatConversationState extends EntityState<ChatConversationModel> {
+  ChatConversationState({
+    ChatService? chatService,
+    AuthService? authService,
+  }) : _chatService = chatService ?? ChatService(),
+       _authService = authService ?? AuthService();
+
+  final ChatService _chatService;
+  final AuthService _authService;
+  List<ChatConversationBundle> _bundles = [];
+
+  List<ChatConversationBundle> get bundles => List.unmodifiable(_bundles);
+  int get unreadCount {
+    final currentUserId = _lastUserId;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return 0;
+    }
+    return _bundles.fold<int>(
+      0,
+      (sum, bundle) => sum + bundle.unreadCountFor(currentUserId),
+    );
+  }
+
+  String? _lastUserId;
+
+  Future<List<ChatConversationBundle>> fetchUserConversations() async {
+    final userId = await _authService.getCurrentUserId();
+    if (userId == null || userId.isEmpty) {
+      _bundles = [];
+      setItems(const []);
+      return const [];
+    }
+
+    _lastUserId = userId;
+    setLoading(true);
+    setError(null);
+
+    try {
+      final bundles = await _chatService.fetchUserConversations(userId: userId);
+      _bundles = bundles;
+      setItems(bundles.map((bundle) => bundle.conversation).toList());
+      return bundles;
+    } catch (e) {
+      setError(e.toString().replaceFirst('Exception: ', ''));
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  Future<ChatConversationBundle> fetchConversationById(String conversationId) async {
+    final userId = await _authService.getCurrentUserId();
+    if (userId == null || userId.isEmpty) {
+      throw Exception('Please log in to view messages.');
+    }
+
+    _lastUserId = userId;
+    setLoading(true);
+    setError(null);
+
+    try {
+      final bundle = await _chatService.fetchConversationById(
+        conversationId: conversationId,
+        currentUserId: userId,
+      );
+      _mergeBundle(bundle);
+      return bundle;
+    } catch (e) {
+      setError(e.toString().replaceFirst('Exception: ', ''));
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  Future<ChatConversationBundle> getOrCreateConversationForProduct({
+    required String productId,
+    required String sellerId,
+  }) async {
+    final userId = await _authService.getCurrentUserId();
+    if (userId == null || userId.isEmpty) {
+      throw Exception('Please log in to message this seller.');
+    }
+
+    _lastUserId = userId;
+    setLoading(true);
+    setError(null);
+
+    try {
+      final bundle = await _chatService.getOrCreateConversation(
+        productId: productId,
+        buyerId: userId,
+        sellerId: sellerId,
+        currentUserId: userId,
+      );
+      _mergeBundle(bundle);
+      return bundle;
+    } catch (e) {
+      setError(e.toString().replaceFirst('Exception: ', ''));
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  void updateBundle(ChatConversationBundle bundle) {
+    _mergeBundle(bundle);
+  }
+
+  void _mergeBundle(ChatConversationBundle bundle) {
+    final index = _bundles.indexWhere(
+      (existing) => existing.conversation.id == bundle.conversation.id,
+    );
+    if (index == -1) {
+      _bundles = [..._bundles, bundle];
+    } else {
+      final updated = [..._bundles];
+      updated[index] = bundle;
+      _bundles = updated;
+    }
+    _bundles.sort((a, b) {
+      final aTime =
+          a.lastMessage?.createdAt ??
+          a.conversation.lastMessageAt ??
+          a.conversation.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime =
+          b.lastMessage?.createdAt ??
+          b.conversation.lastMessageAt ??
+          b.conversation.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final comparison = bTime.compareTo(aTime);
+      if (comparison != 0) {
+        return comparison;
+      }
+      return b.conversation.id.compareTo(a.conversation.id);
+    });
+    upsertItem(bundle.conversation);
+  }
+}

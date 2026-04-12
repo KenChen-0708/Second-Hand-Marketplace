@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../state/state.dart';
+import '../../shared/utils/image_helper.dart';
 import '../../shared/utils/snackbar_helper.dart';
 
 class WishlistPage extends StatefulWidget {
@@ -177,7 +178,7 @@ class _WishlistPageState extends State<WishlistPage> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(14),
                           child: Image.network(
-                            product.imageUrl ?? 'https://via.placeholder.com/90',
+                            ImageHelper.productOrDefault(product.imageUrl),
                             width: 90,
                             height: 90,
                             fit: BoxFit.cover,

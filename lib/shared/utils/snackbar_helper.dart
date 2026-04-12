@@ -84,10 +84,7 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
-    _scaleAnimation = Tween<double>(
-      begin: 0.94,
-      end: 1,
-    ).animate(
+    _scaleAnimation = Tween<double>(begin: 0.94, end: 1).animate(
       CurvedAnimation(
         parent: _controller,
         curve: Curves.easeOutBack,
@@ -153,15 +150,15 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
                       decoration: BoxDecoration(
                         color:
                             widget.backgroundColor ??
-                            colorScheme.inverseSurface.withValues(alpha: 0.82),
+                            colorScheme.inverseSurface.withValues(alpha: 0.66),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.14),
+                          color: Colors.white.withValues(alpha: 0.10),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.16),
-                            blurRadius: 28,
+                            color: Colors.black.withValues(alpha: 0.12),
+                            blurRadius: 24,
                             offset: const Offset(0, 12),
                           ),
                         ],
