@@ -1,132 +1,199 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show Feedback;
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/models.dart';
+import '../../services/chat/chat_service.dart';
+import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/snackbar_helper.dart';
+import '../../state/state.dart';
 import 'chat_models.dart';
 
 class ChatRoomPage extends StatefulWidget {
-  final String conversationId;
   const ChatRoomPage({super.key, required this.conversationId});
+
+  final String conversationId;
 
   @override
   State<ChatRoomPage> createState() => _ChatRoomPageState();
 }
 
-class _ChatRoomPageState extends State<ChatRoomPage>
-    with TickerProviderStateMixin {
+class _ChatRoomPageState extends State<ChatRoomPage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
-  late ChatConversation _conversation;
-  bool _canSend = false;
-
-  // Animation controller for new messages sliding in
-  late AnimationController _newMsgAnim;
+  ChatConversationBundle? _bundle;
+  bool _isLoading = true;
+  bool _isSending = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _conversation = mockConversations.firstWhere(
-      (c) => c.id == widget.conversationId,
-      orElse: () => mockConversations.first,
-    );
-
-    // Unread dot clears visually upon entering the chat room.
-
-    _newMsgAnim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 280),
-    );
-
-    _textController.addListener(() {
-      setState(() => _canSend = _textController.text.trim().isNotEmpty);
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadConversation());
   }
 
   @override
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
-    _newMsgAnim.dispose();
     super.dispose();
   }
 
-  void _scrollToBottom({bool animated = false}) {
-    if (!_scrollController.hasClients) return;
-    final target = _scrollController.position.maxScrollExtent;
-    if (animated) {
-      _scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
+  Future<void> _loadConversation() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final bundle = await context
+          .read<ChatConversationState>()
+          .fetchConversationById(widget.conversationId);
+      context.read<ChatMessageState>().setItems(bundle.messages);
+      await context.read<ChatMessageState>().markConversationAsRead(
+        widget.conversationId,
       );
-    } else {
-      _scrollController.jumpTo(target);
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => _bundle = bundle.copyWith(
+          messages: context.read<ChatMessageState>().items,
+        ),
+      );
+      context.read<ChatConversationState>().updateBundle(_bundle!);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  void _sendMessage() {
-    final text = _textController.text.trim();
-    if (text.isEmpty) return;
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+  }
 
-    setState(() {
-      _conversation.messages.add(
-        ChatMessage(
-          id: 'm_${DateTime.now().millisecondsSinceEpoch}',
-          senderId: 'me',
-          text: text,
-          timestamp: DateTime.now(),
-        ),
+  Future<void> _sendMessage() async {
+    final text = _textController.text.trim();
+    final bundle = _bundle;
+    if (text.isEmpty || bundle == null || _isSending) {
+      return;
+    }
+
+    setState(() => _isSending = true);
+    try {
+      final message = await context.read<ChatMessageState>().sendMessage(
+        conversationId: bundle.conversation.id,
+        messageText: text,
       );
       _textController.clear();
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _scrollToBottom(animated: true),
-    );
-  }
-
-  void _showAttachmentSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _AttachmentSheet(),
-    );
-  }
-
-  void _initiateHandover() {
-    context.push('/checkout');
+      final updatedBundle = bundle.copyWith(
+        messages: [...bundle.messages, message],
+        conversation: bundle.conversation.copyWith(
+          lastMessageAt: message.createdAt,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _bundle = updatedBundle);
+      context.read<ChatConversationState>().updateBundle(updatedBundle);
+      Feedback.forTap(context);
+      await HapticFeedback.lightImpact();
+      await SystemSound.play(SystemSoundType.alert);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      SnackbarHelper.showTopMessage(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final product = _conversation.product;
+    final colorScheme = Theme.of(context).colorScheme;
+    final currentUserId = context.watch<UserState>().currentUser?.id ?? '';
+
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null || _bundle == null) {
+      return Scaffold(
+        backgroundColor: colorScheme.surface,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => context.pop(),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.chat_bubble_outline_rounded, size: 72),
+                const SizedBox(height: 16),
+                Text(
+                  _error ?? 'Unable to load this conversation.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _loadConversation,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final bundle = _bundle!;
+    final product = bundle.product;
+    final messages = bundle.messages;
 
     return Scaffold(
-      backgroundColor: cs.surface,
-      // ── App Bar ─────────────────────────────────────────────────
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: cs.surface,
+        backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        scrolledUnderElevation: 1,
-        shadowColor: cs.outlineVariant.withValues(alpha: 0.4),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
         title: GestureDetector(
-          // Tapping the header row navigates to the product detail
           onTap: () => context.push('/product/${product.id}'),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 18,
                 backgroundImage: NetworkImage(
-                  _conversation.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
+                  bundle.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
                 ),
-                backgroundColor: cs.primaryContainer,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -135,12 +202,12 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _conversation.otherUser.name,
+                      bundle.otherUser.name,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                     Row(
                       children: [
@@ -148,36 +215,25 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                           width: 14,
                           height: 14,
                           margin: const EdgeInsets.only(right: 4),
+                          clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(3),
-                            border: Border.all(
-                              color: cs.outlineVariant,
-                              width: 0.5,
-                            ),
                           ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Image.network(
-                            product.imageUrl ?? 'https://via.placeholder.com/400',
+                          child: ImageHelper.productImage(
+                            product.imageUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                Icon(Icons.image, size: 10, color: cs.primary),
                           ),
                         ),
-                        Flexible(
+                        Expanded(
                           child: Text(
                             '${product.title} · \$${product.price.toStringAsFixed(0)}',
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11,
-                              color: cs.primary,
+                              color: colorScheme.primary,
                               fontWeight: FontWeight.w500,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          size: 14,
-                          color: Color(0xFF10B981),
                         ),
                       ],
                     ),
@@ -187,59 +243,61 @@ class _ChatRoomPageState extends State<ChatRoomPage>
             ],
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert_rounded),
-            onPressed: () {},
-          ),
-        ],
       ),
-
       body: Column(
         children: [
-          // ── Handover banner (only when deal agreed) ────────────
-          if (_conversation.dealAgreed)
-            _HandoverBanner(onTap: _initiateHandover),
-
-          // ── Message list ────────────────────────────────────────
+          if (bundle.conversation.dealAgreed)
+            GestureDetector(
+              onTap: () => context.push('/checkout'),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                child: const Text(
+                  'Deal agreed! Tap to initiate handover & payment.',
+                  style: TextStyle(
+                    color: Color(0xFF065F46),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              itemCount: _conversation.messages.length,
-              itemBuilder: (context, i) {
-                final msg = _conversation.messages[i];
-                final isMe = msg.senderId == 'me';
-                final prev = i > 0 ? _conversation.messages[i - 1] : null;
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                final message = messages[index];
+                final isMe = message.senderId == currentUserId;
+                final previous = index > 0 ? messages[index - 1] : null;
                 final showDateDivider =
-                    prev == null || !_isSameDay(prev.timestamp, msg.timestamp);
+                    previous == null ||
+                    !_isSameDay(previous.createdAt, message.createdAt);
 
                 return Column(
                   children: [
-                    if (showDateDivider) _DateDivider(date: msg.timestamp),
+                    if (showDateDivider)
+                      _DateDivider(date: message.createdAt ?? DateTime.now()),
                     _MessageBubble(
-                      message: msg,
+                      message: message,
                       isMe: isMe,
-                      showAvatar:
-                          !isMe &&
-                          (i == _conversation.messages.length - 1 ||
-                              _conversation.messages[i + 1].senderId == 'me' ||
-                              _conversation.messages[i + 1].senderId.startsWith(
-                                'unread_',
-                              )),
-                      otherAvatarUrl: _conversation.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
+                      otherAvatarUrl:
+                          bundle.otherUser.avatarUrl ??
+                          'https://i.pravatar.cc/150',
                     ),
                   ],
                 );
               },
             ),
           ),
-
-          // ── Input area ──────────────────────────────────────────
           _InputBar(
             controller: _textController,
-            canSend: _canSend,
-            onAttach: _showAttachmentSheet,
+            canSend: _textController.text.trim().isNotEmpty && !_isSending,
+            onChanged: () => setState(() {}),
             onSend: _sendMessage,
           ),
         ],
@@ -247,145 +305,46 @@ class _ChatRoomPageState extends State<ChatRoomPage>
     );
   }
 
-  bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Handover banner
-// ─────────────────────────────────────────────────────────────────────────────
-class _HandoverBanner extends StatelessWidget {
-  final VoidCallback onTap;
-  const _HandoverBanner({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFF10B981).withValues(alpha: 0.12),
-              const Color(0xFF059669).withValues(alpha: 0.08),
-            ],
-          ),
-          border: Border(
-            bottom: BorderSide(
-              color: const Color(0xFF10B981).withValues(alpha: 0.25),
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.handshake_rounded,
-                color: Color(0xFF10B981),
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Deal agreed! 🎉',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: Color(0xFF065F46),
-                    ),
-                  ),
-                  Text(
-                    'Tap to initiate handover & payment',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: const Color(0xFF10B981).withValues(alpha: 0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Text(
-                'Handover',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  bool _isSameDay(DateTime? a, DateTime? b) {
+    if (a == null || b == null) {
+      return false;
+    }
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Date divider
-// ─────────────────────────────────────────────────────────────────────────────
 class _DateDivider extends StatelessWidget {
-  final DateTime date;
   const _DateDivider({required this.date});
 
-  String _label() {
-    final now = DateTime.now();
-    final diff = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).difference(DateTime(date.year, date.month, date.day)).inDays;
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    return '${date.day}/${date.month}/${date.year}';
-  }
+  final DateTime date;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           Expanded(
-            child: Divider(color: cs.outlineVariant.withValues(alpha: 0.4)),
+            child: Divider(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
-              _label(),
+              formatChatDate(date),
               style: TextStyle(
                 fontSize: 11,
-                color: cs.onSurface.withValues(alpha: 0.4),
+                color: colorScheme.onSurface.withValues(alpha: 0.4),
                 fontWeight: FontWeight.w500,
               ),
             ),
           ),
           Expanded(
-            child: Divider(color: cs.outlineVariant.withValues(alpha: 0.4)),
+            child: Divider(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+            ),
           ),
         ],
       ),
@@ -393,34 +352,20 @@ class _DateDivider extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Message bubble
-// ─────────────────────────────────────────────────────────────────────────────
 class _MessageBubble extends StatelessWidget {
-  final ChatMessage message;
-  final bool isMe;
-  final bool showAvatar;
-  final String otherAvatarUrl;
-
   const _MessageBubble({
     required this.message,
     required this.isMe,
-    required this.showAvatar,
     required this.otherAvatarUrl,
   });
 
-  String _timeLabel(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
+  final ChatMessageModel message;
+  final bool isMe;
+  final String otherAvatarUrl;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    const myBubbleColor = Color(0xFF10B981);
-    final theirBubbleColor = cs.surfaceContainerHighest;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -435,80 +380,54 @@ class _MessageBubble extends StatelessWidget {
             : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Other person's avatar (shown only at "tail" of message group)
           if (!isMe) ...[
-            showAvatar
-                ? CircleAvatar(
-                    radius: 14,
-                    backgroundImage: NetworkImage(otherAvatarUrl),
-                    backgroundColor: cs.primaryContainer,
-                  )
-                : const SizedBox(width: 28),
+            CircleAvatar(
+              radius: 14,
+              backgroundImage: NetworkImage(otherAvatarUrl),
+            ),
             const SizedBox(width: 6),
           ],
-          // Bubble
-          Column(
-            crossAxisAlignment: isMe
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: isMe ? myBubbleColor : theirBubbleColor,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(isMe ? 18 : 4),
-                    bottomRight: Radius.circular(isMe ? 4 : 18),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.65,
-                ),
-                child: Text(
-                  message.text,
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    height: 1.4,
+                  decoration: BoxDecoration(
                     color: isMe
-                        ? Colors.white
-                        : cs.onSurface.withValues(alpha: 0.85),
+                        ? const Color(0xFF10B981)
+                        : colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(18),
+                      topRight: const Radius.circular(18),
+                      bottomLeft: Radius.circular(isMe ? 18 : 4),
+                      bottomRight: Radius.circular(isMe ? 4 : 18),
+                    ),
+                  ),
+                  child: Text(
+                    message.messageText,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      height: 1.4,
+                      color: isMe ? Colors.white : colorScheme.onSurface,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 3),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _timeLabel(message.timestamp),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: cs.onSurface.withValues(alpha: 0.4),
-                    ),
+                const SizedBox(height: 3),
+                Text(
+                  formatChatTime(message.createdAt),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
-                  if (isMe) ...[
-                    const SizedBox(width: 3),
-                    Icon(
-                      Icons.done_all_rounded,
-                      size: 12,
-                      color: cs.primary.withValues(alpha: 0.6),
-                    ),
-                  ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -516,25 +435,22 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sticky input bar
-// ─────────────────────────────────────────────────────────────────────────────
 class _InputBar extends StatelessWidget {
-  final TextEditingController controller;
-  final bool canSend;
-  final VoidCallback onAttach;
-  final VoidCallback onSend;
-
   const _InputBar({
     required this.controller,
     required this.canSend,
-    required this.onAttach,
+    required this.onChanged,
     required this.onSend,
   });
 
+  final TextEditingController controller;
+  final bool canSend;
+  final VoidCallback onChanged;
+  final VoidCallback onSend;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
       padding: EdgeInsets.only(
@@ -544,224 +460,62 @@ class _InputBar extends StatelessWidget {
         bottom: MediaQuery.of(context).viewInsets.bottom + 12,
       ),
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: colorScheme.surface,
         border: Border(
-          top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.4)),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
+          top: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
           ),
-        ],
+        ),
       ),
       child: SafeArea(
         top: false,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // Attach (+)
-            _CircleIconBtn(
-              icon: Icons.add_rounded,
-              color: cs.onSurface.withValues(alpha: 0.5),
-              bgColor: cs.surfaceContainerHighest,
-              onTap: onAttach,
-            ),
-            const SizedBox(width: 8),
-            // Text field
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
+                  color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: TextField(
                   controller: controller,
                   maxLines: 4,
                   minLines: 1,
-                  textCapitalization: TextCapitalization.sentences,
-                  style: const TextStyle(fontSize: 14.5),
+                  onChanged: (_) => onChanged(),
+                  onSubmitted: (_) => onSend(),
                   decoration: InputDecoration(
-                    hintText: 'Type a message…',
-                    hintStyle: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.4),
-                      fontSize: 14.5,
-                    ),
-                    filled: false,
+                    hintText: 'Type a message...',
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 10,
                     ),
                   ),
-                  onSubmitted: (_) => onSend(),
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            // Send button
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              transitionBuilder: (child, anim) =>
-                  ScaleTransition(scale: anim, child: child),
-              child: canSend
-                  ? _CircleIconBtn(
-                      key: const ValueKey('send'),
-                      icon: Icons.send_rounded,
-                      color: Colors.white,
-                      bgColor: const Color(0xFF10B981),
-                      onTap: onSend,
-                      hasShadow: true,
-                    )
-                  : _CircleIconBtn(
-                      key: const ValueKey('mic'),
-                      icon: Icons.mic_rounded,
-                      color: cs.onSurface.withValues(alpha: 0.5),
-                      bgColor: cs.surfaceContainerHighest,
-                      onTap: () {},
-                    ),
+            GestureDetector(
+              onTap: canSend ? onSend : null,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: canSend
+                      ? const Color(0xFF10B981)
+                      : colorScheme.surfaceContainerHighest,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.send_rounded,
+                  color: canSend ? Colors.white : colorScheme.onSurfaceVariant,
+                  size: 20,
+                ),
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _CircleIconBtn extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final Color bgColor;
-  final VoidCallback onTap;
-  final bool hasShadow;
-
-  const _CircleIconBtn({
-    super.key,
-    required this.icon,
-    required this.color,
-    required this.bgColor,
-    required this.onTap,
-    this.hasShadow = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: bgColor,
-          shape: BoxShape.circle,
-          boxShadow: hasShadow
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.4),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Icon(icon, color: color, size: 20),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Attachment bottom sheet
-// ─────────────────────────────────────────────────────────────────────────────
-class _AttachmentSheet extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final options = [
-      (Icons.photo_library_rounded, 'Photo Library', const Color(0xFF8B5CF6)),
-      (Icons.camera_alt_rounded, 'Camera', const Color(0xFF10B981)),
-      (Icons.location_on_rounded, 'Location', const Color(0xFFEF4444)),
-      (Icons.insert_drive_file_rounded, 'Document', const Color(0xFFF59E0B)),
-    ];
-
-    return Container(
-      margin: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: cs.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Share',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: options
-                .map((o) => _AttachOption(icon: o.$1, label: o.$2, color: o.$3))
-                .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AttachOption extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _AttachOption({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.pop(context),
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 26),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.7),
-            ),
-          ),
-        ],
       ),
     );
   }

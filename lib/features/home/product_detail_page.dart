@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
+import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
 
@@ -89,6 +90,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   void _showMessage(BuildContext context, String message) {
     SnackbarHelper.showTopMessage(context, message);
+  }
+
+  Future<void> _openSellerChat(
+    BuildContext context,
+    ProductModel product,
+  ) async {
+    if (!await _promptLoginIfNeeded(context)) {
+      return;
+    }
+
+    final currentUserId = context.read<UserState>().currentUser?.id;
+    if (currentUserId == product.sellerId) {
+      _showMessage(context, 'This is your own listing.');
+      return;
+    }
+
+    try {
+      final bundle = await context
+          .read<ChatConversationState>()
+          .getOrCreateConversationForProduct(
+            productId: product.id,
+            sellerId: product.sellerId,
+          );
+      if (!context.mounted) {
+        return;
+      }
+      await context.push('/chat/${bundle.conversation.id}');
+    } catch (e) {
+      if (!context.mounted) {
+        return;
+      }
+      _showMessage(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
   }
 
   Future<_PurchaseSelection?> _showPurchaseOptionsSheet(
@@ -231,6 +268,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final sellerAvatar = seller?.avatarUrl ?? 'https://i.pravatar.cc/150';
         final favoriteState = context.watch<FavoriteState>();
         final isFavorite = favoriteState.isFavorite(product.id);
+        final isOwner = context.watch<UserState>().currentUser?.id == product.sellerId;
 
         return Scaffold(
           backgroundColor: Theme.of(context).colorScheme.surface,
@@ -312,8 +350,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     flexibleSpace: FlexibleSpaceBar(
                       background: Hero(
                         tag: 'product_image_${product.id}',
-                        child: Image.network(
-                          product.imageUrl ?? 'https://via.placeholder.com/400',
+                        child: ImageHelper.productImage(
+                          product.imageUrl,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -489,9 +527,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 icon: const Icon(
                                   Icons.chat_bubble_outline_rounded,
                                 ),
-                                color: Theme.of(context).colorScheme.primary,
+                                color: isOwner
+                                    ? Theme.of(context).disabledColor
+                                    : Theme.of(context).colorScheme.primary,
                                 tooltip: 'Chat with seller',
-                                onPressed: () => context.push('/messages'),
+                                onPressed: isOwner
+                                    ? null
+                                    : () => _openSellerChat(context, product),
                               ),
                             ],
                           ),
@@ -508,8 +550,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 right: 0,
                 child: Consumer2<UserState, ProductState>(
                   builder: (context, userState, productState, child) {
-                    final isOwner =
-                        userState.currentUser?.id == product.sellerId;
+                    final isOwner = userState.currentUser?.id == product.sellerId;
 
                     if (isOwner) {
                       return Container(
@@ -797,8 +838,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(18),
-                      child: Image.network(
-                        product.imageUrl ?? 'https://via.placeholder.com/120',
+                      child: ImageHelper.productImage(
+                        product.imageUrl,
                         width: 92,
                         height: 92,
                         fit: BoxFit.cover,

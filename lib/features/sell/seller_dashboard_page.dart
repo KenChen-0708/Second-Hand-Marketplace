@@ -4,8 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/chat/chat_service.dart';
 import '../../services/seller/seller_service.dart';
-import '../chat/chat_models.dart'; // For mock chats
+import '../chat/chat_models.dart';
 
 class SellerDashboardPage extends StatefulWidget {
   const SellerDashboardPage({super.key});
@@ -17,12 +18,14 @@ class SellerDashboardPage extends StatefulWidget {
 class _SellerDashboardPageState extends State<SellerDashboardPage> {
   final SellerService _sellerService = SellerService();
   final AuthService _authService = AuthService();
+  final ChatService _chatService = ChatService();
 
   bool _isLoading = true;
   SellerStats? _stats;
   List<SellerNeedAction> _needsAction = [];
   Map<String, List<OrderModel>> _ordersSummary = {};
   List<ProductModel> _listings = [];
+  List<ChatConversationBundle> _recentConversations = [];
   UserModel? _currentUser;
 
   @override
@@ -44,6 +47,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
           _sellerService.getNeedsAction(userId),
           _sellerService.getOrdersSummary(userId),
           _sellerService.getListings(userId),
+          _chatService.fetchUserConversations(userId: userId),
         ]);
 
         if (mounted) {
@@ -52,6 +56,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
             _needsAction = results[1] as List<SellerNeedAction>;
             _ordersSummary = results[2] as Map<String, List<OrderModel>>;
             _listings = results[3] as List<ProductModel>;
+            _recentConversations = results[4] as List<ChatConversationBundle>;
             _isLoading = false;
           });
         }
@@ -857,20 +862,24 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
   }
 
   Widget _buildRecentChats(BuildContext context) {
-    // Filter to show conversations regarding user's products
-    final myConversations = mockConversations.take(2).toList();
-    
+    final myConversations = _recentConversations.take(2).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionTitle('Recent Buyer Chats', actionLabel: 'Inbox', onAction: () => context.push('/messages')),
         const SizedBox(height: 12),
-        ...myConversations.map((c) => _buildChatTile(context, c)),
+        if (myConversations.isEmpty)
+          _buildEmptyState('No buyer chats yet', Icons.chat_bubble_outline_rounded)
+        else
+          ...myConversations.map((conversation) => _buildChatTile(context, conversation)),
       ],
     );
   }
 
-  Widget _buildChatTile(BuildContext context, ChatConversation conversation) {
+  Widget _buildChatTile(BuildContext context, ChatConversationBundle conversation) {
+    final lastMessageTime = relativeTime(conversation.lastMessage?.createdAt);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -884,7 +893,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
             CircleAvatar(
               backgroundImage: NetworkImage(conversation.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150'),
             ),
-            if (conversation.hasUnread)
+            if (_currentUser != null && conversation.unreadCountFor(_currentUser!.id) > 0)
               Positioned(
                 right: 0,
                 top: 0,
@@ -902,13 +911,15 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
         ),
         title: Text(conversation.otherUser.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text(
-          'Re: ${conversation.product.title}',
+          lastMessageTime.isEmpty
+              ? 'Re: ${conversation.product.title}'
+              : 'Re: ${conversation.product.title} • $lastMessageTime',
           style: const TextStyle(fontSize: 11, color: Colors.blue),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-        onTap: () => context.push('/chat/${conversation.id}'),
+        onTap: () => context.push('/chat/${conversation.conversation.id}'),
       ),
     );
   }
