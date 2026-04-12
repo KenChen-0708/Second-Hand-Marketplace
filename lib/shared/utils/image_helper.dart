@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ImageHelper {
@@ -7,6 +8,34 @@ class ImageHelper {
 
   static String productOrDefault(String? imageUrl) {
     return resolveProductImageUrl(imageUrl) ?? defaultProductImageUrl;
+  }
+
+  static Widget productImage(
+    String? imageUrl, {
+    BoxFit fit = BoxFit.cover,
+    double? width,
+    double? height,
+  }) {
+    return Image.network(
+      productOrDefault(imageUrl),
+      fit: fit,
+      width: width,
+      height: height,
+      errorBuilder: (context, error, stackTrace) {
+        if (imageUrl != defaultProductImageUrl) {
+          return Image.network(
+            defaultProductImageUrl,
+            fit: fit,
+            width: width,
+            height: height,
+            errorBuilder: (context, error, stackTrace) {
+              return _imagePlaceholder(width: width, height: height);
+            },
+          );
+        }
+        return _imagePlaceholder(width: width, height: height);
+      },
+    );
   }
 
   static String? resolveProductImageUrl(
@@ -70,5 +99,18 @@ class ImageHelper {
     }
 
     return normalized;
+  }
+
+  static Widget _imagePlaceholder({double? width, double? height}) {
+    return Container(
+      width: width,
+      height: height,
+      color: const Color(0xFFF3F4F6),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.image_outlined,
+        color: Color(0xFF9CA3AF),
+      ),
+    );
   }
 }

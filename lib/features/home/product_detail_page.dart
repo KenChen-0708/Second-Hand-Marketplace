@@ -350,8 +350,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     flexibleSpace: FlexibleSpaceBar(
                       background: Hero(
                         tag: 'product_image_${product.id}',
-                        child: Image.network(
-                          ImageHelper.productOrDefault(product.imageUrl),
+                        child: ImageHelper.productImage(
+                          product.imageUrl,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -838,8 +838,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(18),
-                      child: Image.network(
-                        ImageHelper.productOrDefault(product.imageUrl),
+                      child: ImageHelper.productImage(
+                        product.imageUrl,
                         width: 92,
                         height: 92,
                         fit: BoxFit.cover,

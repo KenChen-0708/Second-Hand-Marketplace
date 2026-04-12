@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show Feedback;
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -47,9 +48,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     });
 
     try {
-      final bundle = await context.read<ChatConversationState>().fetchConversationById(
-        widget.conversationId,
-      );
+      final bundle = await context
+          .read<ChatConversationState>()
+          .fetchConversationById(widget.conversationId);
       context.read<ChatMessageState>().setItems(bundle.messages);
       await context.read<ChatMessageState>().markConversationAsRead(
         widget.conversationId,
@@ -57,9 +58,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       if (!mounted) {
         return;
       }
-      setState(() => _bundle = bundle.copyWith(
-            messages: context.read<ChatMessageState>().items,
-          ));
+      setState(
+        () => _bundle = bundle.copyWith(
+          messages: context.read<ChatMessageState>().items,
+        ),
+      );
       context.read<ChatConversationState>().updateBundle(_bundle!);
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
@@ -94,14 +97,18 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       _textController.clear();
       final updatedBundle = bundle.copyWith(
         messages: [...bundle.messages, message],
-        conversation: bundle.conversation.copyWith(lastMessageAt: message.createdAt),
+        conversation: bundle.conversation.copyWith(
+          lastMessageAt: message.createdAt,
+        ),
       );
       if (!mounted) {
         return;
       }
       setState(() => _bundle = updatedBundle);
       context.read<ChatConversationState>().updateBundle(updatedBundle);
-      SystemSound.play(SystemSoundType.click);
+      Feedback.forTap(context);
+      await HapticFeedback.lightImpact();
+      await SystemSound.play(SystemSoundType.alert);
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
       if (!mounted) {
@@ -212,8 +219,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(3),
                           ),
-                          child: Image.network(
-                            ImageHelper.productOrDefault(product.imageUrl),
+                          child: ImageHelper.productImage(
+                            product.imageUrl,
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -244,7 +251,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               onTap: () => context.push('/checkout'),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 color: const Color(0xFF10B981).withValues(alpha: 0.1),
                 child: const Text(
                   'Deal agreed! Tap to initiate handover & payment.',
@@ -264,7 +274,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 final message = messages[index];
                 final isMe = message.senderId == currentUserId;
                 final previous = index > 0 ? messages[index - 1] : null;
-                final showDateDivider = previous == null ||
+                final showDateDivider =
+                    previous == null ||
                     !_isSameDay(previous.createdAt, message.createdAt);
 
                 return Column(
@@ -275,7 +286,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       message: message,
                       isMe: isMe,
                       otherAvatarUrl:
-                          bundle.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
+                          bundle.otherUser.avatarUrl ??
+                          'https://i.pravatar.cc/150',
                     ),
                   ],
                 );
@@ -314,7 +326,9 @@ class _DateDivider extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Divider(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+            child: Divider(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -328,7 +342,9 @@ class _DateDivider extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Divider(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+            child: Divider(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+            ),
           ),
         ],
       ),
@@ -359,7 +375,9 @@ class _MessageBubble extends StatelessWidget {
         right: isMe ? 0 : 60,
       ),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
@@ -371,11 +389,15 @@ class _MessageBubble extends StatelessWidget {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: isMe
                         ? const Color(0xFF10B981)
@@ -440,7 +462,9 @@ class _InputBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         border: Border(
-          top: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+          top: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+          ),
         ),
       ),
       child: SafeArea(

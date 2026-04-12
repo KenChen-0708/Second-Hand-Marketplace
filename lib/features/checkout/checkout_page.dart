@@ -310,8 +310,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        ImageHelper.productOrDefault(cartItem.product.imageUrl),
+                      child: ImageHelper.productImage(
+                        cartItem.product.imageUrl,
                         width: 50,
                         height: 50,
                         fit: BoxFit.cover,

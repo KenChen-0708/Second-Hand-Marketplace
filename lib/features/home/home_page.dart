@@ -1135,8 +1135,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                       child: Hero(
                         tag: 'product_image_${product.id}',
-                        child: Image.network(
-                          ImageHelper.productOrDefault(product.imageUrl),
+                        child: ImageHelper.productImage(
+                          product.imageUrl,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -1296,8 +1296,8 @@ class _HomePageState extends State<HomePage> {
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(22),
                           ),
-                          child: Image.network(
-                            ImageHelper.productOrDefault(product.imageUrl),
+                          child: ImageHelper.productImage(
+                            product.imageUrl,
                             fit: BoxFit.cover,
                           ),
                         ),

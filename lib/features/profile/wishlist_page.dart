@@ -177,17 +177,11 @@ class _WishlistPageState extends State<WishlistPage> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(14),
-                          child: Image.network(
-                            ImageHelper.productOrDefault(product.imageUrl),
+                          child: ImageHelper.productImage(
+                            product.imageUrl,
                             width: 90,
                             height: 90,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 90,
-                              height: 90,
-                              color: colorScheme.surfaceContainerHighest,
-                              child: const Icon(Icons.image_not_supported),
-                            ),
                           ),
                         ),
                         const SizedBox(width: 14),

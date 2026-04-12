@@ -192,8 +192,8 @@ class CartPage extends StatelessWidget {
                     borderRadius: const BorderRadius.horizontal(
                       left: Radius.circular(20),
                     ),
-                    child: Image.network(
-                      ImageHelper.productOrDefault(product.imageUrl),
+                    child: ImageHelper.productImage(
+                      product.imageUrl,
                       width: 90,
                       height: 110,
                       fit: BoxFit.cover,

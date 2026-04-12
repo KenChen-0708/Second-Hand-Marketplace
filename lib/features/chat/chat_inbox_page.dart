@@ -244,8 +244,8 @@ class _ConversationTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: colorScheme.surface, width: 1.5),
                       ),
-                      child: Image.network(
-                        ImageHelper.productOrDefault(bundle.product.imageUrl),
+                      child: ImageHelper.productImage(
+                        bundle.product.imageUrl,
                         fit: BoxFit.cover,
                       ),
                     ),
