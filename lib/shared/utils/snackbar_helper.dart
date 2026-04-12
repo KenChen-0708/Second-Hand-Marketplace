@@ -3,13 +3,16 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+enum SnackbarType { success, error, warning, info }
+
 class SnackbarHelper {
   static OverlayEntry? _currentEntry;
 
+  /// Shows a modern snackbar with appropriate icon and styling based on type
   static void showTopMessage(
     BuildContext context,
     String message, {
-    Color? backgroundColor,
+    SnackbarType type = SnackbarType.info,
     Duration duration = const Duration(seconds: 3),
   }) {
     final overlay = Overlay.of(context, rootOverlay: true);
@@ -23,7 +26,7 @@ class SnackbarHelper {
     entry = OverlayEntry(
       builder: (context) => _CenteredSnackbarOverlay(
         message: message,
-        backgroundColor: backgroundColor,
+        type: type,
         duration: duration,
         onDismissed: () {
           if (_currentEntry == entry) {
@@ -38,6 +41,62 @@ class SnackbarHelper {
     overlay.insert(entry);
   }
 
+  /// Convenience method for showing success messages
+  static void showSuccess(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    showTopMessage(
+      context,
+      message,
+      type: SnackbarType.success,
+      duration: duration,
+    );
+  }
+
+  /// Convenience method for showing error messages
+  static void showError(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 4),
+  }) {
+    showTopMessage(
+      context,
+      message,
+      type: SnackbarType.error,
+      duration: duration,
+    );
+  }
+
+  /// Convenience method for showing warning messages
+  static void showWarning(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    showTopMessage(
+      context,
+      message,
+      type: SnackbarType.warning,
+      duration: duration,
+    );
+  }
+
+  /// Convenience method for showing info messages
+  static void showInfo(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    showTopMessage(
+      context,
+      message,
+      type: SnackbarType.info,
+      duration: duration,
+    );
+  }
+
   static void _removeCurrent() {
     final entry = _currentEntry;
     _currentEntry = null;
@@ -50,11 +109,11 @@ class _CenteredSnackbarOverlay extends StatefulWidget {
     required this.message,
     required this.onDismissed,
     required this.duration,
-    this.backgroundColor,
+    required this.type,
   });
 
   final String message;
-  final Color? backgroundColor;
+  final SnackbarType type;
   final Duration duration;
   final VoidCallback onDismissed;
 
@@ -117,6 +176,7 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final (icon, backgroundColor) = _getIconAndColor(widget.type, colorScheme);
 
     return IgnorePointer(
       ignoring: false,
@@ -139,43 +199,55 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 16,
+                        horizontal: 20,
+                        vertical: 18,
                       ),
                       decoration: BoxDecoration(
-                        color:
-                            widget.backgroundColor ??
-                            colorScheme.inverseSurface.withValues(alpha: 0.66),
-                        borderRadius: BorderRadius.circular(24),
+                        color: backgroundColor,
+                        borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.10),
+                          color: Colors.white.withValues(alpha: 0.15),
+                          width: 1.0,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
-                            blurRadius: 24,
-                            offset: const Offset(0, 12),
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 32,
+                            offset: const Offset(0, 8),
+                          ),
+                          BoxShadow(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            blurRadius: 2,
+                            offset: const Offset(0, -1),
+                            spreadRadius: 0.5,
                           ),
                         ],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: colorScheme.onInverseSurface.withValues(
+                                alpha: 0.10,
+                              ),
+                              shape: BoxShape.circle,
+                            ),
                             child: Icon(
-                              Icons.info_outline_rounded,
+                              icon,
                               color: colorScheme.onInverseSurface,
                               size: 20,
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: Text(
                               widget.message,
@@ -183,18 +255,26 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
                               overflow: TextOverflow.visible,
                               style: TextStyle(
                                 color: colorScheme.onInverseSurface,
-                                fontSize: 15,
-                                height: 1.35,
+                                fontSize: 16,
+                                height: 1.4,
                                 fontWeight: FontWeight.w500,
+                                letterSpacing: -0.2,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 12),
                           InkWell(
                             onTap: _dismiss,
                             borderRadius: BorderRadius.circular(99),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: colorScheme.onInverseSurface.withValues(
+                                  alpha: 0.10,
+                                ),
+                                shape: BoxShape.circle,
+                              ),
                               child: Icon(
                                 Icons.close_rounded,
                                 color: colorScheme.onInverseSurface,
@@ -213,5 +293,34 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
         ),
       ),
     );
+  }
+
+  (IconData, Color) _getIconAndColor(
+    SnackbarType type,
+    ColorScheme colorScheme,
+  ) {
+    switch (type) {
+      case SnackbarType.success:
+        return (
+          Icons.check_circle_rounded,
+          const Color(0xFF10B981).withValues(alpha: 0.50),
+        );
+      case SnackbarType.error:
+        return (
+          Icons.error_outline_rounded,
+          const Color(0xFFEF4444).withValues(alpha: 0.50),
+        );
+      case SnackbarType.warning:
+        return (
+          Icons.warning_amber_rounded,
+          const Color(0xFFF59E0B).withValues(alpha: 0.50),
+        );
+      case SnackbarType.info:
+      default:
+        return (
+          Icons.info_outline_rounded,
+          colorScheme.inverseSurface.withValues(alpha: 0.50),
+        );
+    }
   }
 }

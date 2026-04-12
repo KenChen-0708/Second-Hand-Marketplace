@@ -121,10 +121,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       if (!context.mounted) {
         return;
       }
-      _showMessage(
-        context,
-        e.toString().replaceFirst('Exception: ', ''),
-      );
+      _showMessage(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -148,7 +145,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  Future<void> _handleAddToCart(BuildContext context, ProductModel product) async {
+  Future<void> _handleAddToCart(
+    BuildContext context,
+    ProductModel product,
+  ) async {
     if (!await _promptLoginIfNeeded(context)) {
       return;
     }
@@ -268,7 +268,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final sellerAvatar = seller?.avatarUrl ?? 'https://i.pravatar.cc/150';
         final favoriteState = context.watch<FavoriteState>();
         final isFavorite = favoriteState.isFavorite(product.id);
-        final isOwner = context.watch<UserState>().currentUser?.id == product.sellerId;
+        final isOwner =
+            context.watch<UserState>().currentUser?.id == product.sellerId;
 
         return Scaffold(
           backgroundColor: Theme.of(context).colorScheme.surface,
@@ -550,7 +551,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 right: 0,
                 child: Consumer2<UserState, ProductState>(
                   builder: (context, userState, productState, child) {
-                    final isOwner = userState.currentUser?.id == product.sellerId;
+                    final isOwner =
+                        userState.currentUser?.id == product.sellerId;
 
                     if (isOwner) {
                       return Container(
@@ -625,12 +627,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                       }
                                     } catch (e) {
                                       if (context.mounted) {
-                                        SnackbarHelper.showTopMessage(
+                                        SnackbarHelper.showError(
                                           context,
-                                          'Error: $e',
-                                          backgroundColor: Theme.of(
-                                            context,
-                                          ).colorScheme.error,
+                                          'Something went wrong. Please try again.',
                                         );
                                       }
                                     }
@@ -706,7 +705,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 await _handleAddToCart(context, product);
                               },
                               icon: const Icon(Icons.add_shopping_cart_rounded),
-                              label: const Text('Add to Cart'),
+                              label: const Text(
+                                'Add to Cart',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -753,10 +758,7 @@ class _ProductDetailData {
 }
 
 class _PurchaseSelection {
-  const _PurchaseSelection({
-    required this.quantity,
-    this.selectedOption,
-  });
+  const _PurchaseSelection({required this.quantity, this.selectedOption});
 
   final int quantity;
   final String? selectedOption;
@@ -807,7 +809,11 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
   String _formatTradePreference(String tradePreference) {
     return tradePreference
         .split('_')
-        .map((word) => word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}')
+        .map(
+          (word) => word.isEmpty
+              ? word
+              : '${word[0].toUpperCase()}${word.substring(1)}',
+        )
         .join(' ');
   }
 
@@ -889,7 +895,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                     return ChoiceChip(
                       label: Text(option),
                       selected: isSelected,
-                      onSelected: (_) => setState(() => _selectedOption = option),
+                      onSelected: (_) =>
+                          setState(() => _selectedOption = option),
                     );
                   }).toList(),
                 ),
@@ -950,10 +957,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
 }
 
 class _QuantityButton extends StatelessWidget {
-  const _QuantityButton({
-    required this.icon,
-    required this.onPressed,
-  });
+  const _QuantityButton({required this.icon, required this.onPressed});
 
   final IconData icon;
   final VoidCallback? onPressed;
