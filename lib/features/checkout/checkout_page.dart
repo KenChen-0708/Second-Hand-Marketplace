@@ -21,10 +21,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String _selectedPaymentMethod = 'Credit/Debit Card';
   final TextEditingController _messageController = TextEditingController();
   bool _isProcessing = false;
+  late final List<CartModel> _checkoutItemsSnapshot;
 
   @override
   void initState() {
     super.initState();
+    _checkoutItemsSnapshot = List<CartModel>.from(
+      widget.session?.items ?? context.read<CartState>().items,
+    );
     if (!StripeService.isSupportedPlatform) {
       _selectedPaymentMethod = 'Campus Wallet';
     }
@@ -36,12 +40,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cartState = context.read<CartState>();
     final orderState = context.read<OrderState>();
     final paymentState = context.read<PaymentState>();
-    final checkoutItems = _checkoutItems(cartState);
+    final checkoutItems = _checkoutItems;
     StripePaymentResult? stripeResult;
 
     try {
       if (_isCardPayment) {
-        stripeResult = await paymentState.payWithCard(_totalAmount(cartState));
+        stripeResult = await paymentState.payWithCard(_totalAmount);
       }
 
       final orders = await orderState.checkoutItems(
@@ -66,7 +70,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (_isCardPayment && createdOrder != null) {
         await paymentState.createPaymentRecord(
           orderId: createdOrder.id,
-          amount: _totalAmount(cartState),
+          amount: _totalAmount,
           paymentMethod: _paymentMethodCode,
           paymentStatus: 'paid',
           transactionId: stripeResult?.paymentIntentId,
@@ -168,8 +172,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final cartState = context.watch<CartState>();
-    final checkoutItems = _checkoutItems(cartState);
+    context.watch<CartState>();
+    final checkoutItems = _checkoutItems;
 
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerHighest,
@@ -251,14 +255,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  List<CartModel> _checkoutItems(CartState cartState) {
-    return widget.session?.items ?? cartState.items;
-  }
+  List<CartModel> get _checkoutItems => List.unmodifiable(_checkoutItemsSnapshot);
 
-  double _totalAmount(CartState cartState) {
-    final checkoutItems = _checkoutItems(cartState);
-    return checkoutItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
-  }
+  double get _totalAmount =>
+      _checkoutItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
 
   bool get _isCardPayment => _selectedPaymentMethod == 'Credit/Debit Card';
 

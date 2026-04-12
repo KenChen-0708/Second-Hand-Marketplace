@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show Feedback;
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -106,9 +104,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       }
       setState(() => _bundle = updatedBundle);
       context.read<ChatConversationState>().updateBundle(updatedBundle);
-      Feedback.forTap(context);
-      await HapticFeedback.lightImpact();
-      await SystemSound.play(SystemSoundType.alert);
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
       if (!mounted) {
