@@ -7,6 +7,7 @@ import '../../services/payment/stripe_service.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
+import 'google_maps_picker.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key, this.session});
@@ -20,8 +21,14 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   String _selectedPaymentMethod = 'Credit/Debit Card';
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
   bool _isProcessing = false;
   late final List<CartModel> _checkoutItemsSnapshot;
+
+  // Location fields
+  double? _selectedLatitude;
+  double? _selectedLongitude;
+  String _selectedAddress = '';
 
   @override
   void initState() {
@@ -55,6 +62,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             : (widget.session == null ? cartState : null),
         clearCartAfterSuccess:
             widget.session?.clearCartAfterSuccess ?? widget.session == null,
+        handoverLocation: _selectedAddress.isNotEmpty ? _selectedAddress : null,
         notes: _messageController.text.trim().isEmpty
             ? null
             : _messageController.text.trim(),
@@ -150,12 +158,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         return;
       }
 
-      SnackbarHelper.showTopMessage(
-        context,
-        e.toString().replaceFirst('Exception: ', '').isNotEmpty
-            ? e.toString().replaceFirst('Exception: ', '')
-            : 'Unable to complete checkout right now. Please try again.',
-      );
+      SnackbarHelper.showError(context, 'Checkout failed. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -166,6 +169,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void dispose() {
     _messageController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -255,7 +259,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  List<CartModel> get _checkoutItems => List.unmodifiable(_checkoutItemsSnapshot);
+  List<CartModel> get _checkoutItems =>
+      List.unmodifiable(_checkoutItemsSnapshot);
 
   double get _totalAmount =>
       _checkoutItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
@@ -275,7 +280,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  Widget _buildOrderSummary(BuildContext context, List<CartModel> checkoutItems) {
+  Widget _buildOrderSummary(
+    BuildContext context,
+    List<CartModel> checkoutItems,
+  ) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -415,9 +423,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     return InkWell(
       onTap: isDisabled
-          ? () => SnackbarHelper.showTopMessage(
+          ? () => SnackbarHelper.showInfo(
               context,
-              'Credit/Debit Card payment is only available on Android and iOS.',
+              'Card payments are available on mobile devices only.',
             )
           : () => setState(() => _selectedPaymentMethod = title),
       child: Padding(
@@ -456,12 +464,36 @@ class _CheckoutPageState extends State<CheckoutPage> {
             else
               Icon(
                 Icons.radio_button_off_rounded,
-                color: isDisabled ? Colors.grey.withValues(alpha: 0.5) : Colors.grey,
+                color: isDisabled
+                    ? Colors.grey.withValues(alpha: 0.5)
+                    : Colors.grey,
               ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _openMapSelection() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GoogleMapsPicker(
+          initialLat: _selectedLatitude,
+          initialLng: _selectedLongitude,
+          initialAddress: _selectedAddress.isNotEmpty ? _selectedAddress : null,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedLatitude = result['latitude'];
+        _selectedLongitude = result['longitude'];
+        _selectedAddress = result['address'];
+        _addressController.text = result['address'];
+      });
+    }
   }
 
   Widget _buildHandoverInstructions(BuildContext context) {
@@ -486,6 +518,75 @@ class _CheckoutPageState extends State<CheckoutPage> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
+
+          // Location Section
+          const Text(
+            'Meet-up Location',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _addressController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter address or tap map to select',
+                    prefixIcon: const Icon(
+                      Icons.location_on_outlined,
+                      size: 20,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    fillColor: Colors.grey.withValues(alpha: 0.05),
+                    filled: true,
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedAddress = value;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 56,
+                child: FilledButton.tonal(
+                  onPressed: _openMapSelection,
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer,
+                  ),
+                  child: const Icon(Icons.map_outlined, size: 24),
+                ),
+              ),
+            ],
+          ),
+          if (_selectedLatitude != null && _selectedLongitude != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Location selected: ${_selectedLatitude!.toStringAsFixed(4)}, ${_selectedLongitude!.toStringAsFixed(4)}',
+                style: const TextStyle(fontSize: 12, color: Colors.green),
+              ),
+            ),
+          const SizedBox(height: 20),
+
+          // Message Section
           const Text(
             'Message for Seller',
             style: TextStyle(
@@ -517,7 +618,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Widget _buildBottomButton(BuildContext context, List<CartModel> checkoutItems) {
+  Widget _buildBottomButton(
+    BuildContext context,
+    List<CartModel> checkoutItems,
+  ) {
     return Positioned(
       bottom: 0,
       left: 0,
@@ -539,7 +643,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           width: double.infinity,
           height: 56,
           child: FilledButton(
-            onPressed: _isProcessing || checkoutItems.isEmpty ? null : _handlePayment,
+            onPressed: _isProcessing || checkoutItems.isEmpty
+                ? null
+                : _handlePayment,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF10B981),
               shape: RoundedRectangleBorder(

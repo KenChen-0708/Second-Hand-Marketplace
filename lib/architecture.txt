@@ -1,0 +1,73 @@
+Our code structure divide into 4 main parts:
+
+---
+
+1. Features (pages / UI)
+This is what the user sees.
+Examples: login page, home page, product page, cart page.
+
+👉 It only handles UI and user input (buttons, forms, navigation).
+👉 It does NOT talk directly to Supabase.
+
+---
+
+2. Models (data structure)
+These define what our data looks like.
+Examples: UserModel, ProductModel, OrderModel.
+
+👉 They match our database tables.
+👉 Used to convert Supabase data into Dart objects.
+
+---
+
+3. State (Provider)
+This stores and manages app data in memory.
+Examples: UserState, ProductState, AppState.
+
+👉 Keeps current user, product list, cart, etc.
+👉 UI listens to state and updates automatically.
+👉 Acts like the “middle layer” between UI and services.
+
+---
+
+4. Services (Supabase logic)
+This is where all backend calls happen.
+Examples: AuthService, ProductService.
+
+👉 Handles login, fetch data, insert/update/delete.
+👉 Talks directly to Supabase.
+👉 Returns data to State.
+
+---
+
+How everything connects:
+
+UI (Feature/Page)
+→ calls State
+→ State calls Service
+→ Service talks to Supabase
+→ data returns to State
+→ UI updates automatically
+
+---
+
+Simple flow example (login):
+
+LoginPage
+→ calls AuthService
+→ gets user data
+→ convert to UserModel
+→ store in AppState
+→ UI updates
+
+---
+
+So basically:
+UI = display
+State = manage data
+Service = backend logic
+Model = data structure
+
+---
+
+That’s our architecture 👍
