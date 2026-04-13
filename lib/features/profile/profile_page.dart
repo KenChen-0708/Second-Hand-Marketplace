@@ -136,9 +136,23 @@ class ProfilePage extends StatelessWidget {
                   const Divider(height: 1),
                   _buildMenuItem(
                     context,
+                    icon: Icons.settings_outlined,
+                    title: 'Settings',
+                    onTap: () => context.push('/profile/settings'),
+                  ),
+                  const Divider(height: 1),
+                  _buildMenuItem(
+                    context,
                     icon: Icons.list_alt_rounded,
                     title: 'My Listings',
                     onTap: () => context.push('/profile/listings'),
+                  ),
+                  const Divider(height: 1),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.bar_chart_rounded,
+                    title: 'Seller Dashboard',
+                    onTap: () => context.push('/profile/dashboard'),
                   ),
                 ],
               ),
