@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../models/mock_data.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
+import 'product_listing_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -577,6 +578,8 @@ class _HomePageState extends State<HomePage> {
                               height: 50,
                               child: FilledButton.icon(
                                 onPressed: () {
+                                  final appliedQuery =
+                                      _searchController.text.trim();
                                   setState(() {
                                     _priceRange = tempPrice;
                                     _selectedSort = tempSort;
@@ -589,6 +592,13 @@ class _HomePageState extends State<HomePage> {
                                     _applyAllFilters();
                                   });
                                   Navigator.of(sheetContext).pop();
+                                  _openProductListing(
+                                    query: appliedQuery,
+                                    priceRange: tempPrice,
+                                    conditions: tempConditions,
+                                    categories: tempCategories,
+                                    sort: tempSort,
+                                  );
                                 },
                                 icon: const Icon(Icons.check_rounded),
                                 label: const Text(
@@ -676,13 +686,13 @@ class _HomePageState extends State<HomePage> {
     Set<String> conditions,
     Set<String> categories,
   ) {
-    return _allProducts.where((p) {
-      final inPrice = p.price >= price.start && (price.end >= 2000 ? true : p.price <= price.end);
-      final inCondition =
-          conditions.isEmpty || conditions.contains(p.condition);
-      final inCategory = categories.isEmpty || categories.contains(_getCategoryName(p.categoryId));
-      return inPrice && inCondition && inCategory;
-    }).length;
+    return _buildListingResults(
+      query: _searchController.text,
+      priceRange: price,
+      conditions: conditions,
+      categories: categories,
+      sort: _selectedSort,
+    ).length;
   }
 
   // ── Apply all filters + sort to _filteredProducts ───────────────────────
@@ -712,6 +722,90 @@ class _HomePageState extends State<HomePage> {
     }
 
     _filteredProducts = result;
+  }
+
+  void _handleSearchSubmitted(String query) {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
+      setState(_applyAllFilters);
+      return;
+    }
+
+    _searchFocus.unfocus();
+    _openProductListing(query: trimmedQuery);
+  }
+
+  List<ProductModel> _buildListingResults({
+    String? query,
+    RangeValues? priceRange,
+    Set<String>? conditions,
+    Set<String>? categories,
+    String? sort,
+  }) {
+    final activePriceRange = priceRange ?? _priceRange;
+    final activeConditions = conditions ?? _selectedConditions;
+    final activeCategories = categories ?? _selectedCategories;
+    final activeSort = sort ?? _selectedSort;
+    final lowerQuery = query?.trim().toLowerCase() ?? '';
+
+    final result = _allProducts.where((p) {
+      final inPrice =
+          p.price >= activePriceRange.start &&
+          (activePriceRange.end >= 2000 ? true : p.price <= activePriceRange.end);
+      final inCondition =
+          activeConditions.isEmpty || activeConditions.contains(p.condition);
+      final inCategory =
+          activeCategories.isEmpty ||
+          activeCategories.contains(_getCategoryName(p.categoryId));
+      final matchesQuery =
+          lowerQuery.isEmpty ||
+          p.title.toLowerCase().contains(lowerQuery) ||
+          _getCategoryName(p.categoryId).toLowerCase().contains(lowerQuery) ||
+          p.condition.toLowerCase().contains(lowerQuery);
+
+      return inPrice && inCondition && inCategory && matchesQuery;
+    }).toList();
+
+    switch (activeSort) {
+      case 'Price: Low to High':
+        result.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case 'Price: High to Low':
+        result.sort((a, b) => b.price.compareTo(a.price));
+        break;
+      case 'Newest First':
+        result.sort(
+          (a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+              .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+        );
+        break;
+    }
+
+    return result;
+  }
+
+  void _openProductListing({
+    String? query,
+    RangeValues? priceRange,
+    Set<String>? conditions,
+    Set<String>? categories,
+    String? sort,
+  }) {
+    final activeCategories = (categories ?? _selectedCategories).toList()..sort();
+    final activeConditions = (conditions ?? _selectedConditions).toList()..sort();
+    final trimmedQuery = query?.trim();
+
+    context.push(
+      '/product-listing',
+      extra: ProductListingArguments(
+        allProducts: List<ProductModel>.from(_allProducts),
+        initialQuery: trimmedQuery,
+        initialSort: sort ?? _selectedSort,
+        initialCategories: activeCategories,
+        initialConditions: activeConditions,
+        initialPriceRange: priceRange ?? _priceRange,
+      ),
+    );
   }
 
   @override
@@ -788,7 +882,7 @@ class _HomePageState extends State<HomePage> {
                 child: TextField(
                   controller: _searchController,
                   focusNode: _searchFocus,
-                  onSubmitted: _onSearchSubmitted,
+                  onSubmitted: _handleSearchSubmitted,
                   onChanged: (value) => setState(() {}),
                   decoration: InputDecoration(
                     hintText: 'Search textbooks, gear...',
@@ -1060,7 +1154,7 @@ class _HomePageState extends State<HomePage> {
                   onTap: () {
                     final label = cat['label'] as String;
                     _searchController.text = label;
-                    _onSearchSubmitted(label);
+                    _handleSearchSubmitted(label);
                   },
                   child: Column(
                     children: [

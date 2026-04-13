@@ -13,6 +13,7 @@ import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
 import 'features/home/home_page.dart';
 import 'features/home/product_detail_page.dart';
+import 'features/home/product_listing_page.dart';
 import 'features/sell/sell_page.dart';
 import 'features/profile/profile_page.dart';
 import 'features/profile/my_account_page.dart';
@@ -158,6 +159,18 @@ final _router = GoRouter(
       builder: (context, state) {
         final id = state.pathParameters['id']!;
         return SellerProfilePage(sellerId: id);
+      },
+    ),
+    GoRoute(
+      path: '/product-listing',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final args = state.extra;
+        return ProductListingPage(
+          args: args is ProductListingArguments
+              ? args
+              : const ProductListingArguments(allProducts: []),
+        );
       },
     ),
     GoRoute(
