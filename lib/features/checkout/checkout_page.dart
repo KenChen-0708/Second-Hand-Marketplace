@@ -530,10 +530,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
           const SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: TextField(
                   controller: _addressController,
+                  minLines: 2,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.newline,
                   decoration: InputDecoration(
                     hintText: 'Enter address or tap map to select',
                     prefixIcon: const Icon(
@@ -560,7 +564,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
               const SizedBox(width: 12),
               SizedBox(
-                height: 56,
+                height: 64,
                 child: FilledButton.tonal(
                   onPressed: _openMapSelection,
                   style: FilledButton.styleFrom(
@@ -576,6 +580,64 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ],
           ),
+          if (_addressController.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.location_on_rounded,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Current Address',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Theme.of(context).colorScheme.primary,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          _addressController.text.trim(),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            height: 1.45,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_selectedLatitude != null && _selectedLongitude != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
