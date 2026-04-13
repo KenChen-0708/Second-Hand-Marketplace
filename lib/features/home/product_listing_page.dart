@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/models.dart';
 import '../../models/mock_data.dart';
+import '../../shared/utils/camera_capture_helper.dart';
 import '../../shared/utils/image_helper.dart';
 
 class ProductListingArguments {
@@ -159,6 +160,10 @@ class _ProductListingPageState extends State<ProductListingPage> {
     setState(() {
       _visibleProducts = _buildResults();
     });
+  }
+
+  Future<void> _openCamera() async {
+    await CameraCaptureHelper.openCamera(context);
   }
 
   void _showFilterModal() {
@@ -571,7 +576,13 @@ class _ProductListingPageState extends State<ProductListingPage> {
                           _applyListingResults();
                         },
                       )
-                    : Icon(Icons.camera_alt_outlined, color: cs.primary),
+                    : IconButton(
+                        icon: Icon(
+                          Icons.camera_alt_outlined,
+                          color: cs.primary,
+                        ),
+                        onPressed: _openCamera,
+                      ),
                 filled: true,
                 fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                 border: OutlineInputBorder(
