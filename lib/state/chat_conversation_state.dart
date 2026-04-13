@@ -1,3 +1,4 @@
+import '../models/models.dart';
 import '../models/chat_conversation_model.dart';
 import '../services/auth/auth_service.dart';
 import '../services/chat/chat_service.dart';
@@ -79,8 +80,7 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
   }
 
   Future<ChatConversationBundle> getOrCreateConversationForProduct({
-    required String productId,
-    required String sellerId,
+    required ProductModel product,
   }) async {
     final userId = await _authService.getCurrentUserId();
     if (userId == null || userId.isEmpty) {
@@ -93,13 +93,43 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
 
     try {
       final bundle = await _chatService.getOrCreateConversation(
-        productId: productId,
+        productId: product.id,
         buyerId: userId,
-        sellerId: sellerId,
+        sellerId: product.sellerId,
         currentUserId: userId,
       );
-      _mergeBundle(bundle);
-      return bundle;
+
+      var updatedBundle = bundle;
+      final lastSharedProduct = ChatService.parseSharedProduct(
+        updatedBundle.lastMessage,
+      );
+      final shouldSendProductShare =
+          updatedBundle.lastMessage?.senderId != userId ||
+          lastSharedProduct?.product.id != product.id;
+
+      if (shouldSendProductShare) {
+        final sharedMessage = await _chatService.sendSharedProductMessage(
+          conversationId: updatedBundle.conversation.id,
+          senderId: userId,
+          product: product,
+        );
+        updatedBundle = updatedBundle.copyWith(
+          product: product,
+          messages: [...updatedBundle.messages, sharedMessage],
+          conversation: updatedBundle.conversation.copyWith(
+            productId: product.id,
+            lastMessageAt: sharedMessage.createdAt,
+          ),
+        );
+      } else if (updatedBundle.product.id != product.id) {
+        updatedBundle = updatedBundle.copyWith(
+          product: product,
+          conversation: updatedBundle.conversation.copyWith(productId: product.id),
+        );
+      }
+
+      _mergeBundle(updatedBundle);
+      return updatedBundle;
     } catch (e) {
       setError(e.toString().replaceFirst('Exception: ', ''));
       rethrow;

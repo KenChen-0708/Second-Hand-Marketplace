@@ -19,6 +19,7 @@ class ProductDetailPage extends StatefulWidget {
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
   late Future<_ProductDetailData> _productDetailFuture;
+  bool _isOpeningSellerChat = false;
 
   @override
   void initState() {
@@ -96,6 +97,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     BuildContext context,
     ProductModel product,
   ) async {
+    if (_isOpeningSellerChat) {
+      return;
+    }
+
     if (!await _promptLoginIfNeeded(context)) {
       return;
     }
@@ -106,12 +111,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return;
     }
 
+    setState(() => _isOpeningSellerChat = true);
     try {
       final bundle = await context
           .read<ChatConversationState>()
           .getOrCreateConversationForProduct(
-            productId: product.id,
-            sellerId: product.sellerId,
+            product: product,
           );
       if (!context.mounted) {
         return;
@@ -122,6 +127,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         return;
       }
       _showMessage(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningSellerChat = false);
+      }
     }
   }
 
@@ -270,6 +279,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final isFavorite = favoriteState.isFavorite(product.id);
         final isOwner =
             context.watch<UserState>().currentUser?.id == product.sellerId;
+        final isChatButtonDisabled = isOwner || _isOpeningSellerChat;
 
         return Scaffold(
           backgroundColor: Theme.of(context).colorScheme.surface,
@@ -525,14 +535,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(
-                                  Icons.chat_bubble_outline_rounded,
-                                ),
-                                color: isOwner
+                                icon: _isOpeningSellerChat
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.chat_bubble_outline_rounded,
+                                      ),
+                                color: isChatButtonDisabled
                                     ? Theme.of(context).disabledColor
                                     : Theme.of(context).colorScheme.primary,
                                 tooltip: 'Chat with seller',
-                                onPressed: isOwner
+                                onPressed: isChatButtonDisabled
                                     ? null
                                     : () => _openSellerChat(context, product),
                               ),

@@ -299,7 +299,7 @@ class _ConversationTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          lastMessage?.messageText ?? 'No messages yet',
+                          ChatService.previewText(lastMessage),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
