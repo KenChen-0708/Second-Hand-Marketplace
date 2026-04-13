@@ -345,6 +345,7 @@ class MyApp extends StatelessWidget {
 
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeState()),
         ChangeNotifierProvider(create: (_) => UserState()),
         ChangeNotifierProvider(create: (_) => CategoryState()),
         ChangeNotifierProvider(create: (_) => ProductState()),
@@ -360,66 +361,80 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => DisputeState()),
         ChangeNotifierProvider(create: (_) => AdminLogState()),
       ],
-      child: MaterialApp.router(
-        debugShowCheckedModeBanner: false,
-        title: 'Campus Marketplace',
-        routerConfig: _router,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme:
-              ColorScheme.fromSeed(
+      child: Consumer<ThemeState>(
+        builder: (context, themeState, child) {
+          return MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            title: 'Campus Marketplace',
+            routerConfig: _router,
+            themeMode: themeState.themeMode,
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme:
+                  ColorScheme.fromSeed(
+                    seedColor: primaryColor,
+                    primary: primaryColor,
+                    surface: surfaceColor,
+                    brightness: Brightness.light,
+                    primaryContainer: primaryColor.withValues(alpha: 0.1),
+                    onPrimaryContainer: primaryColor,
+                  ).copyWith(
+                    surface: surfaceColor,
+                    onSurface: const Color(0xFF1F2937),
+                    surfaceContainerHighest: const Color(0xFFF3F4F6),
+                    outlineVariant: const Color(0xFFD1D5DB),
+                  ),
+              scaffoldBackgroundColor: scaffoldBgColor,
+              fontFamily: 'Roboto',
+              textTheme: const TextTheme(
+                headlineSmall: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
+                ),
+                titleLarge: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
+                ),
+                bodyLarge: TextStyle(color: Color(0xFF374151)),
+                bodyMedium: TextStyle(color: Color(0xFF4B5563)),
+              ),
+              filledButtonTheme: FilledButtonThemeData(
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: const Color(0xFFF3F4F6),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: primaryColor, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+              ),
+            ),
+            darkTheme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
                 seedColor: primaryColor,
                 primary: primaryColor,
-                surface: surfaceColor,
-                brightness: Brightness.light,
-                primaryContainer: primaryColor.withValues(alpha: 0.1),
-                onPrimaryContainer: primaryColor,
-              ).copyWith(
-                surface: surfaceColor,
-                onSurface: const Color(0xFF1F2937),
-                surfaceContainerHighest: const Color(0xFFF3F4F6),
-                outlineVariant: const Color(0xFFD1D5DB),
+                brightness: Brightness.dark,
               ),
-          scaffoldBackgroundColor: scaffoldBgColor,
-          fontFamily: 'Roboto',
-          textTheme: const TextTheme(
-            headlineSmall: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
+              fontFamily: 'Roboto',
             ),
-            titleLarge: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
-            ),
-            bodyLarge: TextStyle(color: Color(0xFF374151)),
-            bodyMedium: TextStyle(color: Color(0xFF4B5563)),
-          ),
-          filledButtonTheme: FilledButtonThemeData(
-            style: FilledButton.styleFrom(
-              backgroundColor: primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: const Color(0xFFF3F4F6),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: primaryColor, width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 16,
-            ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

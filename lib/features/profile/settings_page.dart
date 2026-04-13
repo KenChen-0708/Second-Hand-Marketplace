@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../services/auth/biometric_service.dart';
+import '../../state/state.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -10,7 +12,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool _isDarkTheme = false;
   bool _emailNotifs = true;
   bool _pushNotifs = true;
   bool _locationServices = false;
@@ -67,6 +68,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeState = context.watch<ThemeState>();
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -112,8 +115,8 @@ class _SettingsPageState extends State<SettingsPage> {
           SwitchListTile(
             title: const Text('Dark Theme'),
             secondary: const Icon(Icons.dark_mode_outlined),
-            value: _isDarkTheme,
-            onChanged: (val) => setState(() => _isDarkTheme = val),
+            value: themeState.isDarkMode,
+            onChanged: (val) => themeState.toggleTheme(val),
             contentPadding: EdgeInsets.zero,
             activeThumbColor: Theme.of(context).colorScheme.primary,
           ),
