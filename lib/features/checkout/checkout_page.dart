@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/models.dart';
+import '../../services/payment/stripe_service.dart';
+import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
+import '../../shared/utils/snackbar_helper.dart';
+import 'google_maps_picker.dart';
 
 class CheckoutPage extends StatefulWidget {
-  const CheckoutPage({super.key});
+  const CheckoutPage({super.key, this.session});
+
+  final CheckoutSessionModel? session;
 
   @override
   State<CheckoutPage> createState() => _CheckoutPageState();
@@ -14,20 +21,53 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   String _selectedPaymentMethod = 'Credit/Debit Card';
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
   bool _isProcessing = false;
+  late final List<CartModel> _checkoutItemsSnapshot;
+
+  // Location fields
+  double? _selectedLatitude;
+  double? _selectedLongitude;
+  String _selectedAddress = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkoutItemsSnapshot = List<CartModel>.from(
+      widget.session?.items ?? context.read<CartState>().items,
+    );
+    if (!StripeService.isSupportedPlatform) {
+      _selectedPaymentMethod = 'Campus Wallet';
+    }
+  }
 
   Future<void> _handlePayment() async {
     setState(() => _isProcessing = true);
 
     final cartState = context.read<CartState>();
     final orderState = context.read<OrderState>();
+    final paymentState = context.read<PaymentState>();
+    final checkoutItems = _checkoutItems;
+    StripePaymentResult? stripeResult;
 
     try {
-      final orders = await orderState.checkout(
-        cartState: cartState,
+      if (_isCardPayment) {
+        stripeResult = await paymentState.payWithCard(_totalAmount);
+      }
+
+      final orders = await orderState.checkoutItems(
+        items: checkoutItems,
+        cartState: widget.session?.clearCartAfterSuccess == true
+            ? cartState
+            : (widget.session == null ? cartState : null),
+        clearCartAfterSuccess:
+            widget.session?.clearCartAfterSuccess ?? widget.session == null,
+        handoverLocation: _selectedAddress.isNotEmpty ? _selectedAddress : null,
         notes: _messageController.text.trim().isEmpty
             ? null
             : _messageController.text.trim(),
+        status: _isCardPayment ? 'paid' : 'pending',
+        paymentStatus: _isCardPayment ? 'paid' : 'pending',
       );
 
       if (!mounted) {
@@ -35,6 +75,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       final createdOrder = orders.isNotEmpty ? orders.first : null;
+      if (_isCardPayment && createdOrder != null) {
+        await paymentState.createPaymentRecord(
+          orderId: createdOrder.id,
+          amount: _totalAmount,
+          paymentMethod: _paymentMethodCode,
+          paymentStatus: 'paid',
+          transactionId: stripeResult?.paymentIntentId,
+          gatewayResponse: stripeResult?.response,
+        );
+      }
 
       await showDialog(
         context: context,
@@ -108,14 +158,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Unable to complete checkout right now. Please try again.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      SnackbarHelper.showError(context, 'Checkout failed. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -126,13 +169,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void dispose() {
     _messageController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final cartState = context.watch<CartState>();
+    context.watch<CartState>();
+    final checkoutItems = _checkoutItems;
 
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerHighest,
@@ -151,7 +196,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildOrderSummary(context, cartState),
+                        _buildOrderSummary(context, checkoutItems),
                         const SizedBox(height: 20),
                         _buildPaymentMethod(context),
                         const SizedBox(height: 20),
@@ -164,7 +209,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ],
             ),
           ),
-          _buildBottomButton(context, cartState),
+          _buildBottomButton(context, checkoutItems),
           if (_isProcessing)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
@@ -214,7 +259,31 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Widget _buildOrderSummary(BuildContext context, CartState cartState) {
+  List<CartModel> get _checkoutItems =>
+      List.unmodifiable(_checkoutItemsSnapshot);
+
+  double get _totalAmount =>
+      _checkoutItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
+
+  bool get _isCardPayment => _selectedPaymentMethod == 'Credit/Debit Card';
+
+  String get _paymentMethodCode {
+    switch (_selectedPaymentMethod) {
+      case 'Credit/Debit Card':
+        return 'card';
+      case 'Apple/Google Pay':
+        return 'apple_google_pay';
+      case 'Campus Wallet':
+        return 'campus_wallet';
+      default:
+        return 'card';
+    }
+  }
+
+  Widget _buildOrderSummary(
+    BuildContext context,
+    List<CartModel> checkoutItems,
+  ) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -236,22 +305,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
-          if (cartState.isEmpty)
+          if (checkoutItems.isEmpty)
             const Text(
               'Your cart is empty.',
               style: TextStyle(color: Colors.grey),
             )
           else
-            ...cartState.items.map(
+            ...checkoutItems.map(
               (cartItem) => Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Row(
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        cartItem.product.imageUrl ??
-                            'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=200',
+                      child: ImageHelper.productImage(
+                        cartItem.product.imageUrl,
                         width: 50,
                         height: 50,
                         fit: BoxFit.cover,
@@ -295,7 +363,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
               ),
               Text(
-                '\$${cartState.subtotal.toStringAsFixed(2)}',
+                '\$${checkoutItems.fold<double>(0, (sum, item) => sum + item.totalPrice).toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
@@ -350,8 +418,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   Widget _buildPaymentOption(String title, IconData icon) {
     final isSelected = _selectedPaymentMethod == title;
+    final isCardOption = title == 'Credit/Debit Card';
+    final isDisabled = isCardOption && !StripeService.isSupportedPlatform;
+
     return InkWell(
-      onTap: () => setState(() => _selectedPaymentMethod = title),
+      onTap: isDisabled
+          ? () => SnackbarHelper.showInfo(
+              context,
+              'Card payments are available on mobile devices only.',
+            )
+          : () => setState(() => _selectedPaymentMethod = title),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
@@ -366,26 +442,58 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
               child: Icon(
                 icon,
-                color: isSelected ? const Color(0xFF10B981) : Colors.grey,
+                color: isDisabled
+                    ? Colors.grey.withValues(alpha: 0.5)
+                    : isSelected
+                    ? const Color(0xFF10B981)
+                    : Colors.grey,
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
-                title,
+                isDisabled ? '$title (Mobile only)' : title,
                 style: TextStyle(
+                  color: isDisabled ? Colors.grey : null,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             ),
-            if (isSelected)
+            if (isSelected && !isDisabled)
               const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981))
             else
-              const Icon(Icons.radio_button_off_rounded, color: Colors.grey),
+              Icon(
+                Icons.radio_button_off_rounded,
+                color: isDisabled
+                    ? Colors.grey.withValues(alpha: 0.5)
+                    : Colors.grey,
+              ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _openMapSelection() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GoogleMapsPicker(
+          initialLat: _selectedLatitude,
+          initialLng: _selectedLongitude,
+          initialAddress: _selectedAddress.isNotEmpty ? _selectedAddress : null,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedLatitude = result['latitude'];
+        _selectedLongitude = result['longitude'];
+        _selectedAddress = result['address'];
+        _addressController.text = result['address'];
+      });
+    }
   }
 
   Widget _buildHandoverInstructions(BuildContext context) {
@@ -410,6 +518,137 @@ class _CheckoutPageState extends State<CheckoutPage> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
+
+          // Location Section
+          const Text(
+            'Meet-up Location',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _addressController,
+                  minLines: 2,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.newline,
+                  decoration: InputDecoration(
+                    hintText: 'Enter address or tap map to select',
+                    prefixIcon: const Icon(
+                      Icons.location_on_outlined,
+                      size: 20,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    fillColor: Colors.grey.withValues(alpha: 0.05),
+                    filled: true,
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedAddress = value;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 64,
+                child: FilledButton.tonal(
+                  onPressed: _openMapSelection,
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer,
+                  ),
+                  child: const Icon(Icons.map_outlined, size: 24),
+                ),
+              ),
+            ],
+          ),
+          if (_addressController.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.location_on_rounded,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Current Address',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Theme.of(context).colorScheme.primary,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          _addressController.text.trim(),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            height: 1.45,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_selectedLatitude != null && _selectedLongitude != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Location selected: ${_selectedLatitude!.toStringAsFixed(4)}, ${_selectedLongitude!.toStringAsFixed(4)}',
+                style: const TextStyle(fontSize: 12, color: Colors.green),
+              ),
+            ),
+          const SizedBox(height: 20),
+
+          // Message Section
           const Text(
             'Message for Seller',
             style: TextStyle(
@@ -441,7 +680,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Widget _buildBottomButton(BuildContext context, CartState cartState) {
+  Widget _buildBottomButton(
+    BuildContext context,
+    List<CartModel> checkoutItems,
+  ) {
     return Positioned(
       bottom: 0,
       left: 0,
@@ -463,7 +705,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           width: double.infinity,
           height: 56,
           child: FilledButton(
-            onPressed: _isProcessing || cartState.isEmpty ? null : _handlePayment,
+            onPressed: _isProcessing || checkoutItems.isEmpty
+                ? null
+                : _handlePayment,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF10B981),
               shape: RoundedRectangleBorder(

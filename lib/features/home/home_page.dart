@@ -4,8 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../models/mock_data.dart';
+import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
-import '../chat/chat_models.dart';
+import 'product_listing_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,9 +24,10 @@ class _HomePageState extends State<HomePage> {
   List<ProductModel> _filteredProducts = [];
   bool _isLoadingProducts = true;
   String? _productLoadError;
+  ProductState? _productState;
 
   // --- Filter State ---
-  RangeValues _priceRange = const RangeValues(0, 600);
+  RangeValues _priceRange = const RangeValues(0, 2000);
   final Set<String> _selectedConditions = {};
 
   final List<String> _conditions = [
@@ -42,13 +44,36 @@ class _HomePageState extends State<HomePage> {
     _searchFocus.addListener(() {
       setState(() => _searchFocused = _searchFocus.hasFocus);
     });
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProducts();
+      _loadChatConversations();
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newProductState = context.read<ProductState>();
+    if (_productState != newProductState) {
+      _productState?.removeListener(_onProductStateChanged);
+      _productState = newProductState;
+      _productState?.addListener(_onProductStateChanged);
+    }
+  }
+
+  void _onProductStateChanged() {
+    if (mounted && _productState != null) {
+      setState(() {
+        _allProducts = _productState!.items;
+        _applyAllFilters();
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    _productState?.removeListener(_onProductStateChanged);
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -89,6 +114,14 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _loadChatConversations() async {
+    try {
+      await context.read<ChatConversationState>().fetchUserConversations();
+    } catch (_) {
+      // Keep the home page usable even if messages fail to load.
+    }
+  }
+
   String _getCategoryName(String? categoryId) {
     if (categoryId == null) return 'Uncategorized';
     final category = mockCategories.firstWhere(
@@ -118,7 +151,7 @@ class _HomePageState extends State<HomePage> {
 
   void _resetFilters() {
     setState(() {
-      _priceRange = const RangeValues(0, 600);
+      _priceRange = const RangeValues(0, 2000);
       _selectedConditions.clear();
       _selectedCategories.clear();
       _selectedSort = 'Relevance';
@@ -149,7 +182,7 @@ class _HomePageState extends State<HomePage> {
       _selectedConditions.isNotEmpty ||
       _selectedCategories.isNotEmpty ||
       _selectedSort != 'Relevance' ||
-      _priceRange != const RangeValues(0, 600);
+      _priceRange != const RangeValues(0, 2000);
 
   // --- Filter Modal ---
   void _showFilterModal() {
@@ -247,7 +280,7 @@ class _HomePageState extends State<HomePage> {
                                 if (tempConditions.isNotEmpty ||
                                     tempCategories.isNotEmpty ||
                                     tempSort != 'Relevance' ||
-                                    tempPrice != const RangeValues(0, 600))
+                                    tempPrice != const RangeValues(0, 2000))
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 10,
@@ -268,7 +301,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 TextButton(
                                   onPressed: () => setModalState(() {
-                                    tempPrice = const RangeValues(0, 600);
+                                    tempPrice = const RangeValues(0, 2000);
                                     tempConditions.clear();
                                     tempCategories.clear();
                                     tempSort = 'Relevance';
@@ -415,8 +448,8 @@ class _HomePageState extends State<HomePage> {
                               child: RangeSlider(
                                 values: tempPrice,
                                 min: 0,
-                                max: 600,
-                                divisions: 60,
+                                max: 2000,
+                                divisions: 200,
                                 onChanged: (v) =>
                                     setModalState(() => tempPrice = v),
                               ),
@@ -427,29 +460,29 @@ class _HomePageState extends State<HomePage> {
                               children: [
                                 _pricePreset(
                                   ctx,
-                                  'Under \$50',
-                                  const RangeValues(0, 50),
+                                  'Under \$100',
+                                  const RangeValues(0, 100),
                                   tempPrice,
                                   (v) => setModalState(() => tempPrice = v),
                                 ),
                                 _pricePreset(
                                   ctx,
-                                  '\$50–\$150',
-                                  const RangeValues(50, 150),
+                                  '\$100–\$500',
+                                  const RangeValues(100, 500),
                                   tempPrice,
                                   (v) => setModalState(() => tempPrice = v),
                                 ),
                                 _pricePreset(
                                   ctx,
-                                  '\$150–\$400',
-                                  const RangeValues(150, 400),
+                                  '\$500–\$1000',
+                                  const RangeValues(500, 1000),
                                   tempPrice,
                                   (v) => setModalState(() => tempPrice = v),
                                 ),
                                 _pricePreset(
                                   ctx,
-                                  'Over \$400',
-                                  const RangeValues(400, 600),
+                                  'Any',
+                                  const RangeValues(0, 2000),
                                   tempPrice,
                                   (v) => setModalState(() => tempPrice = v),
                                 ),
@@ -545,6 +578,8 @@ class _HomePageState extends State<HomePage> {
                               height: 50,
                               child: FilledButton.icon(
                                 onPressed: () {
+                                  final appliedQuery =
+                                      _searchController.text.trim();
                                   setState(() {
                                     _priceRange = tempPrice;
                                     _selectedSort = tempSort;
@@ -557,6 +592,13 @@ class _HomePageState extends State<HomePage> {
                                     _applyAllFilters();
                                   });
                                   Navigator.of(sheetContext).pop();
+                                  _openProductListing(
+                                    query: appliedQuery,
+                                    priceRange: tempPrice,
+                                    conditions: tempConditions,
+                                    categories: tempCategories,
+                                    sort: tempSort,
+                                  );
                                 },
                                 icon: const Icon(Icons.check_rounded),
                                 label: const Text(
@@ -644,20 +686,20 @@ class _HomePageState extends State<HomePage> {
     Set<String> conditions,
     Set<String> categories,
   ) {
-    return _allProducts.where((p) {
-      final inPrice = p.price >= price.start && p.price <= price.end;
-      final inCondition =
-          conditions.isEmpty || conditions.contains(p.condition);
-      final inCategory = categories.isEmpty || categories.contains(_getCategoryName(p.categoryId));
-      return inPrice && inCondition && inCategory;
-    }).length;
+    return _buildListingResults(
+      query: _searchController.text,
+      priceRange: price,
+      conditions: conditions,
+      categories: categories,
+      sort: _selectedSort,
+    ).length;
   }
 
   // ── Apply all filters + sort to _filteredProducts ───────────────────────
   void _applyAllFilters() {
     List<ProductModel> result = _allProducts.where((p) {
       final inPrice =
-          p.price >= _priceRange.start && p.price <= _priceRange.end;
+          p.price >= _priceRange.start && (_priceRange.end >= 2000 ? true : p.price <= _priceRange.end);
       final inCondition =
           _selectedConditions.isEmpty ||
           _selectedConditions.contains(p.condition);
@@ -682,6 +724,90 @@ class _HomePageState extends State<HomePage> {
     _filteredProducts = result;
   }
 
+  void _handleSearchSubmitted(String query) {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
+      setState(_applyAllFilters);
+      return;
+    }
+
+    _searchFocus.unfocus();
+    _openProductListing(query: trimmedQuery);
+  }
+
+  List<ProductModel> _buildListingResults({
+    String? query,
+    RangeValues? priceRange,
+    Set<String>? conditions,
+    Set<String>? categories,
+    String? sort,
+  }) {
+    final activePriceRange = priceRange ?? _priceRange;
+    final activeConditions = conditions ?? _selectedConditions;
+    final activeCategories = categories ?? _selectedCategories;
+    final activeSort = sort ?? _selectedSort;
+    final lowerQuery = query?.trim().toLowerCase() ?? '';
+
+    final result = _allProducts.where((p) {
+      final inPrice =
+          p.price >= activePriceRange.start &&
+          (activePriceRange.end >= 2000 ? true : p.price <= activePriceRange.end);
+      final inCondition =
+          activeConditions.isEmpty || activeConditions.contains(p.condition);
+      final inCategory =
+          activeCategories.isEmpty ||
+          activeCategories.contains(_getCategoryName(p.categoryId));
+      final matchesQuery =
+          lowerQuery.isEmpty ||
+          p.title.toLowerCase().contains(lowerQuery) ||
+          _getCategoryName(p.categoryId).toLowerCase().contains(lowerQuery) ||
+          p.condition.toLowerCase().contains(lowerQuery);
+
+      return inPrice && inCondition && inCategory && matchesQuery;
+    }).toList();
+
+    switch (activeSort) {
+      case 'Price: Low to High':
+        result.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case 'Price: High to Low':
+        result.sort((a, b) => b.price.compareTo(a.price));
+        break;
+      case 'Newest First':
+        result.sort(
+          (a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+              .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+        );
+        break;
+    }
+
+    return result;
+  }
+
+  void _openProductListing({
+    String? query,
+    RangeValues? priceRange,
+    Set<String>? conditions,
+    Set<String>? categories,
+    String? sort,
+  }) {
+    final activeCategories = (categories ?? _selectedCategories).toList()..sort();
+    final activeConditions = (conditions ?? _selectedConditions).toList()..sort();
+    final trimmedQuery = query?.trim();
+
+    context.push(
+      '/product-listing',
+      extra: ProductListingArguments(
+        allProducts: List<ProductModel>.from(_allProducts),
+        initialQuery: trimmedQuery,
+        initialSort: sort ?? _selectedSort,
+        initialCategories: activeCategories,
+        initialConditions: activeConditions,
+        initialPriceRange: priceRange ?? _priceRange,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -697,52 +823,39 @@ class _HomePageState extends State<HomePage> {
                   ? _buildLoadErrorState(context)
                   : _filteredProducts.isEmpty
                   ? _buildEmptyState(context)
-                  : CustomScrollView(
-                      slivers: [
-                        SliverToBoxAdapter(child: _buildCategories(context)),
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 8.0,
+                  : RefreshIndicator(
+                      onRefresh: () async {
+                        await _loadProducts();
+                        await _loadChatConversations();
+                      },
+                      child: CustomScrollView(
+                        slivers: [
+                          SliverToBoxAdapter(child: _buildCategories(context)),
+                          _buildSectionHeader(
+                            context,
+                            title: 'Popular Products',
+                            count: _filteredProducts.length,
                           ),
-                          sliver: SliverToBoxAdapter(
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Popular Products',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    '${_filteredProducts.length}',
-                                    style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          _buildPopularProducts(context),
+                          _buildSectionHeader(
+                            context,
+                            title: 'Fresh Arrivals',
                           ),
-                        ),
-                        _buildPopularProducts(context),
-                        const SliverToBoxAdapter(child: SizedBox(height: 80)),
-                      ],
+                          _buildHorizontalProductSection(
+                            context,
+                            _recentProducts,
+                          ),
+                          _buildSectionHeader(
+                            context,
+                            title: 'Budget Finds',
+                          ),
+                          _buildHorizontalProductSection(
+                            context,
+                            _budgetProducts,
+                          ),
+                          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                        ],
+                      ),
                     ),
             ),
           ],
@@ -754,6 +867,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildStickyHeader(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final cartQuantity = context.watch<CartState>().totalQuantity;
+    final unreadChats = context.watch<ChatConversationState>().unreadCount;
     final showFilter = _searchController.text.isNotEmpty || _searchFocused;
 
     return Container(
@@ -768,7 +882,7 @@ class _HomePageState extends State<HomePage> {
                 child: TextField(
                   controller: _searchController,
                   focusNode: _searchFocus,
-                  onSubmitted: _onSearchSubmitted,
+                  onSubmitted: _handleSearchSubmitted,
                   onChanged: (value) => setState(() {}),
                   decoration: InputDecoration(
                     hintText: 'Search textbooks, gear...',
@@ -813,10 +927,7 @@ class _HomePageState extends State<HomePage> {
                 context,
                 icon: Icons.chat_bubble_outline_rounded,
                 onTap: () => context.push('/messages'),
-                badgeCount: mockConversations.fold<int>(
-                  0,
-                  (sum, c) => sum + c.unreadCount,
-                ),
+                badgeCount: unreadChats,
               ),
             ],
           ),
@@ -1043,7 +1154,7 @@ class _HomePageState extends State<HomePage> {
                   onTap: () {
                     final label = cat['label'] as String;
                     _searchController.text = label;
-                    _onSearchSubmitted(label);
+                    _handleSearchSubmitted(label);
                   },
                   child: Column(
                     children: [
@@ -1094,7 +1205,7 @@ class _HomePageState extends State<HomePage> {
           final product = _filteredProducts[index];
           return GestureDetector(
             onTap: () {
-              context.push('/home/product/${product.id}');
+              context.push('/product/${product.id}');
             },
             child: Container(
               decoration: BoxDecoration(
@@ -1118,8 +1229,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                       child: Hero(
                         tag: 'product_image_${product.id}',
-                        child: Image.network(
-                          product.imageUrl ?? 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800',
+                        child: ImageHelper.productImage(
+                          product.imageUrl,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -1181,6 +1292,143 @@ class _HomePageState extends State<HomePage> {
             ),
           );
         }, childCount: _filteredProducts.length),
+      ),
+    );
+  }
+
+  List<ProductModel> get _recentProducts {
+    final result = [..._filteredProducts];
+    result.sort(
+      (a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
+        a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+      ),
+    );
+    return result.take(8).toList();
+  }
+
+  List<ProductModel> get _budgetProducts {
+    final result = [..._filteredProducts];
+    result.sort((a, b) => a.price.compareTo(b.price));
+    return result.take(8).toList();
+  }
+
+  Widget _buildSectionHeader(
+    BuildContext context, {
+    required String title,
+    int? count,
+  }) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      sliver: SliverToBoxAdapter(
+        child: Row(
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (count != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHorizontalProductSection(
+    BuildContext context,
+    List<ProductModel> products,
+  ) {
+    return SliverToBoxAdapter(
+      child: SizedBox(
+        height: 250,
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          scrollDirection: Axis.horizontal,
+          itemCount: products.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 14),
+          itemBuilder: (context, index) {
+            final product = products[index];
+            return GestureDetector(
+              onTap: () => context.push('/product/${product.id}'),
+              child: SizedBox(
+                width: 180,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(22),
+                          ),
+                          child: ImageHelper.productImage(
+                            product.imageUrl,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              product.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '\$${product.price.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

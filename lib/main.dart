@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'state/state.dart';
 import 'models/models.dart';
+import 'services/payment/stripe_service.dart';
 
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
 import 'features/home/home_page.dart';
 import 'features/home/product_detail_page.dart';
+import 'features/home/product_listing_page.dart';
 import 'features/sell/sell_page.dart';
 import 'features/profile/profile_page.dart';
 import 'features/profile/my_account_page.dart';
@@ -17,13 +21,15 @@ import 'features/profile/notifications_page.dart';
 import 'features/profile/settings_page.dart';
 import 'features/cart/cart_page.dart';
 import 'features/checkout/checkout_page.dart';
-import 'features/profile/order_status_page.dart';
+import 'features/profile/order_detail_page.dart';
 import 'features/profile/order_history_page.dart';
+import 'features/profile/wishlist_page.dart';
 import 'features/chat/chat_inbox_page.dart';
 import 'features/chat/chat_room_page.dart';
 import 'features/profile/seller_review_page.dart';
 import 'features/profile/seller_profile_page.dart';
 import 'features/sell/my_listings_page.dart';
+import 'features/sell/edit_product_page.dart';
 import 'features/sell/seller_dashboard_page.dart';
 
 import 'shared/widgets/scaffold_with_nav_bar.dart';
@@ -43,6 +49,10 @@ const String supabaseKey =
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  if (StripeService.isSupportedPlatform && !kIsWeb) {
+    Stripe.publishableKey = StripeService.publishableKey;
+    await Stripe.instance.applySettings();
+  }
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
 
   runApp(const MyApp());
@@ -92,7 +102,11 @@ final _router = GoRouter(
     GoRoute(
       path: '/checkout',
       parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const CheckoutPage(),
+      builder: (context, state) => CheckoutPage(
+        session: state.extra is CheckoutSessionModel
+            ? state.extra as CheckoutSessionModel
+            : null,
+      ),
     ),
     GoRoute(
       path: '/messages',
@@ -145,6 +159,34 @@ final _router = GoRouter(
       builder: (context, state) {
         final id = state.pathParameters['id']!;
         return SellerProfilePage(sellerId: id);
+      },
+    ),
+    GoRoute(
+      path: '/product-listing',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final args = state.extra;
+        return ProductListingPage(
+          args: args is ProductListingArguments
+              ? args
+              : const ProductListingArguments(allProducts: []),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/product/:id',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return ProductDetailPage(productId: id);
+      },
+    ),
+    GoRoute(
+      path: '/edit-product',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final product = state.extra as ProductModel;
+        return EditProductPage(product: product);
       },
     ),
     GoRoute(
@@ -216,16 +258,7 @@ final _router = GoRouter(
             GoRoute(
               path: '/home',
               builder: (context, state) => const HomePage(),
-              routes: [
-                GoRoute(
-                  path: 'product/:id',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) {
-                    final id = state.pathParameters['id']!;
-                    return ProductDetailPage(productId: id);
-                  },
-                ),
-              ],
+              routes: const [],
             ),
           ],
         ),
@@ -254,6 +287,11 @@ final _router = GoRouter(
                   path: 'notifications',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const NotificationsPage(),
+                ),
+                GoRoute(
+                  path: 'wishlist',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const WishlistPage(),
                 ),
                 GoRoute(
                   path: 'settings',

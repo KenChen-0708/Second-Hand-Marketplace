@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
+import '../../shared/utils/image_helper.dart';
 
 class CartService {
   CartService({SupabaseClient? client})
@@ -36,7 +37,7 @@ class CartService {
       final productsById = <String, ProductModel>{};
       for (final product in (productData as List)) {
         final model = ProductModel.fromMap(
-          Map<String, dynamic>.from(product as Map),
+          _resolveProductMap(Map<String, dynamic>.from(product as Map)),
         );
         productsById[model.id] = model;
       }
@@ -211,5 +212,25 @@ class CartService {
     } catch (e) {
       throw Exception('Unable to clear your cart right now. Please try again.');
     }
+  }
+
+  Map<String, dynamic> _resolveProductMap(Map<String, dynamic> productMap) {
+    final resolvedImages = ImageHelper.resolveProductImageUrls(
+      productMap['image_urls'],
+    );
+    final resolvedImageUrl =
+        ImageHelper.resolveProductImageUrl(
+          productMap['image_url']?.toString(),
+          fallbackToDefault: false,
+        ) ??
+        (resolvedImages.isNotEmpty
+            ? resolvedImages.first
+            : ImageHelper.defaultProductImageUrl);
+
+    return {
+      ...productMap,
+      'image_url': resolvedImageUrl,
+      'image_urls': resolvedImages,
+    };
   }
 }

@@ -16,8 +16,8 @@ class CartState extends ChangeNotifier {
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
       _,
     ) {
-      final userId = _authService.getCurrentUserId();
-      if (userId == null || userId.isEmpty) {
+      final authUserId = _authService.getCurrentAuthUserId();
+      if (authUserId == null || authUserId.isEmpty) {
         _items.clear();
         _error = null;
         _isLoading = false;
@@ -53,8 +53,8 @@ class CartState extends ChangeNotifier {
       _items.fold(0, (sum, item) => sum + item.totalPrice);
   double get totalPrice => subtotal;
   bool get _hasAuthenticatedUser {
-    final userId = _authService.getCurrentUserId();
-    return userId != null && userId.isNotEmpty;
+    final authUserId = _authService.getCurrentAuthUserId();
+    return authUserId != null && authUserId.isNotEmpty;
   }
 
   bool containsProduct(String productId) =>
@@ -67,7 +67,7 @@ class CartState extends ChangeNotifier {
   }
 
   Future<void> loadCart() async {
-    final userId = _authService.getCurrentUserId();
+    final userId = await _authService.getCurrentUserId();
     if (userId == null || userId.isEmpty) {
       _items.clear();
       _error = null;
@@ -105,7 +105,7 @@ class CartState extends ChangeNotifier {
       return result;
     }
 
-    final userId = _authService.getCurrentUserId();
+    final userId = await _authService.getCurrentUserId();
     if (userId == null || userId.isEmpty) {
       const result = CartActionResult(
         success: false,
@@ -131,10 +131,13 @@ class CartState extends ChangeNotifier {
 
       notifyListeners();
       return result;
-    } catch (_) {
-      const result = CartActionResult(
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      final result = CartActionResult(
         success: false,
-        message: 'Failed to add item to cart, please try again.',
+        message: message.isEmpty
+            ? 'Failed to add item to cart, please try again.'
+            : message,
       );
       _setError(result.message);
       return result;
@@ -214,7 +217,7 @@ class CartState extends ChangeNotifier {
   }
 
   Future<void> clearCart() async {
-    final userId = _authService.getCurrentUserId();
+    final userId = await _authService.getCurrentUserId();
     if (userId == null || userId.isEmpty) {
       _items.clear();
       _error = null;
