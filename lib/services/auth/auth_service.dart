@@ -97,6 +97,26 @@ class AuthService {
     }
   }
 
+  /// Change Password
+  Future<void> changePassword(String newPassword) async {
+    try {
+      await supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } on AuthException catch (e) {
+      throw Exception(e.message);
+    }
+  }
+
+  /// Reset Password (Forgot Password)
+  Future<void> resetPassword(String email) async {
+    try {
+      await supabase.auth.resetPasswordForEmail(email);
+    } on AuthException catch (e) {
+      throw Exception(e.message);
+    }
+  }
+
   Future<void> logout() async => await supabase.auth.signOut();
   bool isLoggedIn() => supabase.auth.currentSession != null;
 }

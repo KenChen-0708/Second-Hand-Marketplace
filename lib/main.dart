@@ -11,6 +11,7 @@ import 'services/payment/stripe_service.dart';
 
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
+import 'features/auth/reset_password_page.dart';
 import 'features/home/home_page.dart';
 import 'features/home/product_detail_page.dart';
 import 'features/home/product_listing_page.dart';
@@ -53,7 +54,14 @@ Future<void> main() async {
     Stripe.publishableKey = StripeService.publishableKey;
     await Stripe.instance.applySettings();
   }
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+  
+  await Supabase.initialize(
+    url: supabaseUrl, 
+    anonKey: supabaseKey,
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+    ),
+  );
 
   runApp(const MyApp());
 }
@@ -93,6 +101,10 @@ final _router = GoRouter(
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterPage(),
+    ),
+    GoRoute(
+      path: '/reset-password',
+      builder: (context, state) => const ResetPasswordPage(),
     ),
     GoRoute(
       path: '/cart',
@@ -334,8 +346,28 @@ final _router = GoRouter(
   ],
 );
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    _setupAuthListener();
+  }
+
+  void _setupAuthListener() {
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final event = data.event;
+      if (event == AuthChangeEvent.passwordRecovery) {
+        _router.go('/reset-password');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
