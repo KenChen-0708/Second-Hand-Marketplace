@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../services/auth/biometric_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -13,6 +14,56 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _emailNotifs = true;
   bool _pushNotifs = true;
   bool _locationServices = false;
+  bool _biometricEnabled = false;
+  bool _biometricHardwareAvailable = false;
+  final _biometricService = BiometricService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricSettings();
+  }
+
+  Future<void> _loadBiometricSettings() async {
+    try {
+      final available = await _biometricService.isBiometricAvailable();
+      final enabled = await _biometricService.isBiometricEnabled();
+      if (mounted) {
+        setState(() {
+          _biometricHardwareAvailable = available;
+          _biometricEnabled = enabled;
+        });
+      }
+    } catch (e) {
+      debugPrint("SettingsPage: Failed to load biometric settings: $e");
+    }
+  }
+
+  Future<void> _toggleBiometrics(bool value) async {
+    try {
+      if (value) {
+        final authenticated = await _biometricService.authenticate();
+        if (authenticated) {
+          await _biometricService.saveCredentials("", ""); 
+          setState(() => _biometricEnabled = true);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Biometrics enabled. Please login manually once to save credentials.')),
+            );
+          }
+        }
+      } else {
+        await _biometricService.clearCredentials();
+        setState(() => _biometricEnabled = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString().contains("MissingPluginException") ? "Please restart the app" : e.toString()}')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +157,16 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
+          if (_biometricHardwareAvailable)
+            SwitchListTile(
+              title: const Text('Biometric Login'),
+              subtitle: const Text('Use fingerprint or face ID to log in'),
+              secondary: const Icon(Icons.fingerprint),
+              value: _biometricEnabled,
+              onChanged: _toggleBiometrics,
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: Theme.of(context).colorScheme.primary,
+            ),
           SwitchListTile(
             title: const Text('Location Services'),
             subtitle: const Text('Used to find nearby items'),
