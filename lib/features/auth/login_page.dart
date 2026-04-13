@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/state.dart';
+import '../../services/auth/biometric_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,13 +16,42 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-
-  // REMOVED: final AuthService _authService = AuthService();
-  // UI no longer knows that AuthService exists.
+  final _biometricService = BiometricService();
 
   bool _isLoading = false;
   String? _errorMessage;
   bool _obscurePassword = true;
+  bool _isBiometricAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkBiometrics();
+    });
+  }
+
+  Future<void> _checkBiometrics() async {
+    try {
+      final available = await _biometricService.isBiometricAvailable();
+      final enabled = await _biometricService.isBiometricEnabled();
+      
+      if (mounted) {
+        setState(() {
+          _isBiometricAvailable = available && enabled;
+        });
+      }
+      
+      if (available && enabled) {
+        final credentials = await _biometricService.getCredentials();
+        if (credentials != null) {
+          _handleBiometricLogin();
+        }
+      }
+    } catch (e) {
+      debugPrint("Biometric check failed: $e");
+    }
+  }
 
   @override
   void dispose() {
@@ -42,25 +72,71 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      // 🔥 THE ARCHITECTURAL WIN:
-      // UI calls the State. The State calls the Service.
-      await context.read<UserState>().login(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
+      await context.read<UserState>().login(email, password);
+
+      // Save credentials for biometrics if enabled
+      try {
+        if (await _biometricService.isBiometricEnabled()) {
+          await _biometricService.saveCredentials(email, password);
+        }
+      } catch (e) {
+        debugPrint("Failed to save biometric credentials: $e");
+      }
 
       if (!mounted) return;
-
-      // Navigate to the Home Page after State confirms success
       context.go('/home');
 
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
-        // Displays error thrown by the Service layer through the State layer
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    if (_isLoading) return;
+
+    try {
+      final credentials = await _biometricService.getCredentials();
+      if (credentials == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No biometric credentials saved. Please login manually once.')),
+          );
+        }
+        return;
+      }
+
+      final authenticated = await _biometricService.authenticate();
+      if (authenticated) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = null;
+        });
+
+        await context.read<UserState>().login(
+          credentials['email']!,
+          credentials['password']!,
+        );
+
+        if (!mounted) return;
+        context.go('/home');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Biometric login failed: ${e.toString()}')),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -277,6 +353,7 @@ class _LoginPageState extends State<LoginPage> {
                               width: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
+                                color: Colors.white,
                               ),
                             )
                                 : const Text(
@@ -290,23 +367,24 @@ class _LoginPageState extends State<LoginPage> {
 
                           const SizedBox(height: 12),
 
-                          OutlinedButton.icon(
-                            onPressed: _isLoading ? null : () => context.go('/home'),
-                            icon: const Icon(Icons.fingerprint, size: 24),
-                            label: const Text(
-                              'Login with Biometrics',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                          if (_isBiometricAvailable)
+                            OutlinedButton.icon(
+                              onPressed: _isLoading ? null : _handleBiometricLogin,
+                              icon: const Icon(Icons.fingerprint, size: 24),
+                              label: const Text(
+                                'Login with Biometrics',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
                             ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                          ),
 
                           const SizedBox(height: 24),
 
