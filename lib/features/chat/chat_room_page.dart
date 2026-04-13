@@ -361,6 +361,15 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final sharedProduct = ChatService.parseSharedProduct(message);
+
+    if (sharedProduct != null) {
+      return _SharedProductBubble(
+        product: sharedProduct.product,
+        isMe: isMe,
+        otherAvatarUrl: otherAvatarUrl,
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.only(
@@ -389,10 +398,12 @@ class _MessageBubble extends StatelessWidget {
                   : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
+                  padding: message.isImage && message.imageUrl != null
+                      ? const EdgeInsets.all(6)
+                      : const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                   decoration: BoxDecoration(
                     color: isMe
                         ? const Color(0xFF10B981)
@@ -404,14 +415,53 @@ class _MessageBubble extends StatelessWidget {
                       bottomRight: Radius.circular(isMe ? 4 : 18),
                     ),
                   ),
-                  child: Text(
-                    message.messageText,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      height: 1.4,
-                      color: isMe ? Colors.white : colorScheme.onSurface,
-                    ),
-                  ),
+                  child: message.isImage && message.imageUrl != null
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.network(
+                                message.imageUrl!,
+                                width: 220,
+                                height: 220,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 220,
+                                  height: 220,
+                                  color: colorScheme.surfaceContainerHighest,
+                                  alignment: Alignment.center,
+                                  child: const Icon(Icons.image_outlined),
+                                ),
+                              ),
+                            ),
+                            if (message.messageText.trim().isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(
+                                  message.messageText,
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    height: 1.4,
+                                    color: isMe
+                                        ? Colors.white
+                                        : colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        )
+                      : Text(
+                          message.messageText,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            height: 1.4,
+                            color: isMe ? Colors.white : colorScheme.onSurface,
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -422,6 +472,133 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SharedProductBubble extends StatelessWidget {
+  const _SharedProductBubble({
+    required this.product,
+    required this.isMe,
+    required this.otherAvatarUrl,
+  });
+
+  final ProductModel product;
+  final bool isMe;
+  final String otherAvatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        top: 4,
+        bottom: 4,
+        left: isMe ? 60 : 0,
+        right: isMe ? 0 : 60,
+      ),
+      child: Row(
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMe) ...[
+            CircleAvatar(
+              radius: 14,
+              backgroundImage: NetworkImage(otherAvatarUrl),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: GestureDetector(
+              onTap: () => context.push('/product/${product.id}'),
+              child: Container(
+                width: 250,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1.2,
+                      child: ImageHelper.productImage(
+                        product.imageUrl,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            product.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '\$${product.price.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  product.condition,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Tap to view',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

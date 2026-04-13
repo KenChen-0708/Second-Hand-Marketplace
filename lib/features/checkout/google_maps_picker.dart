@@ -109,18 +109,22 @@ class _GoogleMapsPickerState extends State<GoogleMapsPicker> {
   }
 
   Future<bool> _ensureLocationAccess({bool requestIfNeeded = false}) async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return false;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied && requestIfNeeded) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      return permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
+    } catch (_) {
       return false;
     }
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied && requestIfNeeded) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    return permission == LocationPermission.always ||
-        permission == LocationPermission.whileInUse;
   }
 
   Future<void> _goToCurrentLocation({
