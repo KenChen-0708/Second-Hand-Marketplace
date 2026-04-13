@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../models/mock_data.dart';
+import '../../shared/utils/camera_capture_helper.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import 'product_listing_page.dart';
@@ -735,6 +736,10 @@ class _HomePageState extends State<HomePage> {
     _openProductListing(query: trimmedQuery);
   }
 
+  Future<void> _openCamera() async {
+    await CameraCaptureHelper.openCamera(context);
+  }
+
   List<ProductModel> _buildListingResults({
     String? query,
     RangeValues? priceRange,
@@ -900,7 +905,13 @@ class _HomePageState extends State<HomePage> {
                               setState(_applyAllFilters);
                             },
                           )
-                        : Icon(Icons.camera_alt_outlined, color: cs.primary),
+                        : IconButton(
+                            icon: Icon(
+                              Icons.camera_alt_outlined,
+                              color: cs.primary,
+                            ),
+                            onPressed: _openCamera,
+                          ),
                     filled: true,
                     fillColor: cs.surfaceContainerHighest.withValues(
                       alpha: 0.5,

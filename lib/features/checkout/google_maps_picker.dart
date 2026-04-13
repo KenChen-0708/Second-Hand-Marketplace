@@ -36,6 +36,7 @@ class _GoogleMapsPickerState extends State<GoogleMapsPicker> {
   bool _isLoading = true;
   bool _isMapMoving = false;
   bool _isReverseGeocoding = false;
+  bool _hasLocationAccess = false;
   Timer? _searchDebounce;
   Timer? _reverseGeocodeDebounce;
   List<_PlaceSuggestion> _suggestions = const [];
@@ -56,11 +57,17 @@ class _GoogleMapsPickerState extends State<GoogleMapsPicker> {
   }
 
   Future<void> _initialize() async {
+    _hasLocationAccess = await _ensureLocationAccess();
+
     if (widget.initialLat != null && widget.initialLng != null) {
       _center = LatLng(widget.initialLat!, widget.initialLng!);
       _selectedAddress = widget.initialAddress ?? 'Loading address...';
+    } else if (_hasLocationAccess) {
+      await _goToCurrentLocation(animate: false, requestIfNeeded: false);
+    } else if (widget.initialAddress?.trim().isNotEmpty == true) {
+      _selectedAddress = widget.initialAddress!.trim();
     } else {
-      await _goToCurrentLocation(animate: false);
+      _selectedAddress = 'Move the map to choose a location';
     }
 
     if (widget.initialAddress == null || widget.initialAddress!.trim().isEmpty) {
@@ -72,24 +79,86 @@ class _GoogleMapsPickerState extends State<GoogleMapsPicker> {
     }
   }
 
-  Future<void> _goToCurrentLocation({bool animate = true}) async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+  Future<bool> _promptEnableLocationServices() async {
+    final shouldOpenSettings = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Turn On Location Services'),
+        content: const Text(
+          'Location services are turned off. Please enable them to find your current location.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldOpenSettings == true) {
+      await Geolocator.openLocationSettings();
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<bool> _ensureLocationAccess({bool requestIfNeeded = false}) async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      _selectedAddress = 'Location services are disabled';
+      return false;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied && requestIfNeeded) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    return permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+  }
+
+  Future<void> _goToCurrentLocation({
+    bool animate = true,
+    bool requestIfNeeded = true,
+  }) async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      await _promptEnableLocationServices();
+      if (mounted) {
+        setState(() => _hasLocationAccess = false);
+      } else {
+        _hasLocationAccess = false;
+      }
       return;
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        _selectedAddress = 'Location permission denied';
-        return;
-      }
+    final hasLocationAccess = await _ensureLocationAccess(
+      requestIfNeeded: requestIfNeeded,
+    );
+
+    if (mounted) {
+      setState(() => _hasLocationAccess = hasLocationAccess);
+    } else {
+      _hasLocationAccess = hasLocationAccess;
     }
 
-    if (permission == LocationPermission.deniedForever) {
-      _selectedAddress = 'Location permission permanently denied';
+    if (!hasLocationAccess) {
+      _selectedAddress = 'Move the map to choose a location';
+      if (mounted && requestIfNeeded) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Location access is optional. You can still pick a place manually.',
+            ),
+          ),
+        );
+      }
       return;
     }
 
@@ -309,7 +378,7 @@ class _GoogleMapsPickerState extends State<GoogleMapsPicker> {
                   },
                   onCameraMove: _onCameraMove,
                   onCameraIdle: _onCameraIdle,
-                  myLocationEnabled: true,
+                  myLocationEnabled: _hasLocationAccess,
                   myLocationButtonEnabled: false,
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,

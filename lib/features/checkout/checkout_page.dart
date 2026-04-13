@@ -564,18 +564,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
               const SizedBox(width: 12),
               SizedBox(
+                width: 64,
                 height: 64,
                 child: FilledButton.tonal(
                   onPressed: _openMapSelection,
                   style: FilledButton.styleFrom(
+                    padding: EdgeInsets.zero,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                     backgroundColor: Theme.of(
                       context,
                     ).colorScheme.primaryContainer,
+                    foregroundColor: const Color(0xFF166534),
                   ),
-                  child: const Icon(Icons.map_outlined, size: 24),
+                  child: const Center(
+                    child: Icon(Icons.map_outlined, size: 24),
+                  ),
                 ),
               ),
             ],
