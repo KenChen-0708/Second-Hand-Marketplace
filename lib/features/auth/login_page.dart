@@ -146,6 +146,82 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  void _showForgotPasswordDialog() {
+    final resetEmailController = TextEditingController();
+    final resetFormKey = GlobalKey<FormState>();
+    bool isResetLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Reset Password'),
+          content: Form(
+            key: resetFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Enter your student email to receive a password reset link.'),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: resetEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Student Email',
+                    hintText: 'student@university.edu',
+                  ),
+                  validator: (value) {
+                    final text = value?.trim() ?? '';
+                    if (text.isEmpty) return 'Email is required';
+                    if (!RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(text)) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isResetLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isResetLoading
+                  ? null
+                  : () async {
+                      if (resetFormKey.currentState!.validate()) {
+                        setDialogState(() => isResetLoading = true);
+                        try {
+                          await context.read<UserState>().resetPassword(resetEmailController.text.trim());
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Password reset email sent!')),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: ${e.toString().replaceFirst('Exception: ', '')}')),
+                            );
+                          }
+                        } finally {
+                          if (context.mounted) setDialogState(() => isResetLoading = false);
+                        }
+                      }
+                    },
+              child: isResetLoading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Send Reset Link'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   InputDecoration _inputDecoration({
     required BuildContext context,
     required String labelText,
@@ -332,7 +408,7 @@ class _LoginPageState extends State<LoginPage> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
-                              onPressed: _isLoading ? null : () {},
+                              onPressed: _isLoading ? null : _showForgotPasswordDialog,
                               child: const Text('Forgot Password?'),
                             ),
                           ),

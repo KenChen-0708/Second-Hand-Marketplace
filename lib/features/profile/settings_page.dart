@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../services/auth/biometric_service.dart';
+import '../../state/state.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -10,7 +12,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool _isDarkTheme = false;
   bool _emailNotifs = true;
   bool _pushNotifs = true;
   bool _locationServices = false;
@@ -65,8 +66,95 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  void _showChangePasswordDialog() {
+    final passwordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Change Password'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'New Password',
+                    hintText: 'Enter new password',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Please enter a password';
+                    if (value.length < 6) return 'Password must be at least 6 characters';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: confirmPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirm Password',
+                    hintText: 'Re-enter new password',
+                  ),
+                  validator: (value) {
+                    if (value != passwordController.text) return 'Passwords do not match';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      if (formKey.currentState!.validate()) {
+                        setDialogState(() => isLoading = true);
+                        try {
+                          await context.read<UserState>().changePassword(passwordController.text);
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Password changed successfully')),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: ${e.toString()}')),
+                            );
+                          }
+                        } finally {
+                          if (context.mounted) setDialogState(() => isLoading = false);
+                        }
+                      }
+                    },
+              child: isLoading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Change'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final themeState = context.watch<ThemeState>();
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -112,8 +200,8 @@ class _SettingsPageState extends State<SettingsPage> {
           SwitchListTile(
             title: const Text('Dark Theme'),
             secondary: const Icon(Icons.dark_mode_outlined),
-            value: _isDarkTheme,
-            onChanged: (val) => setState(() => _isDarkTheme = val),
+            value: themeState.isDarkMode,
+            onChanged: (val) => themeState.toggleTheme(val),
             contentPadding: EdgeInsets.zero,
             activeThumbColor: Theme.of(context).colorScheme.primary,
           ),
@@ -181,7 +269,7 @@ class _SettingsPageState extends State<SettingsPage> {
             leading: const Icon(Icons.lock_outline),
             trailing: const Icon(Icons.chevron_right_rounded),
             contentPadding: EdgeInsets.zero,
-            onTap: () {},
+            onTap: _showChangePasswordDialog,
           ),
           const Divider(),
           const SizedBox(height: 32),

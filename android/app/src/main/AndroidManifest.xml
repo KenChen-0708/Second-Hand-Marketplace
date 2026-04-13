@@ -26,6 +26,15 @@
               android:resource="@style/NormalTheme"
               />
 
+            <!-- Deep Links Configuration -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Accepts links starting with "io.supabase.flutter://login-callback" -->
+                <data android:scheme="io.supabase.flutter" android:host="login-callback" />
+            </intent-filter>
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -35,12 +44,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        
-        <!-- Google Maps API Key -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyADZFFqWrhF2UyOL6If2cYdbRBunjRnq9c" />
-        
     </application>
 
     <queries>
