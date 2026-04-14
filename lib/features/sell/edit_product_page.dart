@@ -22,7 +22,6 @@ class _EditProductPageState extends State<EditProductPage> {
   late TextEditingController _descriptionController;
   late TextEditingController _priceController;
   late String _selectedCondition;
-  late String _tradePreference;
   bool _faceToFace = false;
   bool _delivery = false;
   String? _deliveryMethod;
@@ -49,15 +48,21 @@ class _EditProductPageState extends State<EditProductPage> {
     _descriptionController = TextEditingController(text: description);
     _priceController = TextEditingController(text: widget.product.price.toString());
     _selectedCondition = widget.product.condition;
-    _tradePreference = widget.product.tradePreference;
     _openToOffers = widget.product.openToOffers;
 
     // Map trade preference to UI flags
-    if (_tradePreference == 'face_to_face') {
+    final prefs = widget.product.tradePreference;
+    if (prefs.contains('face_to_face')) {
       _faceToFace = true;
-    } else if (_tradePreference.startsWith('delivery_')) {
+    }
+    
+    final deliveryPref = prefs.firstWhere(
+      (p) => p.startsWith('delivery_'),
+      orElse: () => '',
+    );
+    if (deliveryPref.isNotEmpty) {
       _delivery = true;
-      _deliveryMethod = _tradePreference.replaceFirst('delivery_', '');
+      _deliveryMethod = deliveryPref.replaceFirst('delivery_', '');
     }
     
     // Initialize images
@@ -146,13 +151,17 @@ class _EditProductPageState extends State<EditProductPage> {
 
       final allImageUrls = [...existingUrls, ...uploadedUrls];
 
-      // 6. Determine Trade Preference
-      String tradePreference = 'face_to_face';
-      if (_delivery) {
-        tradePreference = _deliveryMethod == 'official' 
-            ? 'delivery_official' 
-            : 'delivery_self';
+      // 6. Determine Trade Preference (Multi-select)
+      List<String> tradePreferences = [];
+      if (_faceToFace) {
+        tradePreferences.add('face_to_face');
       }
+      if (_delivery) {
+        tradePreferences.add(
+          _deliveryMethod == 'official' ? 'delivery_official' : 'delivery_self',
+        );
+      }
+      if (tradePreferences.isEmpty) tradePreferences = ['face_to_face'];
 
       // 7. Format Description (Appending meeting location if face-to-face)
       String finalDescription = _descriptionController.text.trim();
@@ -168,7 +177,7 @@ class _EditProductPageState extends State<EditProductPage> {
         'description': finalDescription,
         'price': price,
         'condition': _selectedCondition,
-        'trade_preference': tradePreference,
+        'trade_preference': tradePreferences,
         'open_to_offers': _openToOffers,
         'image_urls': allImageUrls,
       };
@@ -261,10 +270,7 @@ class _EditProductPageState extends State<EditProductPage> {
               title: 'Face-to-Face',
               subtitle: 'Meet the buyer in person at a safe location.',
               selected: _faceToFace,
-              onTap: () => setState(() {
-                _faceToFace = !_faceToFace;
-                if (_faceToFace) _delivery = false;
-              }),
+              onTap: () => setState(() => _faceToFace = !_faceToFace),
             ),
             if (_faceToFace) ...[
               const SizedBox(height: 12),
@@ -283,9 +289,8 @@ class _EditProductPageState extends State<EditProductPage> {
               selected: _delivery,
               onTap: () => setState(() {
                 _delivery = !_delivery;
-                if (_delivery) {
-                  _faceToFace = false;
-                  if (_deliveryMethod == null) _deliveryMethod = 'official';
+                if (_delivery && _deliveryMethod == null) {
+                  _deliveryMethod = 'official';
                 }
               }),
             ),

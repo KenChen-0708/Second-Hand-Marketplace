@@ -812,8 +812,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
   List<String> _buildOptions(ProductModel product) {
     final options = <String>[
       if (product.condition.isNotEmpty) product.condition,
-      if (product.tradePreference.isNotEmpty)
-        _formatTradePreference(product.tradePreference),
+      ...product.tradePreference.map(_formatTradePreference),
       if (product.openToOffers) 'Negotiable',
     ].toSet().toList();
 

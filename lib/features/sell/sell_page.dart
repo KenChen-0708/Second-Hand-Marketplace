@@ -476,13 +476,17 @@ class _SellWizardState extends State<_SellWizard> {
         authUser.id,
       );
 
-      // 6. Determine Trade Preference
-      String tradePreference = 'face_to_face';
-      if (_delivery) {
-        tradePreference = _deliveryMethod == 'official' 
-            ? 'delivery_official' 
-            : 'delivery_self';
+      // 6. Determine Trade Preference (Multi-select array)
+      List<String> tradePreferences = [];
+      if (_faceToFace) {
+        tradePreferences.add('face_to_face');
       }
+      if (_delivery) {
+        tradePreferences.add(
+          _deliveryMethod == 'official' ? 'delivery_official' : 'delivery_self',
+        );
+      }
+      if (tradePreferences.isEmpty) tradePreferences = ['face_to_face'];
 
       // 7. Format Description (Appending meeting location if face-to-face)
       String finalDescription = _descriptionController.text.trim();
@@ -499,7 +503,7 @@ class _SellWizardState extends State<_SellWizard> {
         'seller_id': sellerId,
         'condition': dbCondition,
         'image_urls': imageUrls,
-        'trade_preference': tradePreference,
+        'trade_preference': tradePreferences,
         'open_to_offers': _openToOffers,
         'status': 'active',
       };
@@ -619,19 +623,11 @@ class _SellWizardState extends State<_SellWizard> {
                     locationController: _locationController,
                     deliveryMethod: _deliveryMethod,
                     isLoadingLocation: _isLoadingLocation,
-                    onFaceToFaceChanged: (v) => setState(() {
-                      _faceToFace = v;
-                      if (v) {
-                        _delivery = false;
-                      }
-                    }),
+                    onFaceToFaceChanged: (v) => setState(() => _faceToFace = v),
                     onDeliveryChanged: (v) => setState(() {
                       _delivery = v;
-                      if (v) {
-                        _faceToFace = false;
-                        if (_deliveryMethod == null) {
-                          _deliveryMethod = 'official';
-                        }
+                      if (v && _deliveryMethod == null) {
+                        _deliveryMethod = 'official';
                       }
                     }),
                     onDeliveryMethodChanged: (v) =>
@@ -1675,13 +1671,18 @@ class _Step4Review extends StatelessWidget {
                 ),
                 _ReviewSection(
                   title: 'Trade Method',
-                  value: faceToFace
-                      ? 'Face-to-Face'
-                      : (delivery
-                          ? (deliveryMethod == 'official'
-                              ? 'Official Delivery'
-                              : 'Self-Delivery')
-                          : '—'),
+                  value: () {
+                    List<String> methods = [];
+                    if (faceToFace) methods.add('Face-to-Face');
+                    if (delivery) {
+                      methods.add(
+                        deliveryMethod == 'official'
+                            ? 'Official Delivery'
+                            : 'Self-Delivery',
+                      );
+                    }
+                    return methods.isEmpty ? '—' : methods.join(' & ');
+                  }(),
                   onEdit: () => onEdit(3),
                 ),
                 if (faceToFace && location.isNotEmpty)
