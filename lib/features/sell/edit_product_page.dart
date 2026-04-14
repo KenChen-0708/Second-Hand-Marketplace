@@ -34,21 +34,20 @@ class _EditProductPageState extends State<EditProductPage> {
   @override
   void initState() {
     super.initState();
-    // Parse description to extract meeting location if it exists
+    // Parse description to extract meeting location if it exists (Legacy support)
     String description = widget.product.description;
     if (description.contains('\n\n---\nMeeting Location:\n• ')) {
-      final parts = description.split('\n\n---\nMeeting Location:\n• ');
-      description = parts[0];
-      if (parts.length > 1) {
-        _locationController.text = parts[1].trim();
-      }
+      description = description.split('\n\n---\nMeeting Location:\n• ')[0];
     }
 
     _titleController = TextEditingController(text: widget.product.title);
     _descriptionController = TextEditingController(text: description);
-    _priceController = TextEditingController(text: widget.product.price.toString());
+    _priceController =
+        TextEditingController(text: widget.product.price.toString());
     _selectedCondition = widget.product.condition;
     _openToOffers = widget.product.openToOffers;
+
+    _loadMeetupLocation();
 
     // Map trade preference to UI flags
     final prefs = widget.product.tradePreference;
@@ -101,6 +100,19 @@ class _EditProductPageState extends State<EditProductPage> {
       }
     } catch (e) {
       debugPrint('Error taking photo: $e');
+    }
+  }
+
+  Future<void> _loadMeetupLocation() async {
+    try {
+      final location = await ProductService().fetchMeetupLocation(widget.product.id);
+      if (location != null && mounted) {
+        setState(() {
+          _locationController.text = location['location_name'] ?? location['address'] ?? '';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading meetup location: $e');
     }
   }
 
@@ -163,14 +175,10 @@ class _EditProductPageState extends State<EditProductPage> {
       }
       if (tradePreferences.isEmpty) tradePreferences = ['face_to_face'];
 
-      // 7. Format Description (Appending meeting location if face-to-face)
+      // 7. Format Description
       String finalDescription = _descriptionController.text.trim();
-      // Remove previous meeting location block if present to avoid duplicates
+      // Remove previous meeting location block if present to avoid duplicates (Legacy cleanup)
       finalDescription = finalDescription.split('\n\n---\nMeeting Location:')[0];
-      
-      if (_faceToFace && _locationController.text.isNotEmpty) {
-        finalDescription += '\n\n---\nMeeting Location:\n• ${_locationController.text}';
-      }
 
       final updateData = {
         'title': _titleController.text.trim(),
@@ -183,6 +191,15 @@ class _EditProductPageState extends State<EditProductPage> {
       };
 
       await context.read<ProductState>().updateProduct(widget.product.id, updateData);
+
+      // 8. Update Meetup Location in its own table
+      if (_faceToFace && _locationController.text.isNotEmpty) {
+        await productService.updateMeetupLocation(widget.product.id, {
+          'location_name': _locationController.text.trim(),
+          'address': _locationController.text.trim(),
+          'is_default': true,
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
