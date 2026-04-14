@@ -14,7 +14,7 @@ class ProductModel implements AppModel {
   final String condition;
   final String? imageUrl;
   final List<String>? images;
-  final String tradePreference;
+  final List<String> tradePreference;
   final bool openToOffers;
   final String status;
   final int viewCount;
@@ -34,7 +34,7 @@ class ProductModel implements AppModel {
     this.imageUrl,
     this.images,
     this.status = 'active',
-    this.tradePreference = 'face_to_face',
+    this.tradePreference = const ['face_to_face'],
     this.openToOffers = false,
     this.viewCount = 0,
     this.likesCount = 0,
@@ -54,7 +54,7 @@ class ProductModel implements AppModel {
     String? imageUrl,
     List<String>? images,
     String? status,
-    String? tradePreference,
+    List<String>? tradePreference,
     bool? openToOffers,
     int? viewCount,
     int? likesCount,
@@ -101,7 +101,7 @@ class ProductModel implements AppModel {
               : null),
       images: JsonUtils.asStringList(map['image_urls']),
       status: JsonUtils.asString(map['status']) ?? 'active',
-      tradePreference: JsonUtils.asString(map['trade_preference']) ?? 'face_to_face',
+      tradePreference: JsonUtils.asStringList(map['trade_preference']) ?? const ['face_to_face'],
       openToOffers: map['open_to_offers'] == true,
       viewCount: JsonUtils.asInt(map['view_count']) ?? 0,
       likesCount: JsonUtils.asInt(map['likes_count']) ?? 0,
