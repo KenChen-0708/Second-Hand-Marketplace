@@ -7,6 +7,24 @@ class UserState extends ChangeNotifier {
 
   UserModel? _currentUser;
   UserModel? get currentUser => _currentUser;
+  
+  bool get isAuthenticated => _authService.isLoggedIn();
+
+  /// Initialize: Checks if a session exists and loads the profile
+  Future<void> initialize() async {
+    if (_authService.isLoggedIn()) {
+      final email = _authService.supabase.auth.currentUser?.email;
+      if (email != null) {
+        try {
+          _currentUser = await _authService.fetchProfileByEmail(email);
+          notifyListeners();
+        } catch (e) {
+          // If profile fetch fails, logout to be safe
+          await logout();
+        }
+      }
+    }
+  }
 
   /// Standard Login
   Future<void> login(String email, String password) async {
@@ -28,7 +46,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Profile Update: Supports every field in your UserModel
+  /// Profile Update
   Future<void> updateProfile({
     String? name,
     String? phoneNumber,
@@ -41,7 +59,6 @@ class UserState extends ChangeNotifier {
   }) async {
     if (_currentUser == null) return;
 
-    // Create a copy of the current user with the new values
     final updatedUser = _currentUser!.copyWith(
       name: name,
       phoneNumber: phoneNumber,
@@ -55,10 +72,7 @@ class UserState extends ChangeNotifier {
     );
 
     try {
-      // Persist to Database
       await _authService.updateUserProfile(updatedUser);
-
-      // Update Local State
       _currentUser = updatedUser;
       notifyListeners();
     } catch (e) {
@@ -75,7 +89,7 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  /// Reset Password (Forgot Password)
+  /// Reset Password
   Future<void> resetPassword(String email) async {
     try {
       await _authService.resetPassword(email);

@@ -96,6 +96,26 @@ final _shellNavigatorAdminNotificationsKey = GlobalKey<NavigatorState>(
 final _router = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/',
+  redirect: (context, state) async {
+    final userState = context.read<UserState>();
+    
+    // If not authenticated and not on an auth-related page, redirect to login
+    final bool isLoggingIn = state.matchedLocation == '/' || 
+                           state.matchedLocation == '/register' ||
+                           state.matchedLocation == '/reset-password' ||
+                           state.matchedLocation == '/admin/login';
+
+    if (!userState.isAuthenticated) {
+      return isLoggingIn ? null : '/';
+    }
+
+    // If authenticated and trying to go to login/register, redirect to home
+    if (isLoggingIn && state.matchedLocation != '/reset-password') {
+      return '/home';
+    }
+
+    return null;
+  },
   routes: [
     GoRoute(path: '/', builder: (context, state) => const LoginPage()),
     GoRoute(
@@ -354,9 +374,13 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  late final UserState _userState;
+
   @override
   void initState() {
     super.initState();
+    _userState = UserState();
+    _userState.initialize(); // Auto-login on start
     _setupAuthListener();
   }
 
@@ -365,6 +389,11 @@ class _MyAppState extends State<MyApp> {
       final event = data.event;
       if (event == AuthChangeEvent.passwordRecovery) {
         _router.go('/reset-password');
+      }
+      
+      // Update isAuthenticated state whenever auth changes
+      if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
+        setState(() {});
       }
     });
   }
@@ -378,7 +407,7 @@ class _MyAppState extends State<MyApp> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeState()),
-        ChangeNotifierProvider(create: (_) => UserState()),
+        ChangeNotifierProvider.value(value: _userState),
         ChangeNotifierProvider(create: (_) => CategoryState()),
         ChangeNotifierProvider(create: (_) => ProductState()),
         ChangeNotifierProvider(create: (_) => CartState()),
