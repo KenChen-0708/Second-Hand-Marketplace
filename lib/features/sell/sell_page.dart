@@ -488,11 +488,8 @@ class _SellWizardState extends State<_SellWizard> {
       }
       if (tradePreferences.isEmpty) tradePreferences = ['face_to_face'];
 
-      // 7. Format Description (Appending meeting location if face-to-face)
+      // 7. Format Description
       String finalDescription = _descriptionController.text.trim();
-      if (_faceToFace && _locationController.text.isNotEmpty) {
-        finalDescription += '\n\n---\nMeeting Location:\n• ${_locationController.text}';
-      }
 
       // 8. Insert Product into Database
       final productData = <String, dynamic>{
@@ -512,7 +509,17 @@ class _SellWizardState extends State<_SellWizard> {
         productData['subcategory_id'] = subcategoryId;
       }
 
-      await productService.createProduct(productData);
+      final productId = await productService.createProduct(productData);
+
+      // 9. Insert Meetup Location into product_meetup_locations table
+      if (_faceToFace && _locationController.text.isNotEmpty) {
+        await productService.createMeetupLocation({
+          'product_id': productId,
+          'location_name': _locationController.text.trim(),
+          'address': _locationController.text.trim(),
+          'is_default': true,
+        });
+      }
 
       // Success
       if (mounted) {
