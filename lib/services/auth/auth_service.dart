@@ -55,7 +55,14 @@ class AuthService {
   Future<UserModel> loginUser(String email, String password) async {
     try {
       await supabase.auth.signInWithPassword(email: email, password: password);
-      return await fetchProfileByEmail(email);
+      final user = await fetchProfileByEmail(email);
+
+      if (!user.isActive) {
+        await logout(); // Immediately sign out if banned
+        throw Exception('Your account has been suspended. Please contact the administrator.');
+      }
+
+      return user;
     } on AuthException catch (e) {
       throw Exception(e.message);
     }

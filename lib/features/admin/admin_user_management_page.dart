@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../state/state.dart';
+import '../../models/models.dart';
 
 class AdminUserManagementPage extends StatefulWidget {
   const AdminUserManagementPage({super.key});
@@ -9,35 +12,18 @@ class AdminUserManagementPage extends StatefulWidget {
 }
 
 class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
-  // Mock data
-  final List<Map<String, dynamic>> _users = [
-    {
-      'name': 'Alice Smith',
-      'email': 'alice@university.edu',
-      'status': 'Active',
-    },
-    {'name': 'Bob Johnson', 'email': 'bob@university.edu', 'status': 'Banned'},
-    {
-      'name': 'Charlie Davis',
-      'email': 'charlie@university.edu',
-      'status': 'Warned',
-    },
-    {
-      'name': 'Diana Prince',
-      'email': 'diana@university.edu',
-      'status': 'Active',
-    },
-  ];
-
   String _searchQuery = '';
 
   @override
-  Widget build(BuildContext context) {
-    final filteredUsers = _users.where((u) {
-      final text = '${u['name']} ${u['email']}'.toLowerCase();
-      return text.contains(_searchQuery.toLowerCase());
-    }).toList();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminUserState>().fetchAllUsers();
+    });
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -68,99 +54,120 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: ListView.separated(
-                  itemCount: filteredUsers.length,
-                  separatorBuilder: (context, index) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    return ListTile(
-                      tileColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      leading: CircleAvatar(
-                        backgroundColor: _getStatusColor(
-                          user['status'] as String,
-                        ).withValues(alpha: 0.2),
-                        child: Text(
-                          (user['name'] as String)[0].toUpperCase(),
-                          style: TextStyle(
-                            color: _getStatusColor(user['status'] as String),
+                child: Consumer<AdminUserState>(
+                  builder: (context, adminState, child) {
+                    if (adminState.isLoading && adminState.users.isEmpty) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final filteredUsers = adminState.users.where((u) {
+                      final text = '${u.name} ${u.email}'.toLowerCase();
+                      return text.contains(_searchQuery.toLowerCase());
+                    }).toList();
+
+                    if (filteredUsers.isEmpty) {
+                      return const Center(child: Text('No users found.'));
+                    }
+
+                    return ListView.separated(
+                      itemCount: filteredUsers.length,
+                      separatorBuilder: (context, index) => const Divider(),
+                      itemBuilder: (context, index) {
+                        final user = filteredUsers[index];
+                        final statusLabel = user.isActive ? 'Active' : 'Banned';
+                        
+                        return ListTile(
+                          tileColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        ),
-                      ),
-                      title: Text(
-                        user['name'] as String,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(user['email'] as String),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getStatusColor(
-                                user['status'] as String,
-                              ).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          leading: CircleAvatar(
+                            backgroundColor: _getStatusColor(statusLabel)
+                                .withValues(alpha: 0.2),
                             child: Text(
-                              user['status'] as String,
+                              user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                               style: TextStyle(
-                                color: _getStatusColor(
-                                  user['status'] as String,
-                                ),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                color: _getStatusColor(statusLabel),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          PopupMenuButton<String>(
-                            onSelected: (val) {
-                              if (val == 'Block') {
-                                _confirmBlock(
-                                  user['name'] as String,
-                                  index,
-                                  filteredUsers,
-                                );
-                              } else if (val == 'Warn') {
-                                setState(() => user['status'] = 'Warned');
-                              } else if (val == 'Unblock') {
-                                setState(() => user['status'] = 'Active');
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              if (user['status'] != 'Banned')
-                                const PopupMenuItem(
-                                  value: 'Block',
-                                  child: Text(
-                                    'Block/Ban User',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ),
-                              if (user['status'] == 'Banned')
-                                const PopupMenuItem(
-                                  value: 'Unblock',
-                                  child: Text('Unblock User'),
-                                ),
-                              if (user['status'] != 'Banned')
-                                const PopupMenuItem(
-                                  value: 'Warn',
-                                  child: Text('Send Warning'),
-                                ),
+                          title: Text(
+                            user.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(user.email),
+                              Text(
+                                'Role: ${user.role}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ],
                           ),
-                        ],
-                      ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(statusLabel)
+                                      .withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  statusLabel,
+                                  style: TextStyle(
+                                    color: _getStatusColor(statusLabel),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              PopupMenuButton<String>(
+                                onSelected: (val) {
+                                  if (val == 'ToggleStatus') {
+                                    _confirmToggleStatus(user);
+                                  } else if (val == 'MakeAdmin') {
+                                    _updateRole(user, 'admin');
+                                  } else if (val == 'MakeUser') {
+                                    _updateRole(user, 'user');
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  PopupMenuItem(
+                                    value: 'ToggleStatus',
+                                    child: Text(
+                                      user.isActive ? 'Ban User' : 'Unban User',
+                                      style: TextStyle(
+                                        color: user.isActive ? Colors.red : Colors.green,
+                                      ),
+                                    ),
+                                  ),
+                                  if (user.role != 'admin')
+                                    const PopupMenuItem(
+                                      value: 'MakeAdmin',
+                                      child: Text('Promote to Admin'),
+                                    ),
+                                  if (user.role == 'admin')
+                                    const PopupMenuItem(
+                                      value: 'MakeUser',
+                                      child: Text('Demote to User'),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -175,16 +182,17 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
   Color _getStatusColor(String status) {
     if (status == 'Active') return Colors.green;
     if (status == 'Banned') return Colors.red;
-    return Colors.orange; // Warned
+    return Colors.orange;
   }
 
-  void _confirmBlock(String name, int index, List<dynamic> currentList) {
+  void _confirmToggleStatus(UserModel user) {
+    final action = user.isActive ? 'Ban' : 'Unban';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirm Ban'),
+        title: Text('Confirm $action'),
         content: Text(
-          'Are you sure you want to ban $name? This action will prevent the user from accessing their account.',
+          'Are you sure you want to $action ${user.name}?',
         ),
         actions: [
           TextButton(
@@ -192,20 +200,49 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              setState(() {
-                currentList[index]['status'] = 'Banned';
-              });
+            style: FilledButton.styleFrom(
+              backgroundColor: user.isActive ? Colors.red : Colors.green,
+            ),
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('User banned successfully.')),
-              );
+              try {
+                await context
+                    .read<AdminUserState>()
+                    .toggleUserStatus(user.id, user.isActive);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('User ${action}ned successfully.')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to $action user: $e')),
+                  );
+                }
+              }
             },
-            child: const Text('Ban User'),
+            child: Text('$action User'),
           ),
         ],
       ),
     );
+  }
+
+  void _updateRole(UserModel user, String newRole) async {
+    try {
+      await context.read<AdminUserState>().updateUserRole(user.id, newRole);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('User role updated to $newRole.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update role: $e')),
+        );
+      }
+    }
   }
 }
