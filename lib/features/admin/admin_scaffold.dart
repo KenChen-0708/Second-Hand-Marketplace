@@ -71,15 +71,14 @@ class AdminScaffold extends StatelessWidget {
                 size: 32,
               ),
               const SizedBox(width: 8),
-              if (!isMobile || isMobile)
-                const Text(
-                  'CampusAdmin',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const Text(
+                'CampusAdmin',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
             ],
           ),
           const SizedBox(height: 48),
@@ -98,6 +97,15 @@ class AdminScaffold extends StatelessWidget {
             isSelected: navigationShell.currentIndex == 1,
             onTap: () {
               navigationShell.goBranch(1);
+              if (isMobile) Navigator.pop(context);
+            },
+          ),
+          _NavItem(
+            icon: Icons.list_alt_rounded,
+            label: 'Listings',
+            isSelected: navigationShell.currentIndex == 2,
+            onTap: () {
+              navigationShell.goBranch(2);
               if (isMobile) Navigator.pop(context);
             },
           ),
@@ -125,9 +133,7 @@ class AdminScaffold extends StatelessWidget {
             label: 'Admin Logout',
             isSelected: false,
             onTap: () async {
-              // Logout from UserState
               await context.read<UserState>().logout();
-              // Navigate to login page
               if (context.mounted) {
                 context.go('/');
               }

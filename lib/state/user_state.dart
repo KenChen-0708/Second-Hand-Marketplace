@@ -17,6 +17,13 @@ class UserState extends ChangeNotifier {
       if (email != null) {
         try {
           _currentUser = await _authService.fetchProfileByEmail(email);
+
+          // Check if the account is active
+          if (_currentUser != null && !_currentUser!.isActive) {
+            await logout();
+            return;
+          }
+
           notifyListeners();
         } catch (e) {
           // If profile fetch fails, logout to be safe
