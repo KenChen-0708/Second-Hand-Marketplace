@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../state/state.dart';
 
 class AdminScaffold extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
@@ -119,9 +122,16 @@ class AdminScaffold extends StatelessWidget {
           const Spacer(),
           _NavItem(
             icon: Icons.logout_rounded,
-            label: 'Exit Admin',
+            label: 'Admin Logout',
             isSelected: false,
-            onTap: () => context.go('/'),
+            onTap: () async {
+              // Logout from UserState
+              await context.read<UserState>().logout();
+              // Navigate to login page
+              if (context.mounted) {
+                context.go('/');
+              }
+            },
           ),
           const SizedBox(height: 24),
         ],
