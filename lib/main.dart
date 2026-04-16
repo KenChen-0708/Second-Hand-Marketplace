@@ -426,7 +426,7 @@ class _MyAppState extends State<MyApp> {
         builder: (context, themeState, child) {
           return MaterialApp.router(
             debugShowCheckedModeBanner: false,
-            title: 'Campus Marketplace',
+            title: 'CampusSell',
             routerConfig: _router,
             themeMode: themeState.themeMode,
             theme: ThemeData(
