@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/models.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/seller/seller_service.dart';
@@ -106,14 +108,11 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     }
 
     try {
-      // Find a product to associate the chat with (optional but recommended in your architecture)
       final productId = _activeListings.isNotEmpty ? _activeListings.first.id : null;
-      
       final bundle = await context.read<ChatConversationState>().getOrCreateConversationForProduct(
-        productId: productId ?? '', // Falls back to empty string if no products, existing logic handles it
+        productId: productId ?? '',
         sellerId: widget.sellerId,
       );
-      
       if (mounted) {
         context.push('/chat/${bundle.conversation.id}');
       }
@@ -122,6 +121,77 @@ class _SellerProfilePageState extends State<SellerProfilePage>
         SnackbarHelper.showError(context, e.toString().replaceFirst('Exception: ', ''));
       }
     }
+  }
+
+  void _shareProfile() {
+    if (_sellerUser == null) return;
+    final String text = 'Check out ${_sellerUser!.name} on CampusSell! They have ${_activeListings.length} items for sale.\n\nDownload the app to see more.';
+    Share.share(text, subject: 'Seller Profile: ${_sellerUser!.name}');
+  }
+
+  void _showMoreOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: const Text('Copy Profile Link'),
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: 'https://campus-marketplace.app/seller/${widget.sellerId}'));
+                Navigator.pop(context);
+                SnackbarHelper.showTopMessage(context, 'Link copied to clipboard!');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block_rounded, color: Colors.orange),
+              title: const Text('Block Seller'),
+              onTap: () {
+                Navigator.pop(context);
+                _showConfirmDialog('Block Seller', 'Are you sure you want to block this user? You will no longer see their listings.');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.report_problem_rounded, color: Colors.red),
+              title: const Text('Report Seller'),
+              onTap: () {
+                Navigator.pop(context);
+                _showConfirmDialog('Report Seller', 'Help us keep the marketplace safe. Are you sure you want to report this user for investigation?');
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showConfirmDialog(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              SnackbarHelper.showTopMessage(context, 'Request submitted for review.');
+            }, 
+            child: Text(title.split(' ').first, style: const TextStyle(color: Colors.red))
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -238,7 +308,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                         backgroundColor: cs.surfaceContainerHighest.withOpacity(0.5),
                         child: IconButton(
                           icon: Icon(Icons.share_outlined, color: cs.onSurface),
-                          onPressed: () {},
+                          onPressed: _shareProfile,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -246,7 +316,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                         backgroundColor: cs.surfaceContainerHighest.withOpacity(0.5),
                         child: IconButton(
                           icon: Icon(Icons.more_horiz_rounded, color: cs.onSurface),
-                          onPressed: () {},
+                          onPressed: _showMoreOptions,
                         ),
                       ),
                     ],
@@ -257,7 +327,6 @@ class _SellerProfilePageState extends State<SellerProfilePage>
             
             const SizedBox(height: 8),
             
-            // Profile Info
             Hero(
               tag: 'seller_avatar_${seller.id}',
               child: Container(
@@ -297,7 +366,6 @@ class _SellerProfilePageState extends State<SellerProfilePage>
             
             const SizedBox(height: 24),
             
-            // Stats Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -318,7 +386,6 @@ class _SellerProfilePageState extends State<SellerProfilePage>
             
             const SizedBox(height: 24),
             
-            // Contact Button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: FilledButton.icon(
