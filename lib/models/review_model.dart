@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'app_model.dart';
 import 'json_utils.dart';
+import 'user_model.dart';
 
 class ReviewModel implements AppModel {
   @override
@@ -14,6 +15,9 @@ class ReviewModel implements AppModel {
   final String? comment;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  
+  // Joined fields
+  final UserModel? reviewer;
 
   const ReviewModel({
     required this.id,
@@ -26,6 +30,7 @@ class ReviewModel implements AppModel {
     this.comment,
     this.createdAt,
     this.updatedAt,
+    this.reviewer,
   });
 
   ReviewModel copyWith({
@@ -39,6 +44,7 @@ class ReviewModel implements AppModel {
     String? comment,
     DateTime? createdAt,
     DateTime? updatedAt,
+    UserModel? reviewer,
   }) {
     return ReviewModel(
       id: id ?? this.id,
@@ -51,6 +57,7 @@ class ReviewModel implements AppModel {
       comment: comment ?? this.comment,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      reviewer: reviewer ?? this.reviewer,
     );
   }
 
@@ -66,6 +73,9 @@ class ReviewModel implements AppModel {
       comment: JsonUtils.asString(map['comment']),
       createdAt: JsonUtils.asDateTime(map['created_at']),
       updatedAt: JsonUtils.asDateTime(map['updated_at']),
+      reviewer: map['reviewer'] != null 
+          ? UserModel.fromMap(map['reviewer'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -81,6 +91,7 @@ class ReviewModel implements AppModel {
       'comment': comment,
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
+      if (reviewer != null) 'reviewer': reviewer!.toMap(),
     };
   }
 
