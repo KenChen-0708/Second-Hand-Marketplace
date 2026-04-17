@@ -94,8 +94,6 @@ class OrderService {
           .order('created_at', ascending: false);
 
       // 2. Fetch orders where any item belongs to the user (seller)
-      // Note: We use a separate query because Supabase/PostgREST .or() filter 
-      // is limited across deep nested relations.
       final sellerResponse = await _supabase
           .from('orders')
           .select('*, buyer:users!orders_buyer_id_fkey(*), order_items!inner(*, products!inner(*, seller:users(*)))')
@@ -122,6 +120,36 @@ class OrderService {
       throw Exception(e.message);
     } catch (e) {
       throw Exception('Failed to fetch orders: $e');
+    }
+  }
+
+  Future<List<OrderModel>> getAllOrders() async {
+    try {
+      final response = await _supabase
+          .from('orders')
+          .select('*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*)))')
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((order) => OrderModel.fromMap(Map<String, dynamic>.from(order)))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to fetch all orders: $e');
+    }
+  }
+
+  Future<void> updateOrderStatus(String orderId, String status) async {
+    try {
+      await _supabase
+          .from('orders')
+          .update({'status': status})
+          .eq('id', orderId);
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to update order status: $e');
     }
   }
 

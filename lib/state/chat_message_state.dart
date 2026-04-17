@@ -40,6 +40,8 @@ class ChatMessageState extends EntityState<ChatMessageModel> {
   Future<ChatMessageModel> sendMessage({
     required String conversationId,
     required String messageText,
+    bool isImage = false,
+    String? imageUrl,
   }) async {
     final userId = await _authService.getCurrentUserId();
     if (userId == null || userId.isEmpty) {
@@ -51,6 +53,8 @@ class ChatMessageState extends EntityState<ChatMessageModel> {
         conversationId: conversationId,
         senderId: userId,
         messageText: messageText,
+        isImage: isImage,
+        imageUrl: imageUrl,
       );
       addItem(message);
       return message;

@@ -77,6 +77,15 @@ class _LoginPageState extends State<LoginPage> {
 
       await context.read<UserState>().login(email, password);
 
+      final userState = context.read<UserState>();
+      final currentUser = userState.currentUser;
+
+      // STRICT SEPARATION: Block admins from the student login portal
+      if (currentUser != null && currentUser.role == 'admin') {
+        await userState.logout();
+        throw Exception('Admin accounts must use the Admin Login portal at the bottom of the page.');
+      }
+
       // Save credentials for biometrics if enabled
       try {
         if (await _biometricService.isBiometricEnabled()) {
@@ -129,14 +138,20 @@ class _LoginPageState extends State<LoginPage> {
           credentials['password']!,
         );
 
+        final userState = context.read<UserState>();
+        if (userState.currentUser?.role == 'admin') {
+          await userState.logout();
+          throw Exception('Admins must use the Admin Login portal.');
+        }
+
         if (!mounted) return;
         context.go('/home');
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Biometric login failed: ${e.toString()}')),
-      );
+      setState(() {
+         _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      });
     } finally {
       if (mounted) {
         setState(() {

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../state/state.dart';
 
 class AdminScaffold extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
@@ -68,15 +71,14 @@ class AdminScaffold extends StatelessWidget {
                 size: 32,
               ),
               const SizedBox(width: 8),
-              if (!isMobile || isMobile)
-                const Text(
-                  'CampusAdmin',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const Text(
+                'CampusAdmin',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
             ],
           ),
           const SizedBox(height: 48),
@@ -95,6 +97,15 @@ class AdminScaffold extends StatelessWidget {
             isSelected: navigationShell.currentIndex == 1,
             onTap: () {
               navigationShell.goBranch(1);
+              if (isMobile) Navigator.pop(context);
+            },
+          ),
+          _NavItem(
+            icon: Icons.list_alt_rounded,
+            label: 'Listings',
+            isSelected: navigationShell.currentIndex == 2,
+            onTap: () {
+              navigationShell.goBranch(2);
               if (isMobile) Navigator.pop(context);
             },
           ),
@@ -119,9 +130,14 @@ class AdminScaffold extends StatelessWidget {
           const Spacer(),
           _NavItem(
             icon: Icons.logout_rounded,
-            label: 'Exit Admin',
+            label: 'Admin Logout',
             isSelected: false,
-            onTap: () => context.go('/'),
+            onTap: () async {
+              await context.read<UserState>().logout();
+              if (context.mounted) {
+                context.go('/');
+              }
+            },
           ),
           const SizedBox(height: 24),
         ],

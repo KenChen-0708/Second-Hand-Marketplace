@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
+import '../../services/product/product_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -19,6 +20,7 @@ class ProductDetailPage extends StatefulWidget {
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
   late Future<_ProductDetailData> _productDetailFuture;
+  bool _isOpeningSellerChat = false;
 
   @override
   void initState() {
@@ -44,9 +46,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ? null
         : UserModel.fromMap(Map<String, dynamic>.from(sellerData));
 
-    await context.read<FavoriteState>().syncFavoriteStatus(product.id);
+    final meetupLocation = await ProductService().fetchMeetupLocation(product.id);
 
-    return _ProductDetailData(product: product, seller: seller);
+    return _ProductDetailData(
+      product: product,
+      seller: seller,
+      meetupLocation: meetupLocation,
+    );
   }
 
   void _reloadProduct() {
@@ -96,6 +102,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     BuildContext context,
     ProductModel product,
   ) async {
+    if (_isOpeningSellerChat) {
+      return;
+    }
+
     if (!await _promptLoginIfNeeded(context)) {
       return;
     }
@@ -106,12 +116,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return;
     }
 
+    setState(() => _isOpeningSellerChat = true);
     try {
       final bundle = await context
           .read<ChatConversationState>()
           .getOrCreateConversationForProduct(
-            productId: product.id,
-            sellerId: product.sellerId,
+            product: product,
           );
       if (!context.mounted) {
         return;
@@ -122,6 +132,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         return;
       }
       _showMessage(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningSellerChat = false);
+      }
     }
   }
 
@@ -273,6 +287,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final isFavorite = favoriteState.isFavorite(product.id);
         final isOwner =
             context.watch<UserState>().currentUser?.id == product.sellerId;
+        final isChatButtonDisabled = isOwner || _isOpeningSellerChat;
 
         return Scaffold(
           backgroundColor: Theme.of(context).colorScheme.surface,
@@ -283,7 +298,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   SliverAppBar(
                     expandedHeight: 350,
                     pinned: true,
-                    backgroundColor: Colors.transparent,
+                    backgroundColor: Theme.of(context).colorScheme.surface,
                     elevation: 0,
                     leading: Padding(
                       padding: const EdgeInsets.all(8.0),
@@ -352,12 +367,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                     ],
                     flexibleSpace: FlexibleSpaceBar(
-                      background: Hero(
-                        tag: 'product_image_${product.id}',
-                        child: ImageHelper.productImage(
-                          product.imageUrl,
-                          fit: BoxFit.cover,
-                        ),
+                      background: _ImageCarousel(
+                        images: product.images ?? (product.imageUrl != null ? [product.imageUrl!] : []),
+                        productId: product.id,
                       ),
                     ),
                   ),
@@ -448,7 +460,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            '\$${product.price.toStringAsFixed(2)}',
+                            'RM ${product.price.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.w900,
@@ -471,6 +483,83 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               height: 1.5,
                             ),
                           ),
+                          const SizedBox(height: 24),
+                          // --- Added Trade Details Section ---
+                          Text(
+                            'Trade Details',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: product.tradePreference.map((pref) {
+                              String label = pref;
+                              IconData icon = Icons.help_outline_rounded;
+                              if (pref == 'face_to_face') {
+                                label = 'Face-to-Face';
+                                icon = Icons.handshake_rounded;
+                              } else if (pref.startsWith('delivery_')) {
+                                label = pref == 'delivery_official' ? 'Official Delivery' : 'Self-Delivery';
+                                icon = Icons.local_shipping_rounded;
+                              }
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
+                                    const SizedBox(width: 6),
+                                    Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          if (detail.meetupLocation != null) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[50],
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey[200]!),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.location_on_rounded, size: 18, color: Colors.redAccent),
+                                      const SizedBox(width: 8),
+                                      const Text('Meeting Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    detail.meetupLocation!['location_name'] ?? 'N/A',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  ),
+                                  if (detail.meetupLocation!['address'] != null && 
+                                      detail.meetupLocation!['address'] != detail.meetupLocation!['location_name'])
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        detail.meetupLocation!['address'],
+                                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           Text(
                             'Sold By',
@@ -528,14 +617,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(
-                                  Icons.chat_bubble_outline_rounded,
-                                ),
-                                color: isOwner
+                                icon: _isOpeningSellerChat
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.chat_bubble_outline_rounded,
+                                      ),
+                                color: isChatButtonDisabled
                                     ? Theme.of(context).disabledColor
                                     : Theme.of(context).colorScheme.primary,
                                 tooltip: 'Chat with seller',
-                                onPressed: isOwner
+                                onPressed: isChatButtonDisabled
                                     ? null
                                     : () => _openSellerChat(context, product),
                               ),
@@ -754,10 +851,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 }
 
 class _ProductDetailData {
-  const _ProductDetailData({required this.product, required this.seller});
+  const _ProductDetailData({
+    required this.product,
+    required this.seller,
+    this.meetupLocation,
+  });
 
   final ProductModel product;
   final UserModel? seller;
+  final Map<String, dynamic>? meetupLocation;
 }
 
 class _PurchaseSelection {
@@ -791,14 +893,13 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
   void initState() {
     super.initState();
     _options = _buildOptions(widget.product);
-    _selectedOption = _options.first;
+    _selectedOption = _options.isNotEmpty ? _options.first : 'Standard';
   }
 
   List<String> _buildOptions(ProductModel product) {
     final options = <String>[
       if (product.condition.isNotEmpty) product.condition,
-      if (product.tradePreference.isNotEmpty)
-        _formatTradePreference(product.tradePreference),
+      ...product.tradePreference.map(_formatTradePreference),
       if (product.openToOffers) 'Negotiable',
     ].toSet().toList();
 
@@ -870,7 +971,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '\$${product.price.toStringAsFixed(2)}',
+                            'RM ${product.price.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontSize: 24,
@@ -886,8 +987,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                 Text(
                   'Variation',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -909,8 +1010,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                     Text(
                       'Quantity',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const Spacer(),
                     _QuantityButton(
@@ -939,6 +1040,12 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                     onPressed: () => Navigator.pop(
                       context,
                       _PurchaseSelection(
@@ -947,7 +1054,11 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                       ),
                     ),
                     icon: Icon(widget.actionIcon),
-                    label: Text(widget.actionLabel),
+                    label: Text(
+                      widget.actionLabel,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ],
@@ -960,7 +1071,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
 }
 
 class _QuantityButton extends StatelessWidget {
-  const _QuantityButton({required this.icon, required this.onPressed});
+  const _QuantityButton({required this.icon, this.onPressed});
 
   final IconData icon;
   final VoidCallback? onPressed;
@@ -980,6 +1091,83 @@ class _QuantityButton extends StatelessWidget {
         ),
         child: Icon(icon, size: 18),
       ),
+    );
+  }
+}
+
+class _ImageCarousel extends StatefulWidget {
+  final List<String> images;
+  final String productId;
+
+  const _ImageCarousel({required this.images, required this.productId});
+
+  @override
+  State<_ImageCarousel> createState() => _ImageCarouselState();
+}
+
+class _ImageCarouselState extends State<_ImageCarousel> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.images.isEmpty) {
+      return Hero(
+        tag: 'product_image_${widget.productId}',
+        child: ImageHelper.productImage(null, fit: BoxFit.cover),
+      );
+    }
+
+    return Stack(
+      children: [
+        PageView.builder(
+          itemCount: widget.images.length,
+          onPageChanged: (index) => setState(() => _currentIndex = index),
+          itemBuilder: (context, index) {
+            return Hero(
+              tag:
+                  index == 0
+                      ? 'product_image_${widget.productId}'
+                      : 'product_image_${widget.productId}_$index',
+              child: ImageHelper.productImage(
+                widget.images[index],
+                fit: BoxFit.cover,
+              ),
+            );
+          },
+        ),
+        if (widget.images.length > 1)
+          Positioned(
+            bottom: 30, // Above the curved content container
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                widget.images.length,
+                (index) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: _currentIndex == index ? 24 : 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color:
+                        _currentIndex == index
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

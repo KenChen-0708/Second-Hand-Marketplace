@@ -148,11 +148,58 @@ class ProductService {
     }
   }
 
-  Future<void> createProduct(Map<String, dynamic> productData) async {
+  Future<String> createProduct(Map<String, dynamic> productData) async {
     try {
-      await _supabase.from('products').insert(productData);
+      final response = await _supabase
+          .from('products')
+          .insert(productData)
+          .select('id')
+          .single();
+      return response['id'] as String;
     } catch (e) {
       throw Exception('Failed to create product: $e');
+    }
+  }
+
+  Future<void> createMeetupLocation(Map<String, dynamic> locationData) async {
+    try {
+      await _supabase.from('product_meetup_locations').insert(locationData);
+    } catch (e) {
+      throw Exception('Failed to create meetup location: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchMeetupLocation(String productId) async {
+    try {
+      final data = await _supabase
+          .from('product_meetup_locations')
+          .select()
+          .eq('product_id', productId)
+          .maybeSingle();
+      return data != null ? Map<String, dynamic>.from(data) : null;
+    } catch (e) {
+      throw Exception('Failed to fetch meetup location: $e');
+    }
+  }
+
+  Future<void> updateMeetupLocation(String productId, Map<String, dynamic> locationData) async {
+    try {
+      // First check if a location exists for this product
+      final existing = await fetchMeetupLocation(productId);
+      if (existing != null) {
+        await _supabase
+            .from('product_meetup_locations')
+            .update(locationData)
+            .eq('product_id', productId);
+      } else {
+        await createMeetupLocation({
+          ...locationData,
+          'product_id': productId,
+          'is_default': true,
+        });
+      }
+    } catch (e) {
+      throw Exception('Failed to update meetup location: $e');
     }
   }
 
