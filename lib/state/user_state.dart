@@ -8,6 +8,9 @@ class UserState extends ChangeNotifier {
   UserModel? _currentUser;
   UserModel? get currentUser => _currentUser;
   
+  bool _isInitialized = false;
+  bool get isInitialized => _isInitialized;
+
   bool get isAuthenticated => _authService.isLoggedIn();
 
   /// Initialize: Checks if a session exists and loads the profile
@@ -17,13 +20,20 @@ class UserState extends ChangeNotifier {
       if (email != null) {
         try {
           _currentUser = await _authService.fetchProfileByEmail(email);
-          notifyListeners();
+
+          // Check if the account is active
+          if (_currentUser != null && !_currentUser!.isActive) {
+            await logout();
+            return;
+          }
         } catch (e) {
           // If profile fetch fails, logout to be safe
           await logout();
         }
       }
     }
+    _isInitialized = true;
+    notifyListeners();
   }
 
   /// Standard Login

@@ -98,20 +98,37 @@ final _router = GoRouter(
   initialLocation: '/',
   redirect: (context, state) async {
     final userState = context.read<UserState>();
+    final user = userState.currentUser;
     
-    // If not authenticated and not on an auth-related page, redirect to login
+    // Auth-related pages
     final bool isLoggingIn = state.matchedLocation == '/' || 
                            state.matchedLocation == '/register' ||
                            state.matchedLocation == '/reset-password' ||
                            state.matchedLocation == '/admin/login';
 
+    // If not authenticated, only allow auth pages
     if (!userState.isAuthenticated) {
       return isLoggingIn ? null : '/';
     }
 
-    // If authenticated and trying to go to login/register, redirect to home
+    // --- PROTECTED ROUTES (If Logged In) ---
+
+    // 1. Prevent non-admins from entering /admin/*
+    if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
+      if (user != null && user.role != 'admin') {
+        return '/home'; // Kick users back to marketplace
+      }
+    }
+
+    // 2. Prevent admins from entering /home or other user pages (Optional, but cleaner)
+    // if (user != null && user.role == 'admin' && !state.matchedLocation.startsWith('/admin')) {
+    //   return '/admin/dashboard';
+    // }
+
+    // 3. If authenticated and trying to go to login/register, redirect to appropriate home
     if (isLoggingIn && state.matchedLocation != '/reset-password') {
-      return '/home';
+       if (user?.role == 'admin') return '/admin/dashboard';
+       return '/home';
     }
 
     return null;
@@ -426,6 +443,7 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => FavoriteState()),
         ChangeNotifierProvider(create: (_) => DisputeState()),
         ChangeNotifierProvider(create: (_) => AdminLogState()),
+        ChangeNotifierProvider(create: (_) => AdminUserState()),
       ],
       child: Consumer<ThemeState>(
         builder: (context, themeState, child) {

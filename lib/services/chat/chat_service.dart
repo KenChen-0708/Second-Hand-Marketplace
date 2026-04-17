@@ -4,6 +4,8 @@ import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
 
 class ChatService {
+  static const String _productSharePrefix = '[product_share]';
+
   ChatService({SupabaseClient? client})
     : _supabase = client ?? Supabase.instance.client;
 
@@ -159,6 +161,42 @@ class ChatService {
       return existing['id'] as String;
     }
 
+    final existingSellerChat = await _supabase
+        .from('chat_conversations')
+        .select('id, product_id')
+        .eq('buyer_id', buyerId)
+        .eq('seller_id', sellerId)
+        .order('last_message_at', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    if (existingSellerChat != null) {
+      final conversationId = existingSellerChat['id'] as String;
+      final currentProductId = existingSellerChat['product_id'] as String?;
+      if (currentProductId != productId) {
+        try {
+          await _supabase
+              .from('chat_conversations')
+              .update({'product_id': productId})
+              .eq('id', conversationId);
+        } on PostgrestException catch (e) {
+          if (e.code == '23505') {
+            final exactConversation = await _supabase
+                .from('chat_conversations')
+                .select('id')
+                .eq('product_id', productId)
+                .eq('buyer_id', buyerId)
+                .eq('seller_id', sellerId)
+                .single();
+            return exactConversation['id'] as String;
+          }
+          rethrow;
+        }
+      }
+      return conversationId;
+    }
+
     try {
       final inserted = await _supabase
           .from('chat_conversations')
@@ -190,6 +228,8 @@ class ChatService {
     required String conversationId,
     required String senderId,
     required String messageText,
+    bool isImage = false,
+    String? imageUrl,
   }) async {
     try {
       final inserted = await _supabase
@@ -198,6 +238,8 @@ class ChatService {
             'conversation_id': conversationId,
             'sender_id': senderId,
             'message_text': messageText,
+            'is_image': isImage,
+            'image_url': imageUrl,
             'is_read': false,
           })
           .select()
@@ -219,6 +261,20 @@ class ChatService {
     } catch (e) {
       throw Exception('Unable to send message right now.');
     }
+  }
+
+  Future<ChatMessageModel> sendSharedProductMessage({
+    required String conversationId,
+    required String senderId,
+    required ProductModel product,
+  }) {
+    return sendMessage(
+      conversationId: conversationId,
+      senderId: senderId,
+      messageText: encodeSharedProduct(product),
+      isImage: true,
+      imageUrl: ImageHelper.productOrDefault(product.imageUrl),
+    );
   }
 
   Future<void> markConversationAsRead({
@@ -272,6 +328,52 @@ class ChatService {
       return b.conversation.id.compareTo(a.conversation.id);
     });
   }
+
+  static String encodeSharedProduct(ProductModel product) {
+    return '$_productSharePrefix${product.toJson()}';
+  }
+
+  static SharedProductMessage? parseSharedProduct(ChatMessageModel? message) {
+    final raw = message?.messageText ?? '';
+    if (!raw.startsWith(_productSharePrefix)) {
+      return null;
+    }
+
+    try {
+      final json = raw.substring(_productSharePrefix.length);
+      final product = ProductModel.fromJson(json);
+      return SharedProductMessage(product: product);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String previewText(ChatMessageModel? message) {
+    if (message == null) {
+      return 'No messages yet';
+    }
+
+    final sharedProduct = parseSharedProduct(message);
+    if (sharedProduct != null) {
+      return 'Shared product: ${sharedProduct.product.title}';
+    }
+
+    if (message.isImage) {
+      if (message.messageText.trim().isNotEmpty) {
+        return message.messageText;
+      }
+      return 'Sent a photo';
+    }
+
+    final text = message.messageText.trim();
+    return text.isEmpty ? 'No messages yet' : text;
+  }
+}
+
+class SharedProductMessage {
+  const SharedProductMessage({required this.product});
+
+  final ProductModel product;
 }
 
 class ChatConversationBundle {
