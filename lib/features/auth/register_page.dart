@@ -20,8 +20,16 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
+  
+  double _strengthValue = 0;
+  String _strengthLabel = '';
+  Color _strengthColor = Colors.grey;
 
-  // REMOVED: AuthService instance. UI only talks to UserState.
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(_checkPasswordStrength);
+  }
 
   @override
   void dispose() {
@@ -29,6 +37,41 @@ class _RegisterPageState extends State<RegisterPage> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _checkPasswordStrength() {
+    final password = _passwordController.text;
+    if (password.isEmpty) {
+      setState(() {
+        _strengthValue = 0;
+        _strengthLabel = '';
+        _strengthColor = Colors.grey;
+      });
+      return;
+    }
+
+    double score = 0;
+    if (password.length >= 8) score += 0.25;
+    if (RegExp(r'[A-Z]').hasMatch(password)) score += 0.25;
+    if (RegExp(r'[0-9]').hasMatch(password)) score += 0.25;
+    if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) score += 0.25;
+
+    setState(() {
+      _strengthValue = score;
+      if (score <= 0.25) {
+        _strengthLabel = 'Weak';
+        _strengthColor = Colors.red;
+      } else if (score <= 0.5) {
+        _strengthLabel = 'Fair';
+        _strengthColor = Colors.orange;
+      } else if (score <= 0.75) {
+        _strengthLabel = 'Good';
+        _strengthColor = Colors.blue;
+      } else {
+        _strengthLabel = 'Strong';
+        _strengthColor = Colors.green;
+      }
+    });
   }
 
   Future<void> _handleRegister() async {
@@ -42,8 +85,6 @@ class _RegisterPageState extends State<RegisterPage> {
     });
 
     try {
-      // 🔥 THE CLEAN WAY: UI -> STATE
-      // UserState handles the Service call and updates its own memory.
       await context.read<UserState>().register(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -51,8 +92,6 @@ class _RegisterPageState extends State<RegisterPage> {
       );
 
       if (!mounted) return;
-
-      // Navigate only after State confirms registration was successful.
       context.go('/home');
     } catch (e) {
       if (!mounted) return;
@@ -85,7 +124,7 @@ class _RegisterPageState extends State<RegisterPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Join the Campus Marketplace',
+                  'Join CampusSell',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -154,8 +193,42 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  validator: (v) => v!.length < 6 ? 'Password must be at least 6 characters' : null,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Password is required';
+                    if (v.length < 6) return 'Minimum 6 characters required';
+                    return null;
+                  },
                 ),
+                
+                // Password Strength Indicator
+                if (_passwordController.text.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: LinearProgressIndicator(
+                            value: _strengthValue,
+                            backgroundColor: Colors.grey[200],
+                            color: _strengthColor,
+                            minHeight: 6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _strengthLabel,
+                        style: TextStyle(
+                          color: _strengthColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
                 const SizedBox(height: 32),
 
                 FilledButton(

@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
-import '../../shared/utils/currency_helper.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
+import '../../services/product/product_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -47,42 +46,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ? null
         : UserModel.fromMap(Map<String, dynamic>.from(sellerData));
 
-    String? categoryName;
-    if (product.categoryId != null && product.categoryId!.isNotEmpty) {
-      final categoryData = await Supabase.instance.client
-          .from('categories')
-          .select('name')
-          .eq('id', product.categoryId!)
-          .maybeSingle();
-      categoryName = categoryData?['name']?.toString();
-    }
-
-    final reviewData = await Supabase.instance.client
-        .from('reviews')
-        .select('id, rating, title, comment, created_at, reviewer:users!reviews_reviewer_id_fkey(id, name, avatar_url)')
-        .eq('product_id', product.id)
-        .order('created_at', ascending: false);
-
-    final buyerComments = (reviewData as List)
-        .map(
-          (item) => _BuyerComment.fromMap(
-            Map<String, dynamic>.from(item as Map),
-          ),
-        )
-        .where(
-          (comment) =>
-              comment.title.trim().isNotEmpty ||
-              comment.comment.trim().isNotEmpty,
-        )
-        .toList();
-
-    await context.read<FavoriteState>().syncFavoriteStatus(product.id);
+    final meetupLocation = await ProductService().fetchMeetupLocation(product.id);
 
     return _ProductDetailData(
       product: product,
       seller: seller,
-      categoryName: categoryName,
-      buyerComments: buyerComments,
+      meetupLocation: meetupLocation,
     );
   }
 
@@ -309,9 +278,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final detail = snapshot.data!;
         final product = detail.product;
         final seller = detail.seller;
-        final categoryName = detail.categoryName ?? 'Uncategorized';
         final sellerName = seller?.name ?? 'Seller';
-        final sellerAvatar = seller?.avatarUrl ?? 'https://i.pravatar.cc/150';
+        
+        // Dynamic Avatar Resolution
+        final sellerAvatar = ImageHelper.resolveProfileImageUrl(seller?.avatarUrl, name: seller?.name);
+
         final favoriteState = context.watch<FavoriteState>();
         final isFavorite = favoriteState.isFavorite(product.id);
         final isOwner =
@@ -327,7 +298,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   SliverAppBar(
                     expandedHeight: 350,
                     pinned: true,
-                    backgroundColor: Colors.transparent,
+                    backgroundColor: Theme.of(context).colorScheme.surface,
                     elevation: 0,
                     leading: Padding(
                       padding: const EdgeInsets.all(8.0),
@@ -396,12 +367,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                     ],
                     flexibleSpace: FlexibleSpaceBar(
-                      background: Hero(
-                        tag: 'product_image_${product.id}',
-                        child: ImageHelper.productImage(
-                          product.imageUrl,
-                          fit: BoxFit.cover,
-                        ),
+                      background: _ImageCarousel(
+                        images: product.images ?? (product.imageUrl != null ? [product.imageUrl!] : []),
+                        productId: product.id,
                       ),
                     ),
                   ),
@@ -492,31 +460,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            CurrencyHelper.formatRM(product.price),
+                            'RM ${product.price.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.w900,
                               fontSize: 28,
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              _buildInfoChip(
-                                context,
-                                icon: Icons.category_outlined,
-                                label: categoryName,
-                              ),
-                              _buildInfoChip(
-                                context,
-                                icon: Icons.swap_horiz_rounded,
-                                label: _formatTradePreference(
-                                  product.tradePreference,
-                                ),
-                              ),
-                            ],
                           ),
                           const SizedBox(height: 24),
                           Text(
@@ -535,38 +484,82 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             ),
                           ),
                           const SizedBox(height: 24),
+                          // --- Added Trade Details Section ---
                           Text(
-                            'Buyer Comments',
+                            'Trade Details',
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 12),
-                          if (detail.buyerComments.isEmpty)
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: product.tradePreference.map((pref) {
+                              String label = pref;
+                              IconData icon = Icons.help_outline_rounded;
+                              if (pref == 'face_to_face') {
+                                label = 'Face-to-Face';
+                                icon = Icons.handshake_rounded;
+                              } else if (pref.startsWith('delivery_')) {
+                                label = pref == 'delivery_official' ? 'Official Delivery' : 'Self-Delivery';
+                                icon = Icons.local_shipping_rounded;
+                              }
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
+                                    const SizedBox(width: 6),
+                                    Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          if (detail.meetupLocation != null) ...[
+                            const SizedBox(height: 16),
                             Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.all(18),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(20),
+                                color: Colors.grey[50],
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey[200]!),
                               ),
-                              child: Text(
-                                'No buyer comments yet for this product.',
-                                style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                            )
-                          else
-                            ...detail.buyerComments.map(
-                              (comment) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _BuyerCommentCard(comment: comment),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.location_on_rounded, size: 18, color: Colors.redAccent),
+                                      const SizedBox(width: 8),
+                                      const Text('Meeting Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    detail.meetupLocation!['location_name'] ?? 'N/A',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  ),
+                                  if (detail.meetupLocation!['address'] != null && 
+                                      detail.meetupLocation!['address'] != detail.meetupLocation!['location_name'])
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        detail.meetupLocation!['address'],
+                                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
+                          ],
                           const SizedBox(height: 24),
                           Text(
                             'Sold By',
@@ -861,14 +854,12 @@ class _ProductDetailData {
   const _ProductDetailData({
     required this.product,
     required this.seller,
-    required this.categoryName,
-    required this.buyerComments,
+    this.meetupLocation,
   });
 
   final ProductModel product;
   final UserModel? seller;
-  final String? categoryName;
-  final List<_BuyerComment> buyerComments;
+  final Map<String, dynamic>? meetupLocation;
 }
 
 class _PurchaseSelection {
@@ -902,14 +893,13 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
   void initState() {
     super.initState();
     _options = _buildOptions(widget.product);
-    _selectedOption = _options.first;
+    _selectedOption = _options.isNotEmpty ? _options.first : 'Standard';
   }
 
   List<String> _buildOptions(ProductModel product) {
     final options = <String>[
       if (product.condition.isNotEmpty) product.condition,
-      if (product.tradePreference.isNotEmpty)
-        _formatTradePreference(product.tradePreference),
+      ...product.tradePreference.map(_formatTradePreference),
       if (product.openToOffers) 'Negotiable',
     ].toSet().toList();
 
@@ -981,7 +971,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            CurrencyHelper.formatRM(product.price),
+                            'RM ${product.price.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontSize: 24,
@@ -997,8 +987,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                 Text(
                   'Variation',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -1020,8 +1010,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                     Text(
                       'Quantity',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const Spacer(),
                     _QuantityButton(
@@ -1050,6 +1040,12 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                     onPressed: () => Navigator.pop(
                       context,
                       _PurchaseSelection(
@@ -1058,7 +1054,11 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                       ),
                     ),
                     icon: Icon(widget.actionIcon),
-                    label: Text(widget.actionLabel),
+                    label: Text(
+                      widget.actionLabel,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ],
@@ -1070,188 +1070,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
   }
 }
 
-Widget _buildInfoChip(
-  BuildContext context, {
-  required IconData icon,
-  required String label,
-}) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ],
-    ),
-  );
-}
-
-String _formatTradePreference(String tradePreference) {
-  switch (tradePreference) {
-    case 'delivery_official':
-      return 'Official Delivery';
-    case 'delivery_self':
-      return 'Seller Delivery';
-    case 'face_to_face':
-      return 'Meet Up';
-    default:
-      return tradePreference
-          .split('_')
-          .map(
-            (word) => word.isEmpty
-                ? word
-                : '${word[0].toUpperCase()}${word.substring(1)}',
-          )
-          .join(' ');
-  }
-}
-
-class _BuyerComment {
-  const _BuyerComment({
-    required this.id,
-    required this.rating,
-    required this.title,
-    required this.comment,
-    required this.createdAt,
-    required this.reviewerName,
-    required this.reviewerAvatarUrl,
-  });
-
-  final String id;
-  final int rating;
-  final String title;
-  final String comment;
-  final DateTime? createdAt;
-  final String reviewerName;
-  final String? reviewerAvatarUrl;
-
-  factory _BuyerComment.fromMap(Map<String, dynamic> map) {
-    final reviewer =
-        (map['reviewer'] as Map?)?.cast<String, dynamic>() ??
-        <String, dynamic>{};
-    return _BuyerComment(
-      id: map['id']?.toString() ?? '',
-      rating: (map['rating'] as num?)?.toInt() ?? 0,
-      title: map['title']?.toString() ?? '',
-      comment: map['comment']?.toString() ?? '',
-      createdAt: DateTime.tryParse(map['created_at']?.toString() ?? ''),
-      reviewerName: reviewer['name']?.toString() ?? 'Buyer',
-      reviewerAvatarUrl: reviewer['avatar_url']?.toString(),
-    );
-  }
-}
-
-class _BuyerCommentCard extends StatelessWidget {
-  const _BuyerCommentCard({required this.comment});
-
-  final _BuyerComment comment;
-
-  @override
-  Widget build(BuildContext context) {
-    final dateLabel = comment.createdAt == null
-        ? null
-        : DateFormat('dd MMM yyyy').format(comment.createdAt!);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundImage: comment.reviewerAvatarUrl != null
-                    ? NetworkImage(comment.reviewerAvatarUrl!)
-                    : null,
-                child: comment.reviewerAvatarUrl == null
-                    ? Text(
-                        comment.reviewerName.isNotEmpty
-                            ? comment.reviewerName[0].toUpperCase()
-                            : 'B',
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      comment.reviewerName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    if (dateLabel != null)
-                      Text(
-                        dateLabel,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Row(
-                children: List.generate(
-                  5,
-                  (index) => Icon(
-                    index < comment.rating ? Icons.star_rounded : Icons.star_border_rounded,
-                    size: 16,
-                    color: const Color(0xFFF59E0B),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (comment.title.trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              comment.title.trim(),
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ],
-          if (comment.comment.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              comment.comment.trim(),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _QuantityButton extends StatelessWidget {
-  const _QuantityButton({required this.icon, required this.onPressed});
+  const _QuantityButton({required this.icon, this.onPressed});
 
   final IconData icon;
   final VoidCallback? onPressed;
@@ -1271,6 +1091,83 @@ class _QuantityButton extends StatelessWidget {
         ),
         child: Icon(icon, size: 18),
       ),
+    );
+  }
+}
+
+class _ImageCarousel extends StatefulWidget {
+  final List<String> images;
+  final String productId;
+
+  const _ImageCarousel({required this.images, required this.productId});
+
+  @override
+  State<_ImageCarousel> createState() => _ImageCarouselState();
+}
+
+class _ImageCarouselState extends State<_ImageCarousel> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.images.isEmpty) {
+      return Hero(
+        tag: 'product_image_${widget.productId}',
+        child: ImageHelper.productImage(null, fit: BoxFit.cover),
+      );
+    }
+
+    return Stack(
+      children: [
+        PageView.builder(
+          itemCount: widget.images.length,
+          onPageChanged: (index) => setState(() => _currentIndex = index),
+          itemBuilder: (context, index) {
+            return Hero(
+              tag:
+                  index == 0
+                      ? 'product_image_${widget.productId}'
+                      : 'product_image_${widget.productId}_$index',
+              child: ImageHelper.productImage(
+                widget.images[index],
+                fit: BoxFit.cover,
+              ),
+            );
+          },
+        ),
+        if (widget.images.length > 1)
+          Positioned(
+            bottom: 30, // Above the curved content container
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                widget.images.length,
+                (index) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: _currentIndex == index ? 24 : 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color:
+                        _currentIndex == index
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

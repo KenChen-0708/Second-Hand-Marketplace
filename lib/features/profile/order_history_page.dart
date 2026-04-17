@@ -326,9 +326,13 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
                         isBuyer ? 'Bought from ' : 'Sold to ',
                         style: TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
-                      Text(
-                        otherPartyName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      Flexible(
+                        child: Text(
+                          otherPartyName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       const Spacer(),
                       Text(
@@ -478,12 +482,16 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
         children: [
           Icon(info.icon, size: 12, color: info.color),
           const SizedBox(width: 4),
-          Text(
-            info.label,
-            style: TextStyle(
-              color: info.color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+          Flexible(
+            child: Text(
+              info.label,
+              style: TextStyle(
+                color: info.color,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

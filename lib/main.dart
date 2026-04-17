@@ -96,6 +96,43 @@ final _shellNavigatorAdminNotificationsKey = GlobalKey<NavigatorState>(
 final _router = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/',
+  redirect: (context, state) async {
+    final userState = context.read<UserState>();
+    final user = userState.currentUser;
+    
+    // Auth-related pages
+    final bool isLoggingIn = state.matchedLocation == '/' || 
+                           state.matchedLocation == '/register' ||
+                           state.matchedLocation == '/reset-password' ||
+                           state.matchedLocation == '/admin/login';
+
+    // If not authenticated, only allow auth pages
+    if (!userState.isAuthenticated) {
+      return isLoggingIn ? null : '/';
+    }
+
+    // --- PROTECTED ROUTES (If Logged In) ---
+
+    // 1. Prevent non-admins from entering /admin/*
+    if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
+      if (user != null && user.role != 'admin') {
+        return '/home'; // Kick users back to marketplace
+      }
+    }
+
+    // 2. Prevent admins from entering /home or other user pages (Optional, but cleaner)
+    // if (user != null && user.role == 'admin' && !state.matchedLocation.startsWith('/admin')) {
+    //   return '/admin/dashboard';
+    // }
+
+    // 3. If authenticated and trying to go to login/register, redirect to appropriate home
+    if (isLoggingIn && state.matchedLocation != '/reset-password') {
+       if (user?.role == 'admin') return '/admin/dashboard';
+       return '/home';
+    }
+
+    return null;
+  },
   routes: [
     GoRoute(path: '/', builder: (context, state) => const LoginPage()),
     GoRoute(
@@ -296,6 +333,11 @@ final _router = GoRouter(
                   builder: (context, state) => const MyAccountPage(),
                 ),
                 GoRoute(
+                  path: 'edit',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const MyAccountPage(),
+                ),
+                GoRoute(
                   path: 'notifications',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const NotificationsPage(),
@@ -354,9 +396,13 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  late final UserState _userState;
+
   @override
   void initState() {
     super.initState();
+    _userState = UserState();
+    _userState.initialize(); // Auto-login on start
     _setupAuthListener();
   }
 
@@ -365,6 +411,11 @@ class _MyAppState extends State<MyApp> {
       final event = data.event;
       if (event == AuthChangeEvent.passwordRecovery) {
         _router.go('/reset-password');
+      }
+      
+      // Update isAuthenticated state whenever auth changes
+      if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
+        setState(() {});
       }
     });
   }
@@ -378,7 +429,7 @@ class _MyAppState extends State<MyApp> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeState()),
-        ChangeNotifierProvider(create: (_) => UserState()),
+        ChangeNotifierProvider.value(value: _userState),
         ChangeNotifierProvider(create: (_) => CategoryState()),
         ChangeNotifierProvider(create: (_) => ProductState()),
         ChangeNotifierProvider(create: (_) => CartState()),
@@ -392,12 +443,13 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => FavoriteState()),
         ChangeNotifierProvider(create: (_) => DisputeState()),
         ChangeNotifierProvider(create: (_) => AdminLogState()),
+        ChangeNotifierProvider(create: (_) => AdminUserState()),
       ],
       child: Consumer<ThemeState>(
         builder: (context, themeState, child) {
           return MaterialApp.router(
             debugShowCheckedModeBanner: false,
-            title: 'Campus Marketplace',
+            title: 'CampusSell',
             routerConfig: _router,
             themeMode: themeState.themeMode,
             theme: ThemeData(

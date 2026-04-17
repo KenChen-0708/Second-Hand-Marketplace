@@ -24,6 +24,20 @@ class AuthService {
     return profile.id;
   }
 
+  /// Fetches the user profile using their ID (e.g. 'U0001')
+  Future<UserModel> fetchProfileById(String userId) async {
+    try {
+      final data = await supabase
+          .from('users')
+          .select()
+          .eq('id', userId)
+          .single();
+      return UserModel.fromMap(data);
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    }
+  }
+
   /// Bridging Logic: Fetches the 'U0001' style profile using email
   Future<UserModel> fetchProfileByEmail(String email) async {
     try {
@@ -34,7 +48,6 @@ class AuthService {
           .maybeSingle();
 
       if (data == null) {
-        // Recovery logic if database was reset but Supabase Auth remains
         data = await supabase
             .from('users')
             .insert({
@@ -55,7 +68,14 @@ class AuthService {
   Future<UserModel> loginUser(String email, String password) async {
     try {
       await supabase.auth.signInWithPassword(email: email, password: password);
-      return await fetchProfileByEmail(email);
+      final user = await fetchProfileByEmail(email);
+
+      if (!user.isActive) {
+        await logout(); // Immediately sign out if banned
+        throw Exception('Your account has been suspended. Please contact the administrator.');
+      }
+
+      return user;
     } on AuthException catch (e) {
       throw Exception(e.message);
     }
@@ -76,7 +96,6 @@ class AuthService {
 
       if (response.user == null) throw Exception('Registration failed');
 
-      // 1.2s delay ensures the Postgres Trigger has finished creating the 'Uxxx' ID
       await Future.delayed(const Duration(milliseconds: 1200));
 
       return await fetchProfileByEmail(email);

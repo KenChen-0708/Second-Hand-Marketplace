@@ -1,49 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/models.dart';
-import '../../models/mock_data.dart';
-
-// Mock Reviews
-class Review {
-  final String buyerName;
-  final int rating; // 1-5
-  final String comment;
-  final DateTime date;
-  final String? productName;
-
-  Review({
-    required this.buyerName,
-    required this.rating,
-    required this.comment,
-    required this.date,
-    this.productName,
-  });
-}
-
-final List<Review> mockReviews = [
-  Review(
-    buyerName: 'John D.',
-    rating: 5,
-    comment:
-        'Great seller! Fast response and textbook was exactly as described.',
-    date: DateTime.now().subtract(const Duration(days: 2)),
-    productName: 'Linear Algebra Textbook',
-  ),
-  Review(
-    buyerName: 'Emily W.',
-    rating: 4,
-    comment:
-        'Smooth transaction, but took a little while to respond to the first message.',
-    date: DateTime.now().subtract(const Duration(days: 15)),
-    productName: 'Mechanical Keyboard',
-  ),
-  Review(
-    buyerName: 'Anonymous',
-    rating: 5,
-    comment: 'Perfect condition. Thanks!',
-    date: DateTime.now().subtract(const Duration(days: 45)),
-  ),
-];
+import '../../services/auth/auth_service.dart';
+import '../../services/seller/seller_service.dart';
+import '../../services/product/product_service.dart';
+import '../../state/state.dart';
+import '../../shared/utils/snackbar_helper.dart';
+import '../../shared/utils/image_helper.dart';
 
 class SellerProfilePage extends StatefulWidget {
   final String sellerId;
@@ -58,11 +24,61 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  UserModel? _sellerUser;
+  SellerProfileModel? _sellerProfile;
+  List<ProductModel> _activeListings = [];
+  List<ReviewModel> _reviews = [];
+
+  final _authService = AuthService();
+  final _sellerService = SellerService();
+  final _productService = ProductService();
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabSelection);
+    _loadSellerData();
+  }
+
+  Future<void> _loadSellerData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        _authService.fetchProfileById(widget.sellerId),
+        _sellerService.fetchPublicProfile(widget.sellerId),
+        _productService.fetchProducts(
+          sellerId: widget.sellerId,
+          status: 'active',
+        ),
+        _sellerService.fetchSellerReviews(widget.sellerId),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _sellerUser = results[0] as UserModel;
+          _sellerProfile = results[1] as SellerProfileModel?;
+          _activeListings = results[2] as List<ProductModel>;
+          _reviews = results[3] as List<ReviewModel>;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load seller profile: $e';
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _handleTabSelection() {
@@ -70,6 +86,167 @@ class _SellerProfilePageState extends State<SellerProfilePage>
         _tabController.animation?.value == _tabController.index) {
       if (mounted) setState(() {});
     }
+  }
+
+  Future<void> _openSellerChat() async {
+    final currentUser = context.read<UserState>().currentUser;
+    if (currentUser == null) {
+      final shouldLogin = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Login Required'),
+          content: const Text('Please log in to message this seller.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Login'),
+            ),
+          ],
+        ),
+      );
+      if (shouldLogin == true && mounted) context.go('/');
+      return;
+    }
+
+    if (currentUser.id == widget.sellerId) {
+      SnackbarHelper.showTopMessage(context, 'This is your own profile.');
+      return;
+    }
+
+    try {
+      if (_activeListings.isEmpty) {
+        SnackbarHelper.showTopMessage(
+          context,
+          'This seller has no active product to start a chat.',
+        );
+        return;
+      }
+
+      final product = _activeListings.first;
+
+      final bundle = await context
+          .read<ChatConversationState>()
+          .getOrCreateConversationForProduct(product: product);
+      if (mounted) {
+        context.push('/chat/${bundle.conversation.id}');
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackbarHelper.showError(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    }
+  }
+
+  void _shareProfile() {
+    if (_sellerUser == null) return;
+    final String text =
+        'Check out ${_sellerUser!.name} on CampusSell! They have ${_activeListings.length} items for sale.\n\nDownload the app to see more.';
+    Share.share(text, subject: 'Seller Profile: ${_sellerUser!.name}');
+  }
+
+  void _showMoreOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: const Text('Copy Profile Link'),
+              onTap: () {
+                Clipboard.setData(
+                  ClipboardData(
+                    text:
+                        'https://campus-marketplace.app/seller/${widget.sellerId}',
+                  ),
+                );
+                Navigator.pop(context);
+                SnackbarHelper.showTopMessage(
+                  context,
+                  'Link copied to clipboard!',
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block_rounded, color: Colors.orange),
+              title: const Text('Block Seller'),
+              onTap: () {
+                Navigator.pop(context);
+                _showConfirmDialog(
+                  'Block Seller',
+                  'Are you sure you want to block this user? You will no longer see their listings.',
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.report_problem_rounded,
+                color: Colors.red,
+              ),
+              title: const Text('Report Seller'),
+              onTap: () {
+                Navigator.pop(context);
+                _showConfirmDialog(
+                  'Report Seller',
+                  'Help us keep the marketplace safe. Are you sure you want to report this user for investigation?',
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showConfirmDialog(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              SnackbarHelper.showTopMessage(
+                context,
+                'Request submitted for review.',
+              );
+            },
+            child: Text(
+              title.split(' ').first,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -81,159 +258,244 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
   @override
   Widget build(BuildContext context) {
-    // Find seller from mock data
-    final seller = [
-      mockUserSeller1,
-      mockUserSeller2,
-      mockUserBuyer,
-    ].firstWhere((u) => u.id == widget.sellerId, orElse: () => mockUserSeller1);
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
-    // Find active listings
-    final activeListings = mockProducts
-        .where((p) => p.sellerId == seller.id)
-        .toList();
+    if (_errorMessage != null || _sellerUser == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 64,
+                  color: Colors.red,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage ?? 'Seller not found',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: _loadSellerData,
+                  child: const Text('Try Again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildProfileHeader(context, seller)),
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _TabBarDelegate(
-              TabBar(
-                controller: _tabController,
-                indicatorColor: Theme.of(context).colorScheme.primary,
-                indicatorWeight: 3.0,
-                labelColor: Theme.of(context).colorScheme.primary,
-                unselectedLabelColor: Theme.of(
-                  context,
-                ).colorScheme.onSurfaceVariant,
-                labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                tabs: const [
-                  Tab(text: 'Active Listings'),
-                  Tab(text: 'Reviews'),
-                ],
-              ),
-              Theme.of(context).colorScheme.surface,
+      body: RefreshIndicator(
+        onRefresh: _loadSellerData,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: _buildProfileHeader(context, _sellerUser!, _sellerProfile),
             ),
-          ),
-          _tabController.index == 0
-              ? _buildActiveListingsSliver(context, activeListings)
-              : _buildReviewsSliver(context),
-        ],
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _TabBarDelegate(
+                TabBar(
+                  controller: _tabController,
+                  indicatorColor: Theme.of(context).colorScheme.primary,
+                  indicatorWeight: 3.0,
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant,
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                  tabs: const [
+                    Tab(text: 'Active Listings'),
+                    Tab(text: 'Reviews'),
+                  ],
+                ),
+                Theme.of(context).colorScheme.surface,
+              ),
+            ),
+            _tabController.index == 0
+                ? _buildActiveListingsSliver(context, _activeListings)
+                : _buildReviewsSliver(context, _reviews),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context, UserModel seller) {
+  Widget _buildProfileHeader(
+    BuildContext context,
+    UserModel seller,
+    SellerProfileModel? profile,
+  ) {
     final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final String avatarUrl = ImageHelper.resolveProfileImageUrl(seller.avatarUrl, name: seller.name);
+
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(32.0),
+          bottomRight: Radius.circular(32.0),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24.0),
-          bottomRight: Radius.circular(24.0),
-        ),
       ),
       child: SafeArea(
         bottom: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Header Action Row
+            // Action Bar
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 8.0,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
+                  CircleAvatar(
+                    backgroundColor: cs.surfaceContainerHighest.withOpacity(
+                      0.5,
                     ),
                     child: IconButton(
                       icon: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
                       onPressed: () => context.pop(),
                     ),
                   ),
-                  const Spacer(),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: Icon(Icons.more_horiz_rounded, color: cs.onSurface),
-                      onPressed: () {},
-                    ),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: cs.surfaceContainerHighest.withOpacity(
+                          0.5,
+                        ),
+                        child: IconButton(
+                          icon: Icon(Icons.share_outlined, color: cs.onSurface),
+                          onPressed: _shareProfile,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      CircleAvatar(
+                        backgroundColor: cs.surfaceContainerHighest.withOpacity(
+                          0.5,
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.more_horiz_rounded,
+                            color: cs.onSurface,
+                          ),
+                          onPressed: _showMoreOptions,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            // Profile Picture
+
+            const SizedBox(height: 8),
+
             Hero(
               tag: 'seller_avatar_${seller.id}',
-              child: CircleAvatar(
-                radius: 48,
-                backgroundImage: NetworkImage(seller.avatarUrl ?? 'https://i.pravatar.cc/150'),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: cs.primary.withOpacity(0.2),
+                    width: 2,
+                  ),
+                ),
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundImage: NetworkImage(avatarUrl),
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            // Name & Badge
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  seller.name,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(Icons.verified_rounded, color: cs.primary, size: 24),
-              ],
-            ),
-            const SizedBox(height: 4),
             Text(
-              'Verified Student',
-              style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 24),
-            // Trust metrics
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildMetricItem(
-                    context,
-                    title: '4.8/5.0',
-                    subtitle: 'Rating',
-                    icon: Icons.star_rounded,
-                  ),
-                  Container(width: 1, height: 40, color: cs.outlineVariant),
-                  _buildMetricItem(
-                    context,
-                    title:
-                        '${activeListingsCount(seller.id) + 10}', // Mock dynamic looking total sales
-                    subtitle: 'Items Sold',
-                  ),
-                  Container(width: 1, height: 40, color: cs.outlineVariant),
-                  _buildMetricItem(context, title: '2024', subtitle: 'Joined'),
-                ],
+              seller.name,
+              style: textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 4),
+            if (profile?.isVerified ?? false)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.verified_user_rounded,
+                    color: cs.primary,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Verified Student',
+                    style: TextStyle(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+
+            const SizedBox(height: 24),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildStatItem(
+                  context,
+                  profile?.averageRating.toStringAsFixed(1) ?? '0.0',
+                  'Rating',
+                  icon: Icons.star_rounded,
+                ),
+                _buildStatItem(
+                  context,
+                  profile?.totalSales.toString() ?? '0',
+                  'Sold',
+                ),
+                _buildStatItem(
+                  context,
+                  seller.createdAt?.year.toString() ?? '2024',
+                  'Joined',
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: FilledButton.icon(
+                onPressed: _openSellerChat,
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
+                label: const Text('Message Seller'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
           ],
         ),
@@ -241,278 +503,209 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     );
   }
 
-  int activeListingsCount(String sellerId) {
-    return mockProducts.where((p) => p.sellerId == sellerId).length;
-  }
-
-  Widget _buildMetricItem(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
+  Widget _buildStatItem(
+    BuildContext context,
+    String value,
+    String label, {
     IconData? icon,
   }) {
     final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
               Icon(icon, color: Colors.amber, size: 20),
               const SizedBox(width: 4),
             ],
             Text(
-              title,
+              value,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
-        ),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
       ],
     );
   }
 
   Widget _buildActiveListingsSliver(
     BuildContext context,
-    List<ProductModel> activeListings,
+    List<ProductModel> products,
   ) {
-    if (activeListings.isEmpty) {
-      return SliverFillRemaining(
-        hasScrollBody: false,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.inventory_2_outlined,
-                size: 64,
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No active listings',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
+    if (products.isEmpty) {
+      return const SliverFillRemaining(
+        child: Center(child: Text('No active listings found')),
       );
     }
 
     return SliverPadding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(16),
       sliver: SliverGrid(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          mainAxisSpacing: 16.0,
-          crossAxisSpacing: 16.0,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
           childAspectRatio: 0.75,
         ),
         delegate: SliverChildBuilderDelegate((context, index) {
-          final product = activeListings[index];
-          return GestureDetector(
-            onTap: () {
-              context.push('/product/${product.id}');
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(24.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(24.0),
-                      ),
-                      child: Hero(
-                        tag: 'product_image_${product.id}_profile',
-                        child: Image.network(
-                          product.imageUrl ?? 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800',
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '\$${product.price.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                product.condition,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }, childCount: activeListings.length),
+          final product = products[index];
+          return _ProductCard(product: product);
+        }, childCount: products.length),
       ),
     );
   }
 
-  Widget _buildReviewsSliver(BuildContext context) {
-    if (mockReviews.isEmpty) {
+  Widget _buildReviewsSliver(BuildContext context, List<ReviewModel> reviews) {
+    if (reviews.isEmpty) {
       return const SliverFillRemaining(
-        hasScrollBody: false,
-        child: Center(child: Text("No reviews yet.")),
+        child: Center(child: Text('No reviews yet')),
       );
     }
+
     return SliverPadding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(16),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
-          final review = mockReviews[index];
-          final cs = Theme.of(context).colorScheme;
+          final review = reviews[index];
+          return _ReviewTile(review: review);
+        }, childCount: reviews.length),
+      ),
+    );
+  }
+}
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(24.0),
-                border: Border.all(
-                  color: cs.outlineVariant.withValues(alpha: 0.5),
+class _ProductCard extends StatelessWidget {
+  final ProductModel product;
+
+  const _ProductCard({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: () => context.push('/product/${product.id}'),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                child: Image.network(
+                  product.imageUrl ?? 'https://i.pravatar.cc/300',
+                  fit: BoxFit.cover,
+                  width: double.infinity,
                 ),
               ),
-              padding: const EdgeInsets.all(16.0),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        review.buyerName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        '${review.date.day}/${review.date.month}/${review.date.year}',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: List.generate(5, (i) {
-                      return Icon(
-                        i < review.rating
-                            ? Icons.star_rounded
-                            : Icons.star_border_rounded,
-                        color: Colors.amber,
-                        size: 16,
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 12),
                   Text(
-                    review.comment,
-                    style: TextStyle(color: cs.onSurface, height: 1.4),
+                    product.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  if (review.productName != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.inventory_2_outlined,
-                            size: 14,
-                            color: cs.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            review.productName!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'RM ${product.price.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: cs.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
-          );
-        }, childCount: mockReviews.length),
+          ],
+        ),
       ),
     );
+  }
+}
+
+class _ReviewTile extends StatelessWidget {
+  final ReviewModel review;
+
+  const _ReviewTile({required this.review});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                review.reviewer?.name ?? 'Anonymous',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              if (review.createdAt != null)
+                Text(
+                  _formatDate(review.createdAt!),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: List.generate(
+              5,
+              (i) => Icon(
+                Icons.star_rounded,
+                color: i < (review.rating) ? Colors.amber : cs.outlineVariant,
+                size: 16,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            review.comment ?? 'No comment provided',
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.8),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inDays < 1) return 'Today';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${date.day}/${date.month}/${date.year}';
   }
 }
 
@@ -523,9 +716,9 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   _TabBarDelegate(this.tabBar, this.backgroundColor);
 
   @override
-  double get minExtent => tabBar.preferredSize.height + 8; // some padding
+  double get minExtent => tabBar.preferredSize.height;
   @override
-  double get maxExtent => tabBar.preferredSize.height + 8;
+  double get maxExtent => tabBar.preferredSize.height;
 
   @override
   Widget build(
@@ -533,16 +726,11 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(
-      color: backgroundColor,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: tabBar,
-    );
+    return Container(color: backgroundColor, child: tabBar);
   }
 
   @override
   bool shouldRebuild(_TabBarDelegate oldDelegate) {
-    return tabBar != oldDelegate.tabBar ||
-        backgroundColor != oldDelegate.backgroundColor;
+    return false;
   }
 }

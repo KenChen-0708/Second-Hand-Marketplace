@@ -112,6 +112,33 @@ class OrderState extends EntityState<OrderModel> {
     }
   }
 
+  Future<void> fetchAllOrders() async {
+    setLoading(true);
+    setError(null);
+    try {
+      final orders = await _orderService.getAllOrders();
+      setItems(orders);
+    } catch (e) {
+      setError(e.toString());
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  Future<void> updateOrderStatus(String orderId, String newStatus) async {
+    try {
+      await _orderService.updateOrderStatus(orderId, newStatus);
+      final existingOrder = getById(orderId);
+      if (existingOrder != null) {
+        final updatedOrder = existingOrder.copyWith(status: newStatus);
+        upsertItem(updatedOrder);
+      }
+    } catch (e) {
+      setError(e.toString());
+      rethrow;
+    }
+  }
+
   void clearCheckoutState() {
     _lastCheckoutOrders = [];
     _lastOrderNumber = null;

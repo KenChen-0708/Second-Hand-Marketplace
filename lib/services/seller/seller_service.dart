@@ -39,6 +39,41 @@ class SellerService {
 
   final SupabaseClient _supabase;
 
+  /// NEW: Fetches public profile metrics for a seller (Rating, Sales count, etc.)
+  Future<SellerProfileModel?> fetchPublicProfile(String userId) async {
+    try {
+      final response = await _supabase
+          .from('seller_profiles')
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
+      
+      if (response == null) return null;
+      return SellerProfileModel.fromMap(response);
+    } catch (e) {
+      print('Error fetching public seller profile: $e');
+      return null;
+    }
+  }
+
+  /// NEW: Fetches real reviews for a specific seller
+  Future<List<ReviewModel>> fetchSellerReviews(String sellerId) async {
+    try {
+      final response = await _supabase
+          .from('reviews')
+          .select('*, reviewer:users!reviews_reviewer_id_fkey(*)')
+          .eq('seller_id', sellerId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((r) => ReviewModel.fromMap(Map<String, dynamic>.from(r)))
+          .toList();
+    } catch (e) {
+      print('Error fetching seller reviews: $e');
+      return [];
+    }
+  }
+
   Future<SellerStats> getSellerStats(String userId) async {
     try {
       // 1. Fetch products count by status
@@ -76,7 +111,7 @@ class SellerService {
 
       // 4. Fetch unread chats (Mock logic or actual if possible)
       // Since chat is mostly mock for now, we'll return a static number or 0
-      final unreadChatsCount = 2; // Mock
+      final unreadChatsCount = 0; // Set to 0 to avoid touching chat logic
 
       return SellerStats(
         activeListings: activeListings,
@@ -143,16 +178,7 @@ class SellerService {
         ));
       }
 
-      // 3. Mock unread messages if none
-      if (actions.isEmpty) {
-        actions.add(SellerNeedAction(
-          title: 'Unread Buyer Message',
-          description: 'You have a new message regarding your "iPhone 13 Pro" listing.',
-          ctaLabel: 'Open Chat',
-          actionType: 'open_chat',
-          relatedId: 'c1',
-        ));
-      }
+      // 3. Removed unread message check to avoid touching chat logic
     } catch (e) {
       print('Error fetching needs action: $e');
     }
