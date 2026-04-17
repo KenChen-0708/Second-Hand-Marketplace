@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'app_model.dart';
 import 'json_utils.dart';
+import 'product_variation_model.dart';
 
 class ProductModel implements AppModel {
   @override
@@ -15,6 +16,8 @@ class ProductModel implements AppModel {
   final String? imageUrl;
   final List<String>? images;
   final List<String> tradePreference;
+  final int? availableQuantity;
+  final List<ProductVariationModel> variations;
   final bool openToOffers;
   final String status;
   final int viewCount;
@@ -35,6 +38,8 @@ class ProductModel implements AppModel {
     this.images,
     this.status = 'active',
     this.tradePreference = const ['face_to_face'],
+    this.availableQuantity,
+    this.variations = const [],
     this.openToOffers = false,
     this.viewCount = 0,
     this.likesCount = 0,
@@ -55,6 +60,8 @@ class ProductModel implements AppModel {
     List<String>? images,
     String? status,
     List<String>? tradePreference,
+    int? availableQuantity,
+    List<ProductVariationModel>? variations,
     bool? openToOffers,
     int? viewCount,
     int? likesCount,
@@ -74,6 +81,8 @@ class ProductModel implements AppModel {
       images: images ?? this.images,
       status: status ?? this.status,
       tradePreference: tradePreference ?? this.tradePreference,
+      availableQuantity: availableQuantity ?? this.availableQuantity,
+      variations: variations ?? this.variations,
       openToOffers: openToOffers ?? this.openToOffers,
       viewCount: viewCount ?? this.viewCount,
       likesCount: likesCount ?? this.likesCount,
@@ -101,7 +110,19 @@ class ProductModel implements AppModel {
               : null),
       images: JsonUtils.asStringList(map['image_urls']),
       status: JsonUtils.asString(map['status']) ?? 'active',
-      tradePreference: JsonUtils.asStringList(map['trade_preference']) ?? const ['face_to_face'],
+      tradePreference:
+          JsonUtils.asStringList(map['trade_preference']) ??
+          (JsonUtils.asString(map['trade_preference']) != null
+              ? [JsonUtils.asString(map['trade_preference'])!]
+              : const ['face_to_face']),
+      availableQuantity: JsonUtils.asInt(map['available_quantity']),
+      variations: (map['variations'] as List? ?? const [])
+          .map(
+            (item) => ProductVariationModel.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
       openToOffers: map['open_to_offers'] == true,
       viewCount: JsonUtils.asInt(map['view_count']) ?? 0,
       likesCount: JsonUtils.asInt(map['likes_count']) ?? 0,
@@ -124,6 +145,8 @@ class ProductModel implements AppModel {
       'image_urls': images,
       'status': status,
       'trade_preference': tradePreference,
+      'available_quantity': availableQuantity,
+      'variations': variations.map((variation) => variation.toMap()).toList(),
       'open_to_offers': openToOffers,
       'view_count': viewCount,
       'likes_count': likesCount,
@@ -136,4 +159,26 @@ class ProductModel implements AppModel {
       ProductModel.fromMap(json.decode(source) as Map<String, dynamic>);
 
   String toJson() => json.encode(toMap());
+
+  bool get hasVariants => variations.isNotEmpty;
+
+  int? get stockQuantity {
+    if (hasVariants) {
+      return variations.fold<int>(
+        0,
+        (sum, variation) => sum + variation.availableQuantity,
+      );
+    }
+    return availableQuantity;
+  }
+
+  bool get isSoldOut {
+    final normalizedStatus = status.toLowerCase();
+    if (normalizedStatus == 'sold' || normalizedStatus == 'inactive') {
+      return true;
+    }
+
+    final quantity = stockQuantity;
+    return quantity != null && quantity <= 0;
+  }
 }

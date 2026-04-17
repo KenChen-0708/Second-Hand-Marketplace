@@ -31,7 +31,7 @@ class CartService {
       final productIds = cartItems.map((item) => item.productId).toList();
       final productData = await _supabase
           .from('products')
-          .select()
+          .select('*, variations:product_variations(*)')
           .inFilter('id', productIds);
 
       final productsById = <String, ProductModel>{};
@@ -68,6 +68,13 @@ class CartService {
     if (userId.isEmpty || product.id.isEmpty || quantity <= 0) {
       throw Exception('Please choose a valid item and quantity.');
     }
+    if (product.isSoldOut) {
+      throw Exception('This product is sold out.');
+    }
+    final stockQuantity = product.stockQuantity;
+    if (stockQuantity != null && quantity > stockQuantity) {
+      throw Exception('Only $stockQuantity item(s) are currently available.');
+    }
 
     try {
       final existing = await _supabase
@@ -82,6 +89,9 @@ class CartService {
           Map<String, dynamic>.from(existing),
         );
         final updatedQuantity = existingItem.quantity + quantity;
+        if (stockQuantity != null && updatedQuantity > stockQuantity) {
+          throw Exception('Only $stockQuantity item(s) are currently available.');
+        }
 
         final updated = await _supabase
             .from('cart_items')
@@ -137,6 +147,9 @@ class CartService {
         'Failed to add item to cart, please try again. ${e.message}',
       );
     } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
       throw Exception('Failed to add item to cart, please try again.');
     }
   }
@@ -154,6 +167,11 @@ class CartService {
       if (quantity <= 0) {
         await _supabase.from('cart_items').delete().eq('id', cartItemId);
         return null;
+      }
+
+      final stockQuantity = product.stockQuantity;
+      if (stockQuantity != null && quantity > stockQuantity) {
+        throw Exception('Only $stockQuantity item(s) are currently available.');
       }
 
       final updated = await _supabase
@@ -178,6 +196,9 @@ class CartService {
     } on PostgrestException catch (e) {
       throw Exception('Unable to update your cart right now. ${e.message}');
     } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
       throw Exception('Unable to update your cart right now. Please try again.');
     }
   }

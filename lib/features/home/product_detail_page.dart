@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/product_display_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
 import '../../services/product/product_service.dart';
@@ -279,6 +280,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final product = detail.product;
         final seller = detail.seller;
         final sellerName = seller?.name ?? 'Seller';
+        final stockQuantity = product.stockQuantity;
+        final isSoldOut = product.isSoldOut;
         
         // Dynamic Avatar Resolution
         final sellerAvatar = ImageHelper.resolveProfileImageUrl(seller?.avatarUrl, name: seller?.name);
@@ -467,6 +470,38 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               fontSize: 28,
                             ),
                           ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSoldOut
+                                  ? Theme.of(context).colorScheme.errorContainer
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(
+                              isSoldOut
+                                  ? 'Sold Out'
+                                  : stockQuantity != null
+                                  ? '$stockQuantity available'
+                                  : 'Available',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isSoldOut
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .onErrorContainer
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSecondaryContainer,
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 24),
                           Text(
                             'Description',
@@ -495,13 +530,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             spacing: 8,
                             runSpacing: 8,
                             children: product.tradePreference.map((pref) {
-                              String label = pref;
+                              final label = ProductDisplayHelper.formatTradePreference(pref);
                               IconData icon = Icons.help_outline_rounded;
                               if (pref == 'face_to_face') {
-                                label = 'Face-to-Face';
                                 icon = Icons.handshake_rounded;
                               } else if (pref.startsWith('delivery_')) {
-                                label = pref == 'delivery_official' ? 'Official Delivery' : 'Self-Delivery';
                                 icon = Icons.local_shipping_rounded;
                               }
                               return Container(
@@ -801,12 +834,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
-                              onPressed: () async {
-                                await _handleAddToCart(context, product);
-                              },
+                              onPressed: isSoldOut
+                                  ? null
+                                  : () async {
+                                      await _handleAddToCart(context, product);
+                                    },
                               icon: const Icon(Icons.add_shopping_cart_rounded),
-                              label: const Text(
-                                'Add to Cart',
+                              label: Text(
+                                isSoldOut ? 'Sold Out' : 'Add to Cart',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -825,10 +860,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
-                              onPressed: () => _handleBuyNow(context, product),
+                              onPressed: isSoldOut
+                                  ? null
+                                  : () => _handleBuyNow(context, product),
                               icon: const Icon(Icons.flash_on_rounded),
-                              label: const Text(
-                                'Buy Now',
+                              label: Text(
+                                isSoldOut ? 'Sold Out' : 'Buy Now',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -885,33 +922,64 @@ class _PurchaseOptionsSheet extends StatefulWidget {
 }
 
 class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
-  late final List<String> _options;
-  late String _selectedOption;
+  late final Map<String, List<ProductVariationModel>> _variationsByType;
+  final Map<String, ProductVariationModel> _selectedVariationsByType = {};
   int _quantity = 1;
 
   @override
   void initState() {
     super.initState();
-    _options = _buildOptions(widget.product);
-    _selectedOption = _options.isNotEmpty ? _options.first : 'Standard';
+    _variationsByType = _groupVariations(widget.product.variations);
+    for (final entry in _variationsByType.entries) {
+      final preferred = entry.value.firstWhere(
+        (variation) => variation.availableQuantity > 0,
+        orElse: () => entry.value.first,
+      );
+      _selectedVariationsByType[entry.key] = preferred;
+    }
   }
 
-  List<String> _buildOptions(ProductModel product) {
-    final options = <String>[
-      if (product.condition.isNotEmpty) product.condition,
-      ...product.tradePreference.map(_formatTradePreference),
-      if (product.openToOffers) 'Negotiable',
-    ].toSet().toList();
-
-    if (options.isEmpty) {
-      return const ['Standard'];
+  Map<String, List<ProductVariationModel>> _groupVariations(
+    List<ProductVariationModel> variations,
+  ) {
+    final grouped = <String, List<ProductVariationModel>>{};
+    for (final variation in variations) {
+      grouped.putIfAbsent(variation.variationType, () => []).add(variation);
     }
 
-    return options;
+    final sortedKeys = grouped.keys.toList()..sort();
+    return {
+      for (final key in sortedKeys)
+        key: (grouped[key]!..sort(
+          (a, b) => a.variationValue.compareTo(b.variationValue),
+        )),
+    };
   }
 
-  String _formatTradePreference(String tradePreference) {
-    return tradePreference
+  int? get _stockLimit {
+    if (_selectedVariationsByType.isNotEmpty) {
+      return _selectedVariationsByType.values
+          .map((variation) => variation.availableQuantity)
+          .reduce((value, element) => value < element ? value : element);
+    }
+
+    return widget.product.stockQuantity;
+  }
+
+  String? get _selectedOption {
+    if (_selectedVariationsByType.isEmpty) {
+      return null;
+    }
+
+    final entries = _selectedVariationsByType.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries
+        .map((entry) => '${entry.key}: ${entry.value.variationValue}')
+        .join(', ');
+  }
+
+  String _formatVariationType(String type) {
+    return type
         .split('_')
         .map(
           (word) => word.isEmpty
@@ -925,6 +993,8 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final product = widget.product;
+    final stockLimit = _stockLimit;
+    final isSoldOut = product.isSoldOut || (stockLimit != null && stockLimit <= 0);
 
     return SafeArea(
       child: Padding(
@@ -984,26 +1054,56 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                Text(
-                  'Variation',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                if (_variationsByType.isNotEmpty) ...[
+                  Text(
+                    'Variant',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._variationsByType.entries.map((entry) {
+                    final selectedVariation = _selectedVariationsByType[entry.key];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _formatVariationType(entry.key),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: entry.value.map((variation) {
+                              final isSelected = selectedVariation?.id == variation.id;
+                              final isEnabled = variation.availableQuantity > 0;
+                              return ChoiceChip(
+                                label: Text(
+                                  '${variation.variationValue} (${variation.availableQuantity})',
+                                ),
+                                selected: isSelected,
+                                onSelected: isEnabled
+                                    ? (_) => setState(() {
+                                        _selectedVariationsByType[entry.key] = variation;
+                                        final updatedLimit = _stockLimit;
+                                        if (updatedLimit != null && _quantity > updatedLimit) {
+                                          _quantity = updatedLimit;
+                                        }
+                                      })
+                                    : null,
+                              );
+                            }).toList(),
+                          ),
+                        ],
                       ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: _options.map((option) {
-                    final isSelected = option == _selectedOption;
-                    return ChoiceChip(
-                      label: Text(option),
-                      selected: isSelected,
-                      onSelected: (_) =>
-                          setState(() => _selectedOption = option),
                     );
-                  }).toList(),
-                ),
+                  }),
+                ],
                 const SizedBox(height: 24),
                 Row(
                   children: [
@@ -1013,6 +1113,16 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                             fontWeight: FontWeight.bold,
                           ),
                     ),
+                    if (stockLimit != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '$stockLimit left',
+                        style: TextStyle(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                     const Spacer(),
                     _QuantityButton(
                       icon: Icons.remove_rounded,
@@ -1032,7 +1142,9 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                     ),
                     _QuantityButton(
                       icon: Icons.add_rounded,
-                      onPressed: () => setState(() => _quantity += 1),
+                      onPressed: stockLimit == null || _quantity < stockLimit
+                          ? () => setState(() => _quantity += 1)
+                          : null,
                     ),
                   ],
                 ),
@@ -1046,16 +1158,18 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    onPressed: () => Navigator.pop(
-                      context,
-                      _PurchaseSelection(
-                        quantity: _quantity,
-                        selectedOption: _selectedOption,
-                      ),
-                    ),
+                    onPressed: isSoldOut
+                        ? null
+                        : () => Navigator.pop(
+                              context,
+                              _PurchaseSelection(
+                                quantity: _quantity,
+                                selectedOption: _selectedOption,
+                              ),
+                            ),
                     icon: Icon(widget.actionIcon),
                     label: Text(
-                      widget.actionLabel,
+                      isSoldOut ? 'Sold Out' : widget.actionLabel,
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),

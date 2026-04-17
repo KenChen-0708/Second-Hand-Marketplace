@@ -13,7 +13,7 @@ class ProductService {
 
   Future<List<ProductModel>> fetchProducts({String? status, String? sellerId}) async {
     try {
-      var query = _supabase.from('products').select();
+      var query = _supabase.from('products').select('*, variations:product_variations(*)');
 
       if (status != null && status.isNotEmpty) {
         query = query.eq('status', status);
@@ -43,7 +43,7 @@ class ProductService {
     try {
       final data = await _supabase
           .from('products')
-          .select()
+          .select('*, variations:product_variations(*)')
           .eq('id', productId)
           .single();
 
@@ -158,6 +158,22 @@ class ProductService {
       return response['id'] as String;
     } catch (e) {
       throw Exception('Failed to create product: $e');
+    }
+  }
+
+  Future<void> createProductVariations(
+    List<Map<String, dynamic>> variations,
+  ) async {
+    if (variations.isEmpty) {
+      return;
+    }
+
+    try {
+      await _supabase.from('product_variations').insert(variations);
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to create product variations: $e');
     }
   }
 

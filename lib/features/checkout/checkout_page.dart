@@ -73,10 +73,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    if (_selectedHandoverOption == _deliveryOption && !_deliveryAvailable) {
+    if (!_availableHandoverOptions.contains(_selectedHandoverOption)) {
       SnackbarHelper.showInfo(
         context,
-        'Delivery is not available for all selected items.',
+        'That handover option is not available for all selected items.',
       );
       return;
     }
@@ -303,34 +303,48 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double get _itemsSubtotal =>
       _checkoutItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
 
-  bool get _meetUpAvailable =>
-      _checkoutItems.isNotEmpty &&
+  Set<String> get _availableHandoverOptions {
+    final options = <String>{};
+    if (_meetUpAvailable) {
+      options.add(_meetUpOption);
+    }
+    if (_deliveryAvailable) {
+      options.add(_deliveryOption);
+    }
+    return options;
+  }
+
+  bool get _meetUpAvailable => _checkoutItems.isNotEmpty &&
       _checkoutItems.every(
-        (item) => item.product.tradePreference == 'face_to_face',
+        (item) => item.product.tradePreference.contains('face_to_face'),
       );
 
-  bool get _deliveryAvailable =>
-      _checkoutItems.isNotEmpty &&
+  bool get _deliveryAvailable => _checkoutItems.isNotEmpty &&
       _checkoutItems.every(
-        (item) => item.product.tradePreference != 'face_to_face',
+        (item) => item.product.tradePreference.any(
+          (preference) =>
+              preference == 'delivery_official' ||
+              preference == 'delivery_self',
+        ),
       );
 
-  bool get _hasCompatibleHandoverOption =>
-      _meetUpAvailable || _deliveryAvailable;
-
-  bool get _hasOfficialDeliveryItem =>
-      _checkoutItems
-          .any((item) => item.product.tradePreference == 'delivery_official');
+  bool get _hasCompatibleHandoverOption => _availableHandoverOptions.isNotEmpty;
 
   String get _defaultHandoverOption {
-    if (_deliveryAvailable && !_meetUpAvailable) {
+    if (_meetUpAvailable) {
+      return _meetUpOption;
+    }
+    if (_deliveryAvailable) {
       return _deliveryOption;
     }
     return _meetUpOption;
   }
 
   double get _deliveryFee =>
-      _selectedHandoverOption == _deliveryOption && _hasOfficialDeliveryItem
+      _selectedHandoverOption == _deliveryOption &&
+              _checkoutItems.any(
+                (item) => item.product.tradePreference.contains('delivery_official'),
+              )
           ? _officialDeliveryFee
           : 0;
 
@@ -354,19 +368,56 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   String get _locationLabel =>
-      _selectedHandoverOption == _deliveryOption
-          ? 'Delivery Address'
-          : 'Meet-up Location';
+      _selectedHandoverOption == _meetUpOption
+          ? 'Meet-up Location'
+          : 'Delivery Address';
 
   String get _locationHint =>
-      _selectedHandoverOption == _deliveryOption
-          ? 'Enter delivery address or tap map to select'
-          : 'Enter meet-up location or tap map to select';
+      _selectedHandoverOption == _meetUpOption
+          ? 'Enter meet-up location or tap map to select'
+          : 'Enter delivery address or tap map to select';
+
+  String get _selectedHandoverLabel {
+    switch (_selectedHandoverOption) {
+      case _meetUpOption:
+        return 'Meet Up';
+      case _deliveryOption:
+        return 'Delivery';
+      default:
+        return 'Meet Up';
+    }
+  }
+
+  String get _selectedDeliveryHelperText {
+    if (_selectedHandoverOption == _deliveryOption) {
+      final hasOfficialDeliveryItem = _checkoutItems.any(
+        (item) => item.product.tradePreference.contains('delivery_official'),
+      );
+      if (hasOfficialDeliveryItem) {
+        return 'Delivery includes the seller\'s configured delivery method and any official delivery fee.';
+      }
+      return 'The seller will arrange delivery directly with you.';
+    }
+    return 'Meet-up details will be shared with the seller after checkout.';
+  }
+
+  String? get _incompatibleHandoverMessage {
+    if (_hasCompatibleHandoverOption) {
+      return null;
+    }
+
+    return 'These items do not share a common buyer-facing handover option. Please checkout them separately.';
+  }
+
+  String get _currentLocationTitle =>
+      _selectedHandoverOption == _meetUpOption
+          ? 'Current Meet-up Location'
+          : 'Current Delivery Address';
 
   String? _buildCheckoutNotes() {
     final buyerMessage = _messageController.text.trim();
     final noteParts = <String>[
-      'Delivery option: ${_selectedHandoverOption == _deliveryOption ? 'Delivery' : 'Meet Up'}',
+      'Handover option: $_selectedHandoverLabel',
       if (buyerMessage.isNotEmpty) 'Buyer message: $buyerMessage',
     ];
 
@@ -470,7 +521,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Official Delivery Fee',
+                  'Delivery Fee',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -756,9 +807,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _selectedHandoverOption == _deliveryOption
-                              ? 'Current Delivery Address'
-                              : 'Current Meet-up Location',
+                          _currentLocationTitle,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -821,7 +870,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
           const SizedBox(height: 20),
           const Text(
-            'Delivery Option',
+            'Handover Option',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -847,46 +896,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ],
           ),
-          if (!_hasCompatibleHandoverOption)
+          if (_incompatibleHandoverMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(
-                'This checkout has mixed meet-up and delivery items. Please place them in separate orders.',
+                _incompatibleHandoverMessage!,
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.error,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            )
-          else if (!_meetUpAvailable && !_deliveryAvailable)
-            const SizedBox.shrink()
-          else if (!_deliveryAvailable)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                'Delivery is unavailable because one or more selected items are meet-up only.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.error,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            )
-          else if (!_meetUpAvailable)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                'Meet up is unavailable because one or more selected items are delivery only.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             )
           else if (_selectedHandoverOption == _deliveryOption &&
-              _hasOfficialDeliveryItem)
+              _deliveryFee > 0)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(
@@ -894,7 +917,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                _selectedDeliveryHelperText,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
