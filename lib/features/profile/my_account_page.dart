@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; 
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../state/state.dart';
+import '../../shared/utils/image_helper.dart';
 
 class MyAccountPage extends StatefulWidget {
   const MyAccountPage({super.key});
@@ -13,16 +17,30 @@ class MyAccountPage extends StatefulWidget {
 class _MyAccountPageState extends State<MyAccountPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers for all editable fields in your UserModel
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late TextEditingController _bioController;
   late TextEditingController _addressController;
   late TextEditingController _cityController;
   late TextEditingController _postalController;
-  late TextEditingController _countryController;
+  String? _selectedCountry;
+  
+  XFile? _pickedImage;
+  final ImagePicker _picker = ImagePicker();
 
   bool _isLoading = false;
+
+  final List<String> _countries = [
+    'Malaysia',
+    'Singapore',
+    'Indonesia',
+    'Thailand',
+    'Vietnam',
+    'Philippines',
+    'China',
+    'India',
+    'Other'
+  ];
 
   @override
   void initState() {
@@ -35,7 +53,12 @@ class _MyAccountPageState extends State<MyAccountPage> {
     _addressController = TextEditingController(text: user?.address ?? '');
     _cityController = TextEditingController(text: user?.city ?? '');
     _postalController = TextEditingController(text: user?.postalCode ?? '');
-    _countryController = TextEditingController(text: user?.country ?? '');
+    
+    if (user?.country != null && _countries.contains(user!.country)) {
+      _selectedCountry = user.country;
+    } else {
+      _selectedCountry = 'Malaysia';
+    }
   }
 
   @override
@@ -46,8 +69,19 @@ class _MyAccountPageState extends State<MyAccountPage> {
     _addressController.dispose();
     _cityController.dispose();
     _postalController.dispose();
-    _countryController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+    if (image != null) {
+      setState(() {
+        _pickedImage = image;
+      });
+    }
   }
 
   Future<void> _handleSave() async {
@@ -56,27 +90,62 @@ class _MyAccountPageState extends State<MyAccountPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Syncing all controllers to the State layer
-      await context.read<UserState>().updateProfile(
+      final userState = context.read<UserState>();
+      final currentUser = userState.currentUser;
+      String? avatarUrl = currentUser?.avatarUrl;
+
+      if (_pickedImage != null && currentUser != null) {
+        try {
+          final bytes = await _pickedImage!.readAsBytes();
+          final mimeType = _pickedImage!.mimeType ?? 'image/jpeg';
+          
+          final uploadedFileName = await ImageHelper.uploadProfileImage(
+            bytes, 
+            currentUser.id,
+            mimeType,
+          );
+          if (uploadedFileName != null) {
+            avatarUrl = uploadedFileName;
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Photo upload failed: $e'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      }
+
+      await userState.updateProfile(
         name: _nameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         bio: _bioController.text.trim(),
         address: _addressController.text.trim(),
         city: _cityController.text.trim(),
         postalCode: _postalController.text.trim(),
-        country: _countryController.text.trim(),
+        country: _selectedCountry,
+        avatarUrl: avatarUrl,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!')),
+          const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Color(0xFF10B981),
+          ),
         );
-        context.pop(); // Return to profile overview
+        context.pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Update failed: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error saving changes: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -93,6 +162,8 @@ class _MyAccountPageState extends State<MyAccountPage> {
       return const Scaffold(body: Center(child: Text("No user found. Please log in.")));
     }
 
+    final String displayAvatarUrl = ImageHelper.resolveProfileImageUrl(user.avatarUrl, name: user.name);
+
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
@@ -106,12 +177,38 @@ class _MyAccountPageState extends State<MyAccountPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Avatar Section
               Center(
-                child: CircleAvatar(
-                  radius: 60,
-                  backgroundImage: NetworkImage(user.avatarUrl ?? 'https://i.pravatar.cc/150'),
-                  backgroundColor: colorScheme.surfaceContainerHighest,
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: colorScheme.surfaceContainerHighest,
+                        border: Border.all(color: colorScheme.primary.withOpacity(0.2), width: 2),
+                      ),
+                      child: ClipOval(
+                        child: _buildAvatarPreview(displayAvatarUrl),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: _isLoading ? null : _pickImage,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: colorScheme.surface, width: 3),
+                          ),
+                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 20),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 32),
@@ -121,7 +218,8 @@ class _MyAccountPageState extends State<MyAccountPage> {
                 context,
                 'Full Name',
                 _nameController,
-                validator: (v) => v!.isEmpty ? 'Name is required' : null,
+                enabled: !_isLoading,
+                validator: (v) => v!.trim().isEmpty ? 'Name is required' : null,
               ),
               const SizedBox(height: 16),
 
@@ -129,7 +227,9 @@ class _MyAccountPageState extends State<MyAccountPage> {
                 context,
                 'Phone Number',
                 _phoneController,
+                enabled: !_isLoading,
                 hintText: 'e.g. +60123456789',
+                keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 16),
 
@@ -137,6 +237,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
                 context,
                 'Bio',
                 _bioController,
+                enabled: !_isLoading,
                 hintText: 'Tell other students about yourself...',
                 maxLines: 3,
               ),
@@ -144,19 +245,28 @@ class _MyAccountPageState extends State<MyAccountPage> {
               const SizedBox(height: 32),
               _buildSectionTitle(context, 'Address Details'),
 
-              _buildTextField(context, 'Street Address', _addressController),
+              _buildTextField(context, 'Street Address', _addressController, enabled: !_isLoading),
               const SizedBox(height: 16),
 
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _buildTextField(context, 'City', _cityController)),
+                  Expanded(child: _buildTextField(context, 'City', _cityController, enabled: !_isLoading)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildTextField(context, 'Postal Code', _postalController)),
+                  Expanded(
+                    child: _buildTextField(
+                      context, 
+                      'Postal Code', 
+                      _postalController,
+                      enabled: !_isLoading,
+                      keyboardType: TextInputType.number,
+                    )
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
 
-              _buildTextField(context, 'Country', _countryController),
+              _buildCountryDropdown(context),
 
               const SizedBox(height: 40),
 
@@ -168,17 +278,39 @@ class _MyAccountPageState extends State<MyAccountPage> {
                 ),
                 child: _isLoading
                     ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                )
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
                     : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAvatarPreview(String displayAvatarUrl) {
+    if (_pickedImage != null) {
+      if (kIsWeb) {
+        return Image.network(_pickedImage!.path, fit: BoxFit.cover);
+      } else {
+        return Image.file(File(_pickedImage!.path), fit: BoxFit.cover);
+      }
+    }
+
+    return Image.network(
+      displayAvatarUrl,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const Center(child: CircularProgressIndicator());
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Image.network(ImageHelper.getDefaultAvatarUrl(_nameController.text));
+      },
     );
   }
 
@@ -202,6 +334,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
         bool enabled = true,
         String? hintText,
         int maxLines = 1,
+        TextInputType? keyboardType,
         String? Function(String?)? validator,
       }) {
     return Column(
@@ -211,7 +344,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
           label,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
           ),
         ),
         const SizedBox(height: 8),
@@ -220,11 +353,48 @@ class _MyAccountPageState extends State<MyAccountPage> {
           enabled: enabled,
           validator: validator,
           maxLines: maxLines,
+          keyboardType: keyboardType,
           decoration: InputDecoration(
             hintText: hintText,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCountryDropdown(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Country',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedCountry,
+          decoration: InputDecoration(
+            enabled: !_isLoading,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          items: _countries.map((String country) {
+            return DropdownMenuItem<String>(
+              value: country,
+              child: Text(country),
+            );
+          }).toList(),
+          onChanged: _isLoading ? null : (String? newValue) {
+            setState(() {
+              _selectedCountry = newValue;
+            });
+          },
+          validator: (value) => value == null ? 'Please select a country' : null,
         ),
       ],
     );

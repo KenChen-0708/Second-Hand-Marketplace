@@ -3,22 +3,23 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/state.dart';
+import '../../shared/utils/image_helper.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // 1. WATCH the State: This ensures the UI rebuilds if the user
-    // edits their profile in MyAccountPage.
     final userState = context.watch<UserState>();
     final user = userState.currentUser;
     final cs = Theme.of(context).colorScheme;
 
-    // Handle null state (optional, but good for safety)
     if (user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+
+    // Resolve the full URL using our helper with initial fallback
+    final avatarUrl = ImageHelper.resolveProfileImageUrl(user.avatarUrl, name: user.name);
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -31,14 +32,14 @@ class ProfilePage extends StatelessWidget {
             context,
             icon: Icons.shopping_cart_outlined,
             onTap: () => context.push('/cart'),
-            badgeCount: 2, // Eventually move to CartState
+            badgeCount: 2, 
           ),
           const SizedBox(width: 12),
           _buildActionIcon(
             context,
             icon: Icons.chat_bubble_outline_rounded,
             onTap: () => context.push('/messages'),
-            badgeCount: 0, // Eventually move to ChatState
+            badgeCount: 0, 
           ),
           const SizedBox(width: 16),
         ],
@@ -48,19 +49,14 @@ class ProfilePage extends StatelessWidget {
           children: [
             const SizedBox(height: 24),
 
-            // Header: Uses Real User Data
             Center(
               child: Column(
                 children: [
                   GestureDetector(
-                    onTap: () => context.push(
-                      '/profile/edit',
-                    ), // Navigate to MyAccountPage
+                    onTap: () => context.push('/profile/edit'),
                     child: CircleAvatar(
                       radius: 56,
-                      backgroundImage: NetworkImage(
-                        user.avatarUrl ?? 'https://i.pravatar.cc/150',
-                      ),
+                      backgroundImage: NetworkImage(avatarUrl),
                       backgroundColor: cs.surfaceContainerHighest,
                     ),
                   ),
@@ -103,7 +99,6 @@ class ProfilePage extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
-            // Menu Items
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 24),
               decoration: BoxDecoration(
@@ -173,7 +168,6 @@ class ProfilePage extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
-            // Log Out Button: Uses State Logic
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Material(
@@ -181,10 +175,9 @@ class ProfilePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 child: InkWell(
                   onTap: () async {
-                    // 🔥 UI -> STATE: Page calls logout logic
                     await userState.logout();
                     if (context.mounted) {
-                      context.go('/'); // Redirect to login page
+                      context.go('/'); 
                     }
                   },
                   borderRadius: BorderRadius.circular(20),
@@ -227,8 +220,6 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
-
-  // --- UI Helper Methods (Keep as is, but ensure clean styling) ---
 
   Widget _buildActionIcon(
     BuildContext context, {
