@@ -71,82 +71,145 @@ class _SettingsPageState extends State<SettingsPage> {
     final confirmPasswordController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     bool isLoading = false;
+    
+    double strengthValue = 0;
+    String strengthLabel = '';
+    Color strengthColor = Colors.grey;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Change Password'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'New Password',
-                    hintText: 'Enter new password',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Please enter a password';
-                    if (value.length < 6) return 'Password must be at least 6 characters';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: confirmPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm Password',
-                    hintText: 'Re-enter new password',
-                  ),
-                  validator: (value) {
-                    if (value != passwordController.text) return 'Passwords do not match';
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: isLoading ? null : () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: isLoading
-                  ? null
-                  : () async {
-                      if (formKey.currentState!.validate()) {
-                        setDialogState(() => isLoading = true);
-                        try {
-                          await context.read<UserState>().changePassword(passwordController.text);
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Password changed successfully')),
-                            );
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: ${e.toString()}')),
-                            );
-                          }
-                        } finally {
-                          if (context.mounted) setDialogState(() => isLoading = false);
-                        }
-                      }
+        builder: (context, setDialogState) {
+          
+          void checkStrength() {
+            final password = passwordController.text;
+            if (password.isEmpty) {
+              setDialogState(() {
+                strengthValue = 0;
+                strengthLabel = '';
+              });
+              return;
+            }
+
+            double score = 0;
+            if (password.length >= 8) score += 0.25;
+            if (RegExp(r'[A-Z]').hasMatch(password)) score += 0.25;
+            if (RegExp(r'[0-9]').hasMatch(password)) score += 0.25;
+            if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) score += 0.25;
+
+            setDialogState(() {
+              strengthValue = score;
+              if (score <= 0.25) {
+                strengthLabel = 'Weak';
+                strengthColor = Colors.red;
+              } else if (score <= 0.5) {
+                strengthLabel = 'Fair';
+                strengthColor = Colors.orange;
+              } else if (score <= 0.75) {
+                strengthLabel = 'Good';
+                strengthColor = Colors.blue;
+              } else {
+                strengthLabel = 'Strong';
+                strengthColor = Colors.green;
+              }
+            });
+          }
+
+          return AlertDialog(
+            title: const Text('Change Password'),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    controller: passwordController,
+                    obscureText: true,
+                    onChanged: (_) => checkStrength(),
+                    decoration: const InputDecoration(
+                      labelText: 'New Password',
+                      hintText: 'Enter new password',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Please enter a password';
+                      if (value.length < 6) return 'Minimum 6 characters required';
+                      return null;
                     },
-              child: isLoading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Change'),
+                  ),
+                  
+                  if (passwordController.text.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: strengthValue,
+                        backgroundColor: Colors.grey[200],
+                        color: strengthColor,
+                        minHeight: 4,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      strengthLabel,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(color: strengthColor, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                  
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: confirmPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm Password',
+                      hintText: 'Re-enter new password',
+                    ),
+                    validator: (value) {
+                      if (value != passwordController.text) return 'Passwords do not match';
+                      return null;
+                    },
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: isLoading ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        if (formKey.currentState!.validate()) {
+                          setDialogState(() => isLoading = true);
+                          try {
+                            await context.read<UserState>().changePassword(passwordController.text);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Password changed successfully')),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error: ${e.toString()}')),
+                              );
+                            }
+                          } finally {
+                            if (context.mounted) setDialogState(() => isLoading = false);
+                          }
+                        }
+                      },
+                child: isLoading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Change'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -183,7 +246,7 @@ class _SettingsPageState extends State<SettingsPage> {
             leading: const Icon(Icons.person_outline_rounded),
             trailing: const Icon(Icons.chevron_right_rounded),
             contentPadding: EdgeInsets.zero,
-            onTap: () => context.push('/profile/account'),
+            onTap: () => context.push('/profile/edit'),
           ),
           const Divider(),
           const SizedBox(height: 24),
