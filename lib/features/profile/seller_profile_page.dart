@@ -9,6 +9,7 @@ import '../../services/seller/seller_service.dart';
 import '../../services/product/product_service.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
+import '../../shared/utils/image_helper.dart';
 
 class SellerProfilePage extends StatefulWidget {
   final String sellerId;
@@ -269,6 +270,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
   Widget _buildProfileHeader(BuildContext context, UserModel seller, SellerProfileModel? profile) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final String avatarUrl = ImageHelper.resolveProfileImageUrl(seller.avatarUrl, name: seller.name);
 
     return Container(
       decoration: BoxDecoration(
@@ -337,7 +339,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                 ),
                 child: CircleAvatar(
                   radius: 50,
-                  backgroundImage: NetworkImage(seller.avatarUrl ?? 'https://i.pravatar.cc/150'),
+                  backgroundImage: NetworkImage(avatarUrl),
                 ),
               ),
             ),

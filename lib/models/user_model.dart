@@ -103,8 +103,8 @@ class UserModel implements AppModel {
       'postal_code': postalCode,
       'country': country,
       'bio': bio,
-      'created_at': createdAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
+      // Note: created_at and updated_at are excluded from toMap() 
+      // because they are typically managed by Supabase/PostgreSQL.
     };
   }
 

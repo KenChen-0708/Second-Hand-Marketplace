@@ -169,6 +169,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final bundle = _bundle!;
     final product = bundle.product;
     final messages = bundle.messages;
+    
+    // Resolve profile image with initials fallback for the header
+    final String avatarUrl = ImageHelper.resolveProfileImageUrl(
+      bundle.otherUser.avatarUrl, 
+      name: bundle.otherUser.name
+    );
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -186,9 +192,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundImage: NetworkImage(
-                  bundle.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
-                ),
+                backgroundImage: NetworkImage(avatarUrl),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -221,7 +225,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                         ),
                         Expanded(
                           child: Text(
-                            '${product.title} · \$${product.price.toStringAsFixed(0)}',
+                            '${product.title} · RM ${product.price.toStringAsFixed(0)}',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11,
@@ -280,9 +284,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     _MessageBubble(
                       message: message,
                       isMe: isMe,
-                      otherAvatarUrl:
-                          bundle.otherUser.avatarUrl ??
-                          'https://i.pravatar.cc/150',
+                      otherUser: bundle.otherUser,
                     ),
                   ],
                 );
@@ -351,16 +353,21 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.isMe,
-    required this.otherAvatarUrl,
+    required this.otherUser,
   });
 
   final ChatMessageModel message;
   final bool isMe;
-  final String otherAvatarUrl;
+  final UserModel otherUser;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    
+    final avatarUrl = ImageHelper.resolveProfileImageUrl(
+      otherUser.avatarUrl, 
+      name: otherUser.name
+    );
 
     return Padding(
       padding: EdgeInsets.only(
@@ -378,7 +385,7 @@ class _MessageBubble extends StatelessWidget {
           if (!isMe) ...[
             CircleAvatar(
               radius: 14,
-              backgroundImage: NetworkImage(otherAvatarUrl),
+              backgroundImage: NetworkImage(avatarUrl),
             ),
             const SizedBox(width: 6),
           ],

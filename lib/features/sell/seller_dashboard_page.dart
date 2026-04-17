@@ -7,6 +7,7 @@ import '../../services/auth/auth_service.dart';
 import '../../services/chat/chat_service.dart';
 import '../../services/seller/seller_service.dart';
 import '../chat/chat_models.dart';
+import '../../shared/utils/image_helper.dart';
 
 class SellerDashboardPage extends StatefulWidget {
   const SellerDashboardPage({super.key});
@@ -153,6 +154,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
   }
 
   Widget _buildHeader(BuildContext context, Color primaryColor) {
+    final String avatarUrl = ImageHelper.resolveProfileImageUrl(_currentUser?.avatarUrl, name: _currentUser?.name);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
       decoration: BoxDecoration(
@@ -221,9 +224,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               ),
               CircleAvatar(
                 radius: 28,
-                backgroundImage: NetworkImage(
-                  _currentUser?.avatarUrl ?? 'https://i.pravatar.cc/150?u=${_currentUser?.id}',
-                ),
+                backgroundImage: NetworkImage(avatarUrl),
               ),
             ],
           ),
@@ -748,9 +749,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: product.images != null && product.images!.isNotEmpty
-                  ? Image.network(product.images![0], fit: BoxFit.cover, width: double.infinity)
-                  : Container(color: Colors.grey.shade100, child: const Icon(Icons.image_outlined, color: Colors.grey)),
+              child: ImageHelper.productImage(product.imageUrl, fit: BoxFit.cover, width: double.infinity),
             ),
           ),
           Padding(
@@ -879,6 +878,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
 
   Widget _buildChatTile(BuildContext context, ChatConversationBundle conversation) {
     final lastMessageTime = relativeTime(conversation.lastMessage?.createdAt);
+    final String otherUserAvatar = ImageHelper.resolveProfileImageUrl(conversation.otherUser.avatarUrl, name: conversation.otherUser.name);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -891,7 +891,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
         leading: Stack(
           children: [
             CircleAvatar(
-              backgroundImage: NetworkImage(conversation.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150'),
+              backgroundImage: NetworkImage(otherUserAvatar),
             ),
             if (_currentUser != null && conversation.unreadCountFor(_currentUser!.id) > 0)
               Positioned(
@@ -946,4 +946,3 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     );
   }
 }
-

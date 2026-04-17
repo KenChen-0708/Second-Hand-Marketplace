@@ -213,6 +213,12 @@ class _ConversationTile extends StatelessWidget {
     final lastMessage = bundle.lastMessage;
     final unreadCount = bundle.unreadCountFor(currentUserId);
     final hasUnread = unreadCount > 0;
+    
+    // Resolve profile image with initials fallback
+    final String avatarUrl = ImageHelper.resolveProfileImageUrl(
+      bundle.otherUser.avatarUrl, 
+      name: bundle.otherUser.name
+    );
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -228,9 +234,7 @@ class _ConversationTile extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 28,
-                    backgroundImage: NetworkImage(
-                      bundle.otherUser.avatarUrl ?? 'https://i.pravatar.cc/150',
-                    ),
+                    backgroundImage: NetworkImage(avatarUrl),
                     backgroundColor: colorScheme.surfaceContainerHighest,
                   ),
                   Positioned(

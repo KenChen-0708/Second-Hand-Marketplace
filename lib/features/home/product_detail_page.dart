@@ -265,7 +265,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final product = detail.product;
         final seller = detail.seller;
         final sellerName = seller?.name ?? 'Seller';
-        final sellerAvatar = seller?.avatarUrl ?? 'https://i.pravatar.cc/150';
+        
+        // Dynamic Avatar Resolution
+        final sellerAvatar = ImageHelper.resolveProfileImageUrl(seller?.avatarUrl, name: seller?.name);
+
         final favoriteState = context.watch<FavoriteState>();
         final isFavorite = favoriteState.isFavorite(product.id);
         final isOwner =

@@ -316,6 +316,11 @@ final _router = GoRouter(
                   builder: (context, state) => const MyAccountPage(),
                 ),
                 GoRoute(
+                  path: 'edit',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const MyAccountPage(),
+                ),
+                GoRoute(
                   path: 'notifications',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const NotificationsPage(),
