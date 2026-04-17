@@ -22,10 +22,10 @@ class SellerProfilePage extends StatefulWidget {
 class _SellerProfilePageState extends State<SellerProfilePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  
+
   bool _isLoading = true;
   String? _errorMessage;
-  
+
   UserModel? _sellerUser;
   SellerProfileModel? _sellerProfile;
   List<ProductModel> _activeListings = [];
@@ -54,7 +54,10 @@ class _SellerProfilePageState extends State<SellerProfilePage>
       final results = await Future.wait([
         _authService.fetchProfileById(widget.sellerId),
         _sellerService.fetchPublicProfile(widget.sellerId),
-        _productService.fetchProducts(sellerId: widget.sellerId, status: 'active'),
+        _productService.fetchProducts(
+          sellerId: widget.sellerId,
+          status: 'active',
+        ),
         _sellerService.fetchSellerReviews(widget.sellerId),
       ]);
 
@@ -93,8 +96,14 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           title: const Text('Login Required'),
           content: const Text('Please log in to message this seller.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Login')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Login'),
+            ),
           ],
         ),
       );
@@ -108,24 +117,36 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     }
 
     try {
-      final productId = _activeListings.isNotEmpty ? _activeListings.first.id : null;
-      final bundle = await context.read<ChatConversationState>().getOrCreateConversationForProduct(
-        productId: productId ?? '',
-        sellerId: widget.sellerId,
-      );
+      if (_activeListings.isEmpty) {
+        SnackbarHelper.showTopMessage(
+          context,
+          'This seller has no active product to start a chat.',
+        );
+        return;
+      }
+
+      final product = _activeListings.first;
+
+      final bundle = await context
+          .read<ChatConversationState>()
+          .getOrCreateConversationForProduct(product: product);
       if (mounted) {
         context.push('/chat/${bundle.conversation.id}');
       }
     } catch (e) {
       if (mounted) {
-        SnackbarHelper.showError(context, e.toString().replaceFirst('Exception: ', ''));
+        SnackbarHelper.showError(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+        );
       }
     }
   }
 
   void _shareProfile() {
     if (_sellerUser == null) return;
-    final String text = 'Check out ${_sellerUser!.name} on CampusSell! They have ${_activeListings.length} items for sale.\n\nDownload the app to see more.';
+    final String text =
+        'Check out ${_sellerUser!.name} on CampusSell! They have ${_activeListings.length} items for sale.\n\nDownload the app to see more.';
     Share.share(text, subject: 'Seller Profile: ${_sellerUser!.name}');
   }
 
@@ -140,15 +161,30 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             const SizedBox(height: 16),
             ListTile(
               leading: const Icon(Icons.copy_rounded),
               title: const Text('Copy Profile Link'),
               onTap: () {
-                Clipboard.setData(ClipboardData(text: 'https://campus-marketplace.app/seller/${widget.sellerId}'));
+                Clipboard.setData(
+                  ClipboardData(
+                    text:
+                        'https://campus-marketplace.app/seller/${widget.sellerId}',
+                  ),
+                );
                 Navigator.pop(context);
-                SnackbarHelper.showTopMessage(context, 'Link copied to clipboard!');
+                SnackbarHelper.showTopMessage(
+                  context,
+                  'Link copied to clipboard!',
+                );
               },
             ),
             ListTile(
@@ -156,15 +192,24 @@ class _SellerProfilePageState extends State<SellerProfilePage>
               title: const Text('Block Seller'),
               onTap: () {
                 Navigator.pop(context);
-                _showConfirmDialog('Block Seller', 'Are you sure you want to block this user? You will no longer see their listings.');
+                _showConfirmDialog(
+                  'Block Seller',
+                  'Are you sure you want to block this user? You will no longer see their listings.',
+                );
               },
             ),
             ListTile(
-              leading: const Icon(Icons.report_problem_rounded, color: Colors.red),
+              leading: const Icon(
+                Icons.report_problem_rounded,
+                color: Colors.red,
+              ),
               title: const Text('Report Seller'),
               onTap: () {
                 Navigator.pop(context);
-                _showConfirmDialog('Report Seller', 'Help us keep the marketplace safe. Are you sure you want to report this user for investigation?');
+                _showConfirmDialog(
+                  'Report Seller',
+                  'Help us keep the marketplace safe. Are you sure you want to report this user for investigation?',
+                );
               },
             ),
             const SizedBox(height: 16),
@@ -181,13 +226,22 @@ class _SellerProfilePageState extends State<SellerProfilePage>
         title: Text(title),
         content: Text(content),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              SnackbarHelper.showTopMessage(context, 'Request submitted for review.');
-            }, 
-            child: Text(title.split(' ').first, style: const TextStyle(color: Colors.red))
+              SnackbarHelper.showTopMessage(
+                context,
+                'Request submitted for review.',
+              );
+            },
+            child: Text(
+              title.split(' ').first,
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -204,9 +258,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_errorMessage != null || _sellerUser == null) {
@@ -218,11 +270,21 @@ class _SellerProfilePageState extends State<SellerProfilePage>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline_rounded, size: 64, color: Colors.red),
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 64,
+                  color: Colors.red,
+                ),
                 const SizedBox(height: 16),
-                Text(_errorMessage ?? 'Seller not found', textAlign: TextAlign.center),
+                Text(
+                  _errorMessage ?? 'Seller not found',
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 24),
-                FilledButton(onPressed: _loadSellerData, child: const Text('Try Again')),
+                FilledButton(
+                  onPressed: _loadSellerData,
+                  child: const Text('Try Again'),
+                ),
               ],
             ),
           ),
@@ -236,7 +298,9 @@ class _SellerProfilePageState extends State<SellerProfilePage>
         onRefresh: _loadSellerData,
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(child: _buildProfileHeader(context, _sellerUser!, _sellerProfile)),
+            SliverToBoxAdapter(
+              child: _buildProfileHeader(context, _sellerUser!, _sellerProfile),
+            ),
             SliverPersistentHeader(
               pinned: true,
               delegate: _TabBarDelegate(
@@ -248,7 +312,10 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                   unselectedLabelColor: Theme.of(
                     context,
                   ).colorScheme.onSurfaceVariant,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                   tabs: const [
                     Tab(text: 'Active Listings'),
                     Tab(text: 'Reviews'),
@@ -266,7 +333,11 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context, UserModel seller, SellerProfileModel? profile) {
+  Widget _buildProfileHeader(
+    BuildContext context,
+    UserModel seller,
+    SellerProfileModel? profile,
+  ) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -296,7 +367,9 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   CircleAvatar(
-                    backgroundColor: cs.surfaceContainerHighest.withOpacity(0.5),
+                    backgroundColor: cs.surfaceContainerHighest.withOpacity(
+                      0.5,
+                    ),
                     child: IconButton(
                       icon: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
                       onPressed: () => context.pop(),
@@ -305,7 +378,9 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: cs.surfaceContainerHighest.withOpacity(0.5),
+                        backgroundColor: cs.surfaceContainerHighest.withOpacity(
+                          0.5,
+                        ),
                         child: IconButton(
                           icon: Icon(Icons.share_outlined, color: cs.onSurface),
                           onPressed: _shareProfile,
@@ -313,9 +388,14 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                       ),
                       const SizedBox(width: 8),
                       CircleAvatar(
-                        backgroundColor: cs.surfaceContainerHighest.withOpacity(0.5),
+                        backgroundColor: cs.surfaceContainerHighest.withOpacity(
+                          0.5,
+                        ),
                         child: IconButton(
-                          icon: Icon(Icons.more_horiz_rounded, color: cs.onSurface),
+                          icon: Icon(
+                            Icons.more_horiz_rounded,
+                            color: cs.onSurface,
+                          ),
                           onPressed: _showMoreOptions,
                         ),
                       ),
@@ -324,34 +404,45 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             Hero(
               tag: 'seller_avatar_${seller.id}',
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: cs.primary.withOpacity(0.2), width: 2),
+                  border: Border.all(
+                    color: cs.primary.withOpacity(0.2),
+                    width: 2,
+                  ),
                 ),
                 child: CircleAvatar(
                   radius: 50,
-                  backgroundImage: NetworkImage(seller.avatarUrl ?? 'https://i.pravatar.cc/150'),
+                  backgroundImage: NetworkImage(
+                    seller.avatarUrl ?? 'https://i.pravatar.cc/150',
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
             Text(
               seller.name,
-              style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              style: textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 4),
             if (profile?.isVerified ?? false)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.verified_user_rounded, color: cs.primary, size: 16),
+                  Icon(
+                    Icons.verified_user_rounded,
+                    color: cs.primary,
+                    size: 16,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     'Verified Student',
@@ -363,29 +454,33 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                   ),
                 ],
               ),
-            
+
             const SizedBox(height: 24),
-            
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _buildStatItem(
-                  context, 
-                  profile?.averageRating.toStringAsFixed(1) ?? '0.0', 
-                  'Rating', 
-                  icon: Icons.star_rounded
+                  context,
+                  profile?.averageRating.toStringAsFixed(1) ?? '0.0',
+                  'Rating',
+                  icon: Icons.star_rounded,
                 ),
-                _buildStatItem(context, profile?.totalSales.toString() ?? '0', 'Sold'),
                 _buildStatItem(
-                  context, 
-                  seller.createdAt?.year.toString() ?? '2024', 
-                  'Joined'
+                  context,
+                  profile?.totalSales.toString() ?? '0',
+                  'Sold',
+                ),
+                _buildStatItem(
+                  context,
+                  seller.createdAt?.year.toString() ?? '2024',
+                  'Joined',
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: FilledButton.icon(
@@ -394,11 +489,13 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                 label: const Text('Message Seller'),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 24),
           ],
         ),
@@ -406,7 +503,12 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     );
   }
 
-  Widget _buildStatItem(BuildContext context, String value, String label, {IconData? icon}) {
+  Widget _buildStatItem(
+    BuildContext context,
+    String value,
+    String label, {
+    IconData? icon,
+  }) {
     final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
@@ -424,15 +526,15 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           ],
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
-        ),
+        Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
       ],
     );
   }
 
-  Widget _buildActiveListingsSliver(BuildContext context, List<ProductModel> products) {
+  Widget _buildActiveListingsSliver(
+    BuildContext context,
+    List<ProductModel> products,
+  ) {
     if (products.isEmpty) {
       return const SliverFillRemaining(
         child: Center(child: Text('No active listings found')),
@@ -448,13 +550,10 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           crossAxisSpacing: 16,
           childAspectRatio: 0.75,
         ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final product = products[index];
-            return _ProductCard(product: product);
-          },
-          childCount: products.length,
-        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final product = products[index];
+          return _ProductCard(product: product);
+        }, childCount: products.length),
       ),
     );
   }
@@ -469,13 +568,10 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     return SliverPadding(
       padding: const EdgeInsets.all(16),
       sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final review = reviews[index];
-            return _ReviewTile(review: review);
-          },
-          childCount: reviews.length,
-        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final review = reviews[index];
+          return _ReviewTile(review: review);
+        }, childCount: reviews.length),
       ),
     );
   }
@@ -508,7 +604,9 @@ class _ProductCard extends StatelessWidget {
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
                 child: Image.network(
                   product.imageUrl ?? 'https://i.pravatar.cc/300',
                   fit: BoxFit.cover,
@@ -581,16 +679,22 @@ class _ReviewTile extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Row(
-            children: List.generate(5, (i) => Icon(
-              Icons.star_rounded,
-              color: i < (review.rating) ? Colors.amber : cs.outlineVariant,
-              size: 16,
-            )),
+            children: List.generate(
+              5,
+              (i) => Icon(
+                Icons.star_rounded,
+                color: i < (review.rating) ? Colors.amber : cs.outlineVariant,
+                size: 16,
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             review.comment ?? 'No comment provided',
-            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.8), height: 1.4),
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.8),
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -617,11 +721,12 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: backgroundColor,
-      child: tabBar,
-    );
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(color: backgroundColor, child: tabBar);
   }
 
   @override
