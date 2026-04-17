@@ -163,6 +163,7 @@ class _SellWizardState extends State<_SellWizard> {
       TextEditingController(); // <-- Added Description
   String? _selectedCondition;
   final _priceController = TextEditingController();
+  final List<_DraftVariation> _variations = [];
   bool _openToOffers = true;
   bool _faceToFace = false;
   bool _delivery = false;
@@ -234,7 +235,23 @@ class _SellWizardState extends State<_SellWizard> {
     _descriptionController.dispose();
     _priceController.dispose();
     _locationController.dispose();
+    for (final variation in _variations) {
+      variation.dispose();
+    }
     super.dispose();
+  }
+
+  void _addVariant() {
+    setState(() {
+      _variations.add(_DraftVariation());
+    });
+  }
+
+  void _removeVariant(int index) {
+    setState(() {
+      _variations[index].dispose();
+      _variations.removeAt(index);
+    });
   }
 
   void _next() {
@@ -266,7 +283,8 @@ class _SellWizardState extends State<_SellWizard> {
       _nameController.text.trim().isNotEmpty &&
       _descriptionController.text.trim().isNotEmpty && // Require description
       _selectedCondition != null &&
-      _priceController.text.trim().isNotEmpty;
+      _priceController.text.trim().isNotEmpty &&
+      _variations.every((variation) => variation.isValid);
   bool get _canProceedStep3 =>
       (_faceToFace || _delivery) &&
       (!_faceToFace || _locationController.text.trim().isNotEmpty) &&
@@ -511,6 +529,12 @@ class _SellWizardState extends State<_SellWizard> {
 
       final productId = await productService.createProduct(productData);
 
+      await productService.createProductVariations(
+        _variations
+            .map((variation) => variation.toInsertMap(productId))
+            .toList(),
+      );
+
       // 9. Insert Meetup Location into product_meetup_locations table
       if (_faceToFace && _locationController.text.isNotEmpty) {
         await productService.createMeetupLocation({
@@ -618,11 +642,15 @@ class _SellWizardState extends State<_SellWizard> {
                     nameController: _nameController,
                     descriptionController: _descriptionController,
                     priceController: _priceController,
+                    variations: _variations,
                     selectedCondition: _selectedCondition,
                     openToOffers: _openToOffers,
                     onConditionSelected: (c) =>
                         setState(() => _selectedCondition = c),
                     onOffersChanged: (v) => setState(() => _openToOffers = v),
+                    onAddVariant: _addVariant,
+                    onRemoveVariant: _removeVariant,
+                    onVariantChanged: () => setState(() {}),
                   ),
                   _Step3TradeMethod(
                     faceToFace: _faceToFace,
@@ -651,6 +679,7 @@ class _SellWizardState extends State<_SellWizard> {
                     condition: _selectedCondition,
                     price: _priceController.text,
                     openToOffers: _openToOffers,
+                    variations: _variations,
                     faceToFace: _faceToFace,
                     delivery: _delivery,
                     location: _locationController.text,
@@ -1339,19 +1368,27 @@ class _Step2Details extends StatelessWidget {
   final TextEditingController
   descriptionController; // <-- Added Description Controller
   final TextEditingController priceController;
+  final List<_DraftVariation> variations;
   final String? selectedCondition;
   final bool openToOffers;
   final void Function(String) onConditionSelected;
   final void Function(bool) onOffersChanged;
+  final VoidCallback onAddVariant;
+  final void Function(int) onRemoveVariant;
+  final VoidCallback onVariantChanged;
 
   const _Step2Details({
     required this.nameController,
     required this.descriptionController,
     required this.priceController,
+    required this.variations,
     required this.selectedCondition,
     required this.openToOffers,
     required this.onConditionSelected,
     required this.onOffersChanged,
+    required this.onAddVariant,
+    required this.onRemoveVariant,
+    required this.onVariantChanged,
   });
 
   static const List<String> _conditions = [
@@ -1448,6 +1485,60 @@ class _Step2Details extends StatelessWidget {
             ],
             prefixText: 'RM ',
           ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              const Expanded(child: _SectionLabel('Product Variants')),
+              TextButton.icon(
+                onPressed: onAddVariant,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Add Variant'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Optional. Add stock by variation such as size, color, or storage.',
+            style: TextStyle(
+              fontSize: 12,
+              color: colors.onSurface.withOpacity(0.55),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (variations.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: colors.outline.withOpacity(0.12)),
+              ),
+              child: Text(
+                'No variants added. The listing will be published without variant-level stock.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colors.onSurface.withOpacity(0.65),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: List.generate(
+                variations.length,
+                (index) => Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == variations.length - 1 ? 0 : 12,
+                  ),
+                  child: _VariantEditorCard(
+                    variation: variations[index],
+                    index: index,
+                    onChanged: onVariantChanged,
+                    onRemove: () => onRemoveVariant(index),
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 20),
           _OfferToggle(value: openToOffers, onChanged: onOffersChanged),
         ],
@@ -1595,6 +1686,7 @@ class _Step4Review extends StatelessWidget {
   final String? condition;
   final String price;
   final bool openToOffers;
+  final List<_DraftVariation> variations;
   final bool faceToFace;
   final bool delivery;
   final String location;
@@ -1612,6 +1704,7 @@ class _Step4Review extends StatelessWidget {
     required this.condition,
     required this.price,
     required this.openToOffers,
+    required this.variations,
     required this.faceToFace,
     required this.delivery,
     required this.location,
@@ -1674,6 +1767,15 @@ class _Step4Review extends StatelessWidget {
                 _ReviewSection(
                   title: 'Open to Offers',
                   value: openToOffers ? 'Yes' : 'No',
+                  onEdit: () => onEdit(2),
+                ),
+                _ReviewSection(
+                  title: 'Variants',
+                  value: variations.isEmpty
+                      ? 'None'
+                      : variations
+                          .map((variation) => variation.reviewLabel)
+                          .join(' | '),
                   onEdit: () => onEdit(2),
                 ),
                 _ReviewSection(
@@ -1996,6 +2098,161 @@ class _ReviewSection extends StatelessWidget {
   }
 }
 
+class _VariantEditorCard extends StatelessWidget {
+  const _VariantEditorCard({
+    required this.variation,
+    required this.index,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final _DraftVariation variation;
+  final int index;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.outline.withOpacity(0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Variant ${index + 1}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline_rounded),
+                tooltip: 'Remove variant',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _StyledField(
+            controller: variation.typeController,
+            hint: 'Variation type, e.g. size',
+            icon: Icons.category_outlined,
+            onChanged: (_) => onChanged(),
+          ),
+          const SizedBox(height: 12),
+          _StyledField(
+            controller: variation.valueController,
+            hint: 'Variation value, e.g. XL',
+            icon: Icons.label_outline_rounded,
+            onChanged: (_) => onChanged(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _StyledField(
+                  controller: variation.quantityController,
+                  hint: 'Stock',
+                  icon: Icons.inventory_2_outlined,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StyledField(
+                  controller: variation.priceAdjustmentController,
+                  hint: '0.00',
+                  icon: Icons.tune_rounded,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d{0,2}')),
+                  ],
+                  prefixText: 'RM ',
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+            ],
+          ),
+          if (!variation.isValid) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Fill in type, value, and quantity to keep this variant.',
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DraftVariation {
+  _DraftVariation()
+      : typeController = TextEditingController(),
+        valueController = TextEditingController(),
+        quantityController = TextEditingController(text: '1'),
+        priceAdjustmentController = TextEditingController(text: '0');
+
+  final TextEditingController typeController;
+  final TextEditingController valueController;
+  final TextEditingController quantityController;
+  final TextEditingController priceAdjustmentController;
+
+  bool get isValid {
+    final quantity = int.tryParse(quantityController.text.trim());
+    return typeController.text.trim().isNotEmpty &&
+        valueController.text.trim().isNotEmpty &&
+        quantity != null &&
+        quantity >= 0;
+  }
+
+  String get reviewLabel {
+    final adjustment = double.tryParse(priceAdjustmentController.text.trim()) ?? 0;
+    final adjustmentText = adjustment == 0
+        ? 'no price change'
+        : adjustment > 0
+        ? '+RM ${adjustment.toStringAsFixed(2)}'
+        : '-RM ${adjustment.abs().toStringAsFixed(2)}';
+    return '${typeController.text.trim()}: ${valueController.text.trim()} (${quantityController.text.trim()} qty, $adjustmentText)';
+  }
+
+  Map<String, dynamic> toInsertMap(String productId) {
+    return {
+      'product_id': productId,
+      'variation_type': typeController.text.trim(),
+      'variation_value': valueController.text.trim(),
+      'available_quantity': int.tryParse(quantityController.text.trim()) ?? 0,
+      'price_adjustment':
+          double.tryParse(priceAdjustmentController.text.trim()) ?? 0,
+    };
+  }
+
+  void dispose() {
+    typeController.dispose();
+    valueController.dispose();
+    quantityController.dispose();
+    priceAdjustmentController.dispose();
+  }
+}
+
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -2019,6 +2276,7 @@ class _StyledField extends StatelessWidget {
   final String? prefixText;
   final Widget? suffixIcon;
   final int maxLines; // <-- Added to support description
+  final ValueChanged<String>? onChanged;
 
   const _StyledField({
     required this.controller,
@@ -2030,6 +2288,7 @@ class _StyledField extends StatelessWidget {
     this.prefixText,
     this.suffixIcon,
     this.maxLines = 1,
+    this.onChanged,
   });
 
   @override
@@ -2040,6 +2299,7 @@ class _StyledField extends StatelessWidget {
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       maxLines: maxLines, // <-- Supports tall text area
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

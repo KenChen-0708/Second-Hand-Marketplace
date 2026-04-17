@@ -3,6 +3,7 @@ export 'json_utils.dart';
 export 'user_model.dart';
 export 'category_model.dart';
 export 'product_model.dart';
+export 'product_variation_model.dart';
 export 'checkout_session_model.dart';
 export 'cart_model.dart';
 export 'cart_action_result.dart';

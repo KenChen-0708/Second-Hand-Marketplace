@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../models/mock_data.dart';
 import '../../shared/utils/camera_capture_helper.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/product_display_helper.dart';
 import '../../state/state.dart';
 import 'product_listing_page.dart';
 
@@ -66,7 +67,7 @@ class _HomePageState extends State<HomePage> {
   void _onProductStateChanged() {
     if (mounted && _productState != null) {
       setState(() {
-        _allProducts = _productState!.items;
+        _allProducts = _visibleMarketplaceProducts(_productState!.items);
         _applyAllFilters();
       });
     }
@@ -94,7 +95,7 @@ class _HomePageState extends State<HomePage> {
       }
 
       setState(() {
-        _allProducts = products;
+        _allProducts = _visibleMarketplaceProducts(products);
         _applyAllFilters();
       });
     } catch (e) {
@@ -737,7 +738,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openCamera() async {
-    await CameraCaptureHelper.openCamera(context);
+    await CameraCaptureHelper.pickFromCameraOrGallery(context);
+  }
+
+  List<ProductModel> _visibleMarketplaceProducts(List<ProductModel> products) {
+    final currentUserId = context.read<UserState>().currentUser?.id;
+    return products
+        .where((product) => ProductDisplayHelper.isVisibleToUser(product, currentUserId))
+        .toList();
   }
 
   List<ProductModel> _buildListingResults({

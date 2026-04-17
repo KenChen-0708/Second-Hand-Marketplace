@@ -179,7 +179,7 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
     final (icon, backgroundColor) = _getIconAndColor(widget.type, colorScheme);
 
     return IgnorePointer(
-      ignoring: false,
+      ignoring: true,
       child: Material(
         color: Colors.transparent,
         child: Center(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -118,6 +119,66 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         setState(() => _isSending = false);
       }
     }
+  }
+
+  Future<void> _copyMessageText(String text) async {
+    if (text.trim().isEmpty) {
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) {
+      return;
+    }
+    SnackbarHelper.showSuccess(context, 'Message copied to clipboard.');
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final clipboardData = await Clipboard.getData('text/plain');
+    final text = clipboardData?.text?.trim();
+    if (!mounted) {
+      return;
+    }
+
+    if (text == null || text.isEmpty) {
+      SnackbarHelper.showInfo(context, 'Clipboard is empty.');
+      return;
+    }
+
+    _textController.text = text;
+    _textController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _textController.text.length),
+    );
+    setState(() {});
+  }
+
+  Future<void> _showMessageActions(ChatMessageModel message) async {
+    final sharedProduct = ChatService.parseSharedProduct(message);
+    final hasCopyableText =
+        sharedProduct == null && message.messageText.trim().isNotEmpty;
+
+    if (!hasCopyableText) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: const Text('Copy message'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _copyMessageText(message.messageText);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -281,10 +342,24 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   children: [
                     if (showDateDivider)
                       _DateDivider(date: message.createdAt ?? DateTime.now()),
-                    _MessageBubble(
-                      message: message,
-                      isMe: isMe,
-                      otherUser: bundle.otherUser,
+                    Builder(
+                      builder: (context) {
+                        final sharedProduct = ChatService.parseSharedProduct(message);
+                        if (sharedProduct != null) {
+                          return _SharedProductBubble(
+                            product: sharedProduct.product,
+                            isMe: isMe,
+                            otherAvatarUrl: avatarUrl,
+                          );
+                        }
+
+                        return _MessageBubble(
+                          message: message,
+                          isMe: isMe,
+                          otherUser: bundle.otherUser,
+                          onLongPress: () => _showMessageActions(message),
+                        );
+                      },
                     ),
                   ],
                 );
@@ -295,6 +370,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             controller: _textController,
             canSend: _textController.text.trim().isNotEmpty && !_isSending,
             onChanged: () => setState(() {}),
+            onPaste: _pasteFromClipboard,
             onSend: _sendMessage,
           ),
         ],
@@ -354,11 +430,13 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMe,
     required this.otherUser,
+    this.onLongPress,
   });
 
   final ChatMessageModel message;
   final bool isMe;
   final UserModel otherUser;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -395,71 +473,74 @@ class _MessageBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: message.isImage && message.imageUrl != null
-                      ? const EdgeInsets.all(6)
-                      : const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                  decoration: BoxDecoration(
-                    color: isMe
-                        ? const Color(0xFF10B981)
-                        : colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isMe ? 18 : 4),
-                      bottomRight: Radius.circular(isMe ? 4 : 18),
+                GestureDetector(
+                  onLongPress: onLongPress,
+                  child: Container(
+                    padding: message.isImage && message.imageUrl != null
+                        ? const EdgeInsets.all(6)
+                        : const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                    decoration: BoxDecoration(
+                      color: isMe
+                          ? const Color(0xFF10B981)
+                          : colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(18),
+                        topRight: const Radius.circular(18),
+                        bottomLeft: Radius.circular(isMe ? 18 : 4),
+                        bottomRight: Radius.circular(isMe ? 4 : 18),
+                      ),
                     ),
-                  ),
-                  child: message.isImage && message.imageUrl != null
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: Image.network(
-                                message.imageUrl!,
-                                width: 220,
-                                height: 220,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
+                    child: message.isImage && message.imageUrl != null
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.network(
+                                  message.imageUrl!,
                                   width: 220,
                                   height: 220,
-                                  color: colorScheme.surfaceContainerHighest,
-                                  alignment: Alignment.center,
-                                  child: const Icon(Icons.image_outlined),
-                                ),
-                              ),
-                            ),
-                            if (message.messageText.trim().isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                child: Text(
-                                  message.messageText,
-                                  style: TextStyle(
-                                    fontSize: 14.5,
-                                    height: 1.4,
-                                    color: isMe
-                                        ? Colors.white
-                                        : colorScheme.onSurface,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 220,
+                                    height: 220,
+                                    color: colorScheme.surfaceContainerHighest,
+                                    alignment: Alignment.center,
+                                    child: const Icon(Icons.image_outlined),
                                   ),
                                 ),
                               ),
+                              if (message.messageText.trim().isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  child: Text(
+                                    message.messageText,
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      height: 1.4,
+                                      color: isMe
+                                          ? Colors.white
+                                          : colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
-                        )
-                      : Text(
-                          message.messageText,
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            height: 1.4,
-                            color: isMe ? Colors.white : colorScheme.onSurface,
+                          )
+                        : Text(
+                            message.messageText,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              height: 1.4,
+                              color: isMe ? Colors.white : colorScheme.onSurface,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -559,7 +640,7 @@ class _SharedProductBubble extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '\$${product.price.toStringAsFixed(2)}',
+                            'RM ${product.price.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontWeight: FontWeight.w800,
@@ -610,12 +691,14 @@ class _InputBar extends StatelessWidget {
     required this.controller,
     required this.canSend,
     required this.onChanged,
+    required this.onPaste,
     required this.onSend,
   });
 
   final TextEditingController controller;
   final bool canSend;
   final VoidCallback onChanged;
+  final VoidCallback onPaste;
   final VoidCallback onSend;
 
   @override
@@ -642,6 +725,14 @@ class _InputBar extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            IconButton(
+              onPressed: onPaste,
+              icon: Icon(
+                Icons.content_paste_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              tooltip: 'Paste',
+            ),
             Expanded(
               child: Container(
                 decoration: BoxDecoration(

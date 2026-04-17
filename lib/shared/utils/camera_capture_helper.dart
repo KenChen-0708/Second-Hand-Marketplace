@@ -8,10 +8,35 @@ class CameraCaptureHelper {
 
   static final ImagePicker _picker = ImagePicker();
 
-  static Future<void> openCamera(BuildContext context) async {
+  static Future<void> pickFromCameraOrGallery(BuildContext context) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!context.mounted || source == null) {
+      return;
+    }
+
     try {
       final photo = await _picker.pickImage(
-        source: ImageSource.camera,
+        source: source,
         imageQuality: 80,
       );
 
@@ -19,7 +44,12 @@ class CameraCaptureHelper {
         return;
       }
 
-      SnackbarHelper.showSuccess(context, 'Photo captured successfully.');
+      SnackbarHelper.showSuccess(
+        context,
+        source == ImageSource.camera
+            ? 'Photo captured successfully.'
+            : 'Image selected successfully.',
+      );
     } catch (_) {
       if (!context.mounted) {
         return;

@@ -14,6 +14,7 @@ class OrderService {
     String? handoverLocation,
     DateTime? handoverDate,
     String? notes,
+    double additionalFee = 0,
     String status = 'pending',
     String paymentStatus = 'pending',
   }) async {
@@ -23,10 +24,11 @@ class OrderService {
 
     try {
       final orderNumber = _generateOrderNumber();
-      final totalPrice = orderItems.fold<double>(
+      final itemsTotal = orderItems.fold<double>(
         0,
         (sum, item) => sum + item.subtotal,
       );
+      final totalPrice = itemsTotal + additionalFee;
 
       final insertedOrder = await _supabase
           .from('orders')
