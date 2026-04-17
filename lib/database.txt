@@ -36,6 +36,8 @@ drop sequence if exists seller_profiles_id_seq cascade;
 drop sequence if exists favorites_id_seq cascade;
 drop sequence if exists disputes_id_seq cascade;
 drop sequence if exists admin_logs_id_seq cascade;
+drop sequence if exists product_variations_id_seq cascade;
+
 
 -- =========================
 -- GENERIC ID GENERATOR
@@ -73,6 +75,8 @@ create sequence seller_profiles_id_seq start 1;
 create sequence favorites_id_seq start 1;
 create sequence disputes_id_seq start 1;
 create sequence admin_logs_id_seq start 1;
+create sequence product_meetup_locations_id_seq;
+create sequence product_variations_id_seq start 1;
 
 -- =========================
 -- USERS
@@ -133,13 +137,59 @@ create table products (
   seller_id varchar(20) not null references users(id) on delete cascade,
   condition varchar(20) not null
     check (condition in ('like_new', 'excellent', 'good', 'fair')),
-  image_urls text[], -- <-- UPDATED TO ARRAY
+  image_urls text[],
+  -- ✅ UPDATED: Trade Preferences (NOW MULTI-SELECT)
+  trade_preference text[] not null default array['face_to_face']
+    check (
+      trade_preference <@ array['face_to_face', 'delivery_official', 'delivery_self']
+      and array_length(trade_preference, 1) > 0
+    ),
+  -- ✅ NEW: Trade Preferences
+  trade_preference varchar(30) not null default 'face_to_face'
+    check (trade_preference in ('face_to_face', 'delivery_official', 'delivery_self')),
+  -- ✅ NEW: Open to Offers
+  open_to_offers boolean not null default false,
   status varchar(20) not null default 'active'
     check (status in ('draft', 'active', 'reserved', 'sold', 'inactive')),
   view_count integer not null default 0 check (view_count >= 0),
   likes_count integer not null default 0 check (likes_count >= 0),
   created_at timestamptz not null default current_timestamp,
   updated_at timestamptz not null default current_timestamp
+);
+
+-- =========================
+-- PRODUCT VARIATIONS
+-- Prefix: PV
+-- =========================
+create table product_variations (
+  id varchar(20) primary key default generate_prefixed_id('product_variations_id_seq', 'PV', 4),
+  product_id varchar(20) not null references products(id) on delete cascade,
+  variation_type varchar(100) not null,   -- e.g. 'color', 'size', 'storage'
+  variation_value varchar(255) not null,  -- e.g. 'red', 'XL', '256GB'
+  available_quantity integer not null default 0
+    check (available_quantity >= 0),
+  price_adjustment numeric(10,2) not null default 0,
+  created_at timestamptz not null default current_timestamp,
+  unique(product_id, variation_type, variation_value)
+);
+
+-- =========================
+-- Product Meetup Location
+-- Prefix: ML
+-- =========================
+create table product_meetup_locations (
+  id varchar(20) primary key default generate_prefixed_id('product_meetup_locations_id_seq', 'ML', 4),
+  product_id varchar(20) not null
+    references products(id) on delete cascade,
+  location_name varchar(255) not null, -- e.g. "Starbucks Setapak Central Mall"
+  address text,                         -- full address (optional but useful)
+  city varchar(100),
+  state varchar(100),
+  postal_code varchar(20),
+  latitude numeric(10,7),               -- optional (for maps)
+  longitude numeric(10,7),
+  is_default boolean not null default false,
+  created_at timestamptz not null default current_timestamp
 );
 
 -- =========================
@@ -388,8 +438,3 @@ create index if not exists idx_disputes_accused_id on disputes(accused_id);
 
 create index idx_subcategories_category_id on subcategories(category_id);
 create index if not exists idx_products_subcategory_id on products(subcategory_id);
-
-
-//product image
-Bucket = product_images
-https://yqvgeownycvbzelukmfp.supabase.co/storage/v1/object/public/product_images/example.jpg

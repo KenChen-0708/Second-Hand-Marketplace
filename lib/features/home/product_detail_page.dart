@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
+import '../../shared/utils/currency_helper.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
@@ -45,9 +47,43 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ? null
         : UserModel.fromMap(Map<String, dynamic>.from(sellerData));
 
+    String? categoryName;
+    if (product.categoryId != null && product.categoryId!.isNotEmpty) {
+      final categoryData = await Supabase.instance.client
+          .from('categories')
+          .select('name')
+          .eq('id', product.categoryId!)
+          .maybeSingle();
+      categoryName = categoryData?['name']?.toString();
+    }
+
+    final reviewData = await Supabase.instance.client
+        .from('reviews')
+        .select('id, rating, title, comment, created_at, reviewer:users!reviews_reviewer_id_fkey(id, name, avatar_url)')
+        .eq('product_id', product.id)
+        .order('created_at', ascending: false);
+
+    final buyerComments = (reviewData as List)
+        .map(
+          (item) => _BuyerComment.fromMap(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        )
+        .where(
+          (comment) =>
+              comment.title.trim().isNotEmpty ||
+              comment.comment.trim().isNotEmpty,
+        )
+        .toList();
+
     await context.read<FavoriteState>().syncFavoriteStatus(product.id);
 
-    return _ProductDetailData(product: product, seller: seller);
+    return _ProductDetailData(
+      product: product,
+      seller: seller,
+      categoryName: categoryName,
+      buyerComments: buyerComments,
+    );
   }
 
   void _reloadProduct() {
@@ -273,6 +309,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final detail = snapshot.data!;
         final product = detail.product;
         final seller = detail.seller;
+        final categoryName = detail.categoryName ?? 'Uncategorized';
         final sellerName = seller?.name ?? 'Seller';
         final sellerAvatar = seller?.avatarUrl ?? 'https://i.pravatar.cc/150';
         final favoriteState = context.watch<FavoriteState>();
@@ -455,12 +492,31 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            '\$${product.price.toStringAsFixed(2)}',
+                            CurrencyHelper.formatRM(product.price),
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.w900,
                               fontSize: 28,
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              _buildInfoChip(
+                                context,
+                                icon: Icons.category_outlined,
+                                label: categoryName,
+                              ),
+                              _buildInfoChip(
+                                context,
+                                icon: Icons.swap_horiz_rounded,
+                                label: _formatTradePreference(
+                                  product.tradePreference,
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 24),
                           Text(
@@ -478,6 +534,39 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               height: 1.5,
                             ),
                           ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'Buyer Comments',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 12),
+                          if (detail.buyerComments.isEmpty)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                'No buyer comments yet for this product.',
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          else
+                            ...detail.buyerComments.map(
+                              (comment) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _BuyerCommentCard(comment: comment),
+                              ),
+                            ),
                           const SizedBox(height: 24),
                           Text(
                             'Sold By',
@@ -769,10 +858,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 }
 
 class _ProductDetailData {
-  const _ProductDetailData({required this.product, required this.seller});
+  const _ProductDetailData({
+    required this.product,
+    required this.seller,
+    required this.categoryName,
+    required this.buyerComments,
+  });
 
   final ProductModel product;
   final UserModel? seller;
+  final String? categoryName;
+  final List<_BuyerComment> buyerComments;
 }
 
 class _PurchaseSelection {
@@ -885,7 +981,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '\$${product.price.toStringAsFixed(2)}',
+                            CurrencyHelper.formatRM(product.price),
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontSize: 24,
@@ -969,6 +1065,186 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+Widget _buildInfoChip(
+  BuildContext context, {
+  required IconData icon,
+  required String label,
+}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
+}
+
+String _formatTradePreference(String tradePreference) {
+  switch (tradePreference) {
+    case 'delivery_official':
+      return 'Official Delivery';
+    case 'delivery_self':
+      return 'Seller Delivery';
+    case 'face_to_face':
+      return 'Meet Up';
+    default:
+      return tradePreference
+          .split('_')
+          .map(
+            (word) => word.isEmpty
+                ? word
+                : '${word[0].toUpperCase()}${word.substring(1)}',
+          )
+          .join(' ');
+  }
+}
+
+class _BuyerComment {
+  const _BuyerComment({
+    required this.id,
+    required this.rating,
+    required this.title,
+    required this.comment,
+    required this.createdAt,
+    required this.reviewerName,
+    required this.reviewerAvatarUrl,
+  });
+
+  final String id;
+  final int rating;
+  final String title;
+  final String comment;
+  final DateTime? createdAt;
+  final String reviewerName;
+  final String? reviewerAvatarUrl;
+
+  factory _BuyerComment.fromMap(Map<String, dynamic> map) {
+    final reviewer =
+        (map['reviewer'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    return _BuyerComment(
+      id: map['id']?.toString() ?? '',
+      rating: (map['rating'] as num?)?.toInt() ?? 0,
+      title: map['title']?.toString() ?? '',
+      comment: map['comment']?.toString() ?? '',
+      createdAt: DateTime.tryParse(map['created_at']?.toString() ?? ''),
+      reviewerName: reviewer['name']?.toString() ?? 'Buyer',
+      reviewerAvatarUrl: reviewer['avatar_url']?.toString(),
+    );
+  }
+}
+
+class _BuyerCommentCard extends StatelessWidget {
+  const _BuyerCommentCard({required this.comment});
+
+  final _BuyerComment comment;
+
+  @override
+  Widget build(BuildContext context) {
+    final dateLabel = comment.createdAt == null
+        ? null
+        : DateFormat('dd MMM yyyy').format(comment.createdAt!);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundImage: comment.reviewerAvatarUrl != null
+                    ? NetworkImage(comment.reviewerAvatarUrl!)
+                    : null,
+                child: comment.reviewerAvatarUrl == null
+                    ? Text(
+                        comment.reviewerName.isNotEmpty
+                            ? comment.reviewerName[0].toUpperCase()
+                            : 'B',
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      comment.reviewerName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    if (dateLabel != null)
+                      Text(
+                        dateLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Row(
+                children: List.generate(
+                  5,
+                  (index) => Icon(
+                    index < comment.rating ? Icons.star_rounded : Icons.star_border_rounded,
+                    size: 16,
+                    color: const Color(0xFFF59E0B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (comment.title.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              comment.title.trim(),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+          if (comment.comment.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              comment.comment.trim(),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
