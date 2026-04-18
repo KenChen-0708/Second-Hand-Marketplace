@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
+import '../local/connectivity_service.dart';
+import '../local/local_database_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -7,6 +9,8 @@ class AuthService {
   AuthService._internal();
 
   final SupabaseClient supabase = Supabase.instance.client;
+  final LocalDatabaseService _localDatabase = LocalDatabaseService.instance;
+  final ConnectivityService _connectivityService = ConnectivityService.instance;
 
   /// Returns the current Supabase Auth user UUID for session checks.
   String? getCurrentAuthUserId() {
@@ -26,20 +30,62 @@ class AuthService {
 
   /// Fetches the user profile using their ID (e.g. 'U0001')
   Future<UserModel> fetchProfileById(String userId) async {
+    final cachedProfile = await _localDatabase.getCachedUserProfileById(userId);
+    if (!await _connectivityService.isOnline()) {
+      if (cachedProfile != null) {
+        return cachedProfile;
+      }
+      throw Exception('Profile unavailable while offline.');
+    }
+
     try {
       final data = await supabase
           .from('users')
           .select()
           .eq('id', userId)
           .single();
-      return UserModel.fromMap(data);
+      final profile = UserModel.fromMap(data);
+      await _localDatabase.cacheUserProfile(profile);
+      return profile;
     } on PostgrestException catch (e) {
+      if (cachedProfile != null) {
+        return cachedProfile;
+      }
       throw Exception(e.message);
+    } catch (_) {
+      if (cachedProfile != null) {
+        return cachedProfile;
+      }
+      rethrow;
     }
   }
 
   /// Bridging Logic: Fetches the 'U0001' style profile using email
   Future<UserModel> fetchProfileByEmail(String email) async {
+    final cachedProfile = await _localDatabase.getCachedUserProfileByEmail(email);
+    if (!await _connectivityService.isOnline()) {
+      if (cachedProfile != null) {
+        return cachedProfile;
+      }
+      final authUser = supabase.auth.currentUser;
+      return UserModel(
+        id: cachedProfile?.id ?? authUser?.id ?? email,
+        email: email,
+        name: cachedProfile?.name ?? email.split('@').first,
+        avatarUrl: cachedProfile?.avatarUrl,
+        role: cachedProfile?.role ?? 'user',
+        isActive: cachedProfile?.isActive ?? true,
+        phoneNumber: cachedProfile?.phoneNumber,
+        address: cachedProfile?.address,
+        city: cachedProfile?.city,
+        postalCode: cachedProfile?.postalCode,
+        country: cachedProfile?.country,
+        bio: cachedProfile?.bio,
+        createdAt: cachedProfile?.createdAt,
+        updatedAt: cachedProfile?.updatedAt,
+      );
+    }
+
     try {
       var data = await supabase
           .from('users')
@@ -58,9 +104,19 @@ class AuthService {
             .single();
       }
 
-      return UserModel.fromMap(data);
+      final profile = UserModel.fromMap(data);
+      await _localDatabase.cacheUserProfile(profile);
+      return profile;
     } on PostgrestException catch (e) {
+      if (cachedProfile != null) {
+        return cachedProfile;
+      }
       throw Exception(e.message);
+    } catch (_) {
+      if (cachedProfile != null) {
+        return cachedProfile;
+      }
+      rethrow;
     }
   }
 
@@ -106,6 +162,12 @@ class AuthService {
 
   /// UPDATE: Saves the full UserModel back to the 'users' table
   Future<void> updateUserProfile(UserModel user) async {
+    await _localDatabase.cacheUserProfile(user);
+
+    if (!await _connectivityService.isOnline()) {
+      return;
+    }
+
     try {
       await supabase
           .from('users')

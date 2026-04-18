@@ -27,8 +27,13 @@ class UserState extends ChangeNotifier {
             return;
           }
         } catch (e) {
-          // If profile fetch fails, logout to be safe
-          await logout();
+          // Keep the existing auth session when offline and continue with a
+          // minimal local user instead of forcing a logout.
+          _currentUser = UserModel(
+            id: _authService.supabase.auth.currentUser?.id ?? email,
+            email: email,
+            name: email.split('@').first,
+          );
         }
       }
     }
