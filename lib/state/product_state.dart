@@ -13,11 +13,19 @@ class ProductState extends EntityState<ProductModel> {
     setError(null);
 
     try {
+      final cachedProducts = await _productService.getCachedProducts(status: status);
+      if (cachedProducts.isNotEmpty) {
+        setItems(cachedProducts);
+      }
+
       final products = await _productService.fetchProducts(status: status);
       setItems(products);
       return products;
     } catch (e) {
       setError(e.toString());
+      if (items.isNotEmpty) {
+        return items;
+      }
       rethrow;
     } finally {
       setLoading(false);
@@ -40,6 +48,11 @@ class ProductState extends EntityState<ProductModel> {
       setLoading(false);
     }
   }
+
+  Future<List<ProductModel>> searchCachedProducts(String query) {
+    return _productService.searchCachedProducts(query: query, status: 'active');
+  }
+
   Future<void> deleteProduct(String productId) async {
     try {
       await _productService.deleteProduct(productId);
@@ -49,11 +62,11 @@ class ProductState extends EntityState<ProductModel> {
       rethrow;
     }
   }
+
   Future<void> updateProduct(String productId, Map<String, dynamic> updateData) async {
     try {
       await _productService.updateProduct(productId, updateData);
 
-      // Update local state if the item exists
       final existing = getById(productId);
       if (existing != null) {
         final updated = existing.copyWith(
@@ -66,10 +79,11 @@ class ProductState extends EntityState<ProductModel> {
           openToOffers: updateData['open_to_offers'],
           status: updateData['status'],
           categoryId: updateData['category_id'],
-          images: updateData['image_urls'] != null 
-              ? List<String>.from(updateData['image_urls']) 
+          images: updateData['image_urls'] != null
+              ? List<String>.from(updateData['image_urls'])
               : existing.images,
-          imageUrl: (updateData['image_urls'] != null && (updateData['image_urls'] as List).isNotEmpty)
+          imageUrl: (updateData['image_urls'] != null &&
+                  (updateData['image_urls'] as List).isNotEmpty)
               ? (updateData['image_urls'] as List)[0]
               : existing.imageUrl,
           updatedAt: DateTime.now(),

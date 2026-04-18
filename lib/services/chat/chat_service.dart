@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
+import '../local/connectivity_service.dart';
+import '../local/local_database_service.dart';
 
 class ChatService {
   static const String _productSharePrefix = '[product_share]';
@@ -10,11 +15,21 @@ class ChatService {
     : _supabase = client ?? Supabase.instance.client;
 
   final SupabaseClient _supabase;
+  final LocalDatabaseService _localDatabase = LocalDatabaseService.instance;
+  final ConnectivityService _connectivityService = ConnectivityService.instance;
+  final Uuid _uuid = const Uuid();
 
   Future<List<ChatConversationBundle>> fetchUserConversations({
     required String userId,
   }) async {
+    final cachedBundles = await _loadCachedConversationBundles(userId: userId);
+    if (!await _connectivityService.isOnline()) {
+      return cachedBundles;
+    }
+
     try {
+      await syncPendingMessages();
+
       final conversationsData = await _supabase
           .from('chat_conversations')
           .select(
@@ -64,11 +79,18 @@ class ChatService {
           )
           .toList();
 
+      await _cacheBundles(userId, hydratedBundles);
       _sortBundles(hydratedBundles);
       return hydratedBundles;
     } on PostgrestException catch (e) {
+      if (cachedBundles.isNotEmpty) {
+        return cachedBundles;
+      }
       throw Exception(e.message);
     } catch (e) {
+      if (cachedBundles.isNotEmpty) {
+        return cachedBundles;
+      }
       throw Exception('Unable to load messages right now.');
     }
   }
@@ -77,7 +99,21 @@ class ChatService {
     required String conversationId,
     required String currentUserId,
   }) async {
+    final cachedBundle = await _loadCachedConversationBundle(
+      conversationId: conversationId,
+      currentUserId: currentUserId,
+    );
+
+    if (!await _connectivityService.isOnline()) {
+      if (cachedBundle != null) {
+        return cachedBundle;
+      }
+      throw Exception('Unable to load this conversation while offline.');
+    }
+
     try {
+      await syncPendingMessages();
+
       final conversationData = await _supabase
           .from('chat_conversations')
           .select(
@@ -95,23 +131,31 @@ class ChatService {
           .eq('conversation_id', conversationId)
           .order('created_at');
 
-      return ChatConversationBundle.fromConversationMap(
+      final bundle = ChatConversationBundle.fromConversationMap(
         Map<String, dynamic>.from(conversationData),
         currentUserId: currentUserId,
       ).copyWith(
         messages: _sortMessages(
           (messagesData as List)
-            .map(
-              (item) => ChatMessageModel.fromMap(
-                Map<String, dynamic>.from(item as Map),
-              ),
-            )
-            .toList(),
+              .map(
+                (item) => ChatMessageModel.fromMap(
+                  Map<String, dynamic>.from(item as Map),
+                ),
+              )
+              .toList(),
         ),
       );
+      await _cacheBundles(currentUserId, [bundle]);
+      return bundle;
     } on PostgrestException catch (e) {
+      if (cachedBundle != null) {
+        return cachedBundle;
+      }
       throw Exception(e.message);
     } catch (e) {
+      if (cachedBundle != null) {
+        return cachedBundle;
+      }
       throw Exception('Unable to load this conversation.');
     }
   }
@@ -231,6 +275,21 @@ class ChatService {
     bool isImage = false,
     String? imageUrl,
   }) async {
+    if (!await _connectivityService.isOnline()) {
+      final localMessage = ChatMessageModel(
+        id: 'local_${_uuid.v4()}',
+        conversationId: conversationId,
+        senderId: senderId,
+        messageText: messageText,
+        isImage: isImage,
+        imageUrl: imageUrl,
+        isRead: true,
+        createdAt: DateTime.now(),
+      );
+      await _localDatabase.upsertChatMessage(localMessage, syncStatus: 'pending');
+      return localMessage;
+    }
+
     try {
       final inserted = await _supabase
           .from('chat_messages')
@@ -254,7 +313,7 @@ class ChatService {
           .from('chat_conversations')
           .update({'last_message_at': lastMessageAt})
           .eq('id', conversationId);
-
+      await _localDatabase.upsertChatMessage(message, syncStatus: 'synced');
       return message;
     } on PostgrestException catch (e) {
       throw Exception(e.message);
@@ -282,16 +341,131 @@ class ChatService {
     required String currentUserId,
   }) async {
     try {
-      await _supabase
-          .from('chat_messages')
-          .update({'is_read': true})
-          .eq('conversation_id', conversationId)
-          .neq('sender_id', currentUserId)
-          .eq('is_read', false);
+      if (await _connectivityService.isOnline()) {
+        await _supabase
+            .from('chat_messages')
+            .update({'is_read': true})
+            .eq('conversation_id', conversationId)
+            .neq('sender_id', currentUserId)
+            .eq('is_read', false);
+      }
+
+      final cachedMessages = await _localDatabase.getCachedMessages(conversationId);
+      for (final message in cachedMessages.where((message) => message.senderId != currentUserId)) {
+        await _localDatabase.upsertChatMessage(
+          message.copyWith(isRead: true),
+          syncStatus: 'synced',
+        );
+      }
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
       throw Exception('Unable to update message status.');
+    }
+  }
+
+  Future<void> syncPendingMessages() async {
+    if (!await _connectivityService.isOnline()) {
+      return;
+    }
+
+    final pendingRows = await _localDatabase.getPendingChatMessageRows();
+    for (final row in pendingRows) {
+      final localMessage = ChatMessageModel.fromJson(row['data'] as String);
+      final remoteMessage = await sendMessage(
+        conversationId: localMessage.conversationId,
+        senderId: localMessage.senderId,
+        messageText: localMessage.messageText,
+        isImage: localMessage.isImage,
+        imageUrl: localMessage.imageUrl,
+      );
+      await _localDatabase.markMessageSynced(
+        localMessageId: localMessage.id,
+        remoteMessage: remoteMessage,
+      );
+    }
+  }
+
+  Future<void> _cacheBundles(
+    String currentUserId,
+    List<ChatConversationBundle> bundles,
+  ) async {
+    await _localDatabase.replaceConversationBundles(
+      currentUserId,
+      bundles
+          .map(
+            (bundle) => {
+              'conversation_id': bundle.conversation.id,
+              'product_id': bundle.product.id,
+              'other_user_id': bundle.otherUser.id,
+              'other_user_name': bundle.otherUser.name,
+              'conversation_data': jsonEncode(bundle.conversation.toMap()),
+              'product_data': bundle.product.toJson(),
+              'other_user_data': bundle.otherUser.toJson(),
+              'last_message_at': bundle.conversation.lastMessageAt?.toIso8601String(),
+            },
+          )
+          .toList(),
+    );
+
+    for (final bundle in bundles) {
+      await _localDatabase.replaceConversationMessages(
+        bundle.conversation.id,
+        bundle.messages,
+      );
+    }
+  }
+
+  Future<List<ChatConversationBundle>> _loadCachedConversationBundles({
+    required String userId,
+  }) async {
+    final rows = await _localDatabase.getCachedConversationRows(userId);
+    final bundles = <ChatConversationBundle>[];
+    for (final row in rows) {
+      final bundle = await _bundleFromCacheRow(
+        row,
+        currentUserId: userId,
+      );
+      if (bundle != null) {
+        bundles.add(bundle);
+      }
+    }
+    _sortBundles(bundles);
+    return bundles;
+  }
+
+  Future<ChatConversationBundle?> _loadCachedConversationBundle({
+    required String conversationId,
+    required String currentUserId,
+  }) async {
+    final row = await _localDatabase.getCachedConversationRow(conversationId);
+    if (row == null) {
+      return null;
+    }
+    return _bundleFromCacheRow(row, currentUserId: currentUserId);
+  }
+
+  Future<ChatConversationBundle?> _bundleFromCacheRow(
+    Map<String, dynamic> row, {
+    required String currentUserId,
+  }) async {
+    try {
+      final conversation = ChatConversationModel.fromMap(
+        Map<String, dynamic>.from(
+          (jsonDecode(row['conversation_data'] as String) as Map),
+        ),
+      );
+      final product = ProductModel.fromJson(row['product_data'] as String);
+      final otherUser = UserModel.fromJson(row['other_user_data'] as String);
+      final messages = await _localDatabase.getCachedMessages(conversation.id);
+      return ChatConversationBundle(
+        conversation: conversation,
+        product: product,
+        otherUser: otherUser,
+        messages: _sortMessages(messages),
+      );
+    } catch (_) {
+      return null;
     }
   }
 

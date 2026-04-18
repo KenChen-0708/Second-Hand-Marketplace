@@ -90,6 +90,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     StripePaymentResult? stripeResult;
 
     try {
+      if (widget.session?.isBuyNow != true) {
+        await cartState.syncWithRemote();
+      }
+
       if (_isCardPayment) {
         stripeResult = await paymentState.payWithCard(_grandTotal);
       }

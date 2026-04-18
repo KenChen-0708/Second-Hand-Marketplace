@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import '../models/models.dart';
-import '../models/chat_conversation_model.dart';
 import '../services/auth/auth_service.dart';
 import '../services/chat/chat_service.dart';
+import '../services/local/connectivity_service.dart';
 import 'entity_state.dart';
 
 class ChatConversationState extends EntityState<ChatConversationModel> {
@@ -9,13 +11,24 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
     ChatService? chatService,
     AuthService? authService,
   }) : _chatService = chatService ?? ChatService(),
-       _authService = authService ?? AuthService();
+       _authService = authService ?? AuthService() {
+    _connectivitySubscription = _connectivityService.onlineChanges.listen((
+      isOnline,
+    ) {
+      if (isOnline) {
+        fetchUserConversations();
+      }
+    });
+  }
 
   final ChatService _chatService;
   final AuthService _authService;
+  final ConnectivityService _connectivityService = ConnectivityService.instance;
+  late final StreamSubscription<bool> _connectivitySubscription;
   List<ChatConversationBundle> _bundles = [];
 
   List<ChatConversationBundle> get bundles => List.unmodifiable(_bundles);
+
   int get unreadCount {
     final currentUserId = _lastUserId;
     if (currentUserId == null || currentUserId.isEmpty) {
@@ -171,5 +184,11 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       return b.conversation.id.compareTo(a.conversation.id);
     });
     upsertItem(bundle.conversation);
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription.cancel();
+    super.dispose();
   }
 }

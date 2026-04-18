@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import '../models/models.dart';
 import '../services/auth/auth_service.dart';
 import '../services/favorite/favorite_service.dart';
+import '../services/local/connectivity_service.dart';
 import 'entity_state.dart';
 
 class FavoriteState extends EntityState<FavoriteModel> {
@@ -8,10 +11,28 @@ class FavoriteState extends EntityState<FavoriteModel> {
     FavoriteService? favoriteService,
     AuthService? authService,
   }) : _favoriteService = favoriteService ?? FavoriteService(),
-       _authService = authService ?? AuthService();
+       _authService = authService ?? AuthService() {
+    _connectivitySubscription = _connectivityService.onlineChanges.listen((
+      isOnline,
+    ) async {
+      if (!isOnline) {
+        return;
+      }
+
+      final userId = await _authService.getCurrentUserId();
+      if (userId == null || userId.isEmpty) {
+        return;
+      }
+
+      await _favoriteService.syncWishlist(userId);
+      await fetchWishlistItems();
+    });
+  }
 
   final FavoriteService _favoriteService;
   final AuthService _authService;
+  final ConnectivityService _connectivityService = ConnectivityService.instance;
+  late final StreamSubscription<bool> _connectivitySubscription;
 
   bool isFavorite(String productId) =>
       items.any((item) => item.productId == productId);
@@ -59,7 +80,10 @@ class FavoriteState extends EntityState<FavoriteModel> {
       );
 
       if (existing != null) {
-        await _favoriteService.removeFavorite(favoriteId: existing.id);
+        await _favoriteService.removeFavorite(
+          userId: userId,
+          productId: productId,
+        );
         removeById(existing.id);
         return 'Removed from wishlist.';
       }
@@ -112,5 +136,11 @@ class FavoriteState extends EntityState<FavoriteModel> {
     for (final id in matchingIds) {
       removeById(id);
     }
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription.cancel();
+    super.dispose();
   }
 }
