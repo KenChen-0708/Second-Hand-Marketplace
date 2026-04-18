@@ -9,7 +9,7 @@ class LocalDatabaseService {
   static final LocalDatabaseService instance = LocalDatabaseService._();
 
   static const _databaseName = 'marketplace_cache.db';
-  static const _databaseVersion = 1;
+  static const _databaseVersion = 2;
 
   Database? _database;
 
@@ -24,13 +24,44 @@ class LocalDatabaseService {
       path,
       version: _databaseVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+      onOpen: _onOpen,
     );
     return _database!;
   }
 
   Future<void> _onCreate(Database db, int version) async {
+    await _createProductsTable(db);
+    await _createUserProfilesTable(db);
+    await _createCartItemsTable(db);
+    await _createWishlistItemsTable(db);
+    await _createChatConversationsTable(db);
+    await _createChatMessagesTable(db);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createUserProfilesTable(db);
+    }
+    await _ensureSchema(db);
+  }
+
+  Future<void> _onOpen(Database db) async {
+    await _ensureSchema(db);
+  }
+
+  Future<void> _ensureSchema(Database db) async {
+    await _createProductsTable(db);
+    await _createUserProfilesTable(db);
+    await _createCartItemsTable(db);
+    await _createWishlistItemsTable(db);
+    await _createChatConversationsTable(db);
+    await _createChatMessagesTable(db);
+  }
+
+  Future<void> _createProductsTable(Database db) async {
     await db.execute('''
-      CREATE TABLE products (
+      CREATE TABLE IF NOT EXISTS products (
         id TEXT PRIMARY KEY,
         title TEXT,
         description TEXT,
@@ -46,9 +77,22 @@ class LocalDatabaseService {
         last_synced_at TEXT
       )
     ''');
+  }
 
+  Future<void> _createUserProfilesTable(Database db) async {
     await db.execute('''
-      CREATE TABLE cart_items (
+      CREATE TABLE IF NOT EXISTS user_profiles (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        data TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _createCartItemsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cart_items (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         product_id TEXT NOT NULL,
@@ -61,11 +105,13 @@ class LocalDatabaseService {
       )
     ''');
     await db.execute(
-      'CREATE INDEX idx_cart_items_user_status ON cart_items(user_id, sync_status, is_deleted)',
+      'CREATE INDEX IF NOT EXISTS idx_cart_items_user_status ON cart_items(user_id, sync_status, is_deleted)',
     );
+  }
 
+  Future<void> _createWishlistItemsTable(Database db) async {
     await db.execute('''
-      CREATE TABLE wishlist_items (
+      CREATE TABLE IF NOT EXISTS wishlist_items (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         product_id TEXT NOT NULL,
@@ -77,11 +123,13 @@ class LocalDatabaseService {
       )
     ''');
     await db.execute(
-      'CREATE INDEX idx_wishlist_items_user_status ON wishlist_items(user_id, sync_status, is_deleted)',
+      'CREATE INDEX IF NOT EXISTS idx_wishlist_items_user_status ON wishlist_items(user_id, sync_status, is_deleted)',
     );
+  }
 
+  Future<void> _createChatConversationsTable(Database db) async {
     await db.execute('''
-      CREATE TABLE chat_conversations (
+      CREATE TABLE IF NOT EXISTS chat_conversations (
         id TEXT PRIMARY KEY,
         current_user_id TEXT NOT NULL,
         product_id TEXT NOT NULL,
@@ -95,11 +143,13 @@ class LocalDatabaseService {
       )
     ''');
     await db.execute(
-      'CREATE INDEX idx_chat_conversations_user ON chat_conversations(current_user_id, last_message_at)',
+      'CREATE INDEX IF NOT EXISTS idx_chat_conversations_user ON chat_conversations(current_user_id, last_message_at)',
     );
+  }
 
+  Future<void> _createChatMessagesTable(Database db) async {
     await db.execute('''
-      CREATE TABLE chat_messages (
+      CREATE TABLE IF NOT EXISTS chat_messages (
         id TEXT PRIMARY KEY,
         conversation_id TEXT NOT NULL,
         sender_id TEXT NOT NULL,
@@ -114,10 +164,10 @@ class LocalDatabaseService {
       )
     ''');
     await db.execute(
-      'CREATE INDEX idx_chat_messages_conversation ON chat_messages(conversation_id, created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(conversation_id, created_at)',
     );
     await db.execute(
-      'CREATE INDEX idx_chat_messages_sync ON chat_messages(sync_status, created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_chat_messages_sync ON chat_messages(sync_status, created_at)',
     );
   }
 
@@ -153,6 +203,48 @@ class LocalDatabaseService {
 
   Future<void> cacheProduct(ProductModel product) async {
     await cacheProducts([product]);
+  }
+
+  Future<void> cacheUserProfile(UserModel user) async {
+    final db = await database;
+    await db.insert(
+      'user_profiles',
+      {
+        'id': user.id,
+        'email': user.email,
+        'data': user.toJson(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<UserModel?> getCachedUserProfileByEmail(String email) async {
+    final db = await database;
+    final rows = await db.query(
+      'user_profiles',
+      where: 'email = ?',
+      whereArgs: [email],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return UserModel.fromJson(rows.first['data'] as String);
+  }
+
+  Future<UserModel?> getCachedUserProfileById(String userId) async {
+    final db = await database;
+    final rows = await db.query(
+      'user_profiles',
+      where: 'id = ?',
+      whereArgs: [userId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return UserModel.fromJson(rows.first['data'] as String);
   }
 
   Future<List<ProductModel>> getCachedProducts({
