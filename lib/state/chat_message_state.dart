@@ -88,4 +88,6 @@ class ChatMessageState extends EntityState<ChatMessageModel> {
       setError(e.toString().replaceFirst('Exception: ', ''));
     }
   }
+
+  Future<void> syncPendingMessages() => _chatService.syncPendingMessages();
 }

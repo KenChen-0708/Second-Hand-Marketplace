@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 import '../services/auth/auth_service.dart';
 import '../services/cart/cart_service.dart';
+import '../services/local/connectivity_service.dart';
 
 class CartState extends ChangeNotifier {
   CartState({
@@ -28,6 +29,14 @@ class CartState extends ChangeNotifier {
       unawaited(loadCart());
     });
 
+    _connectivitySubscription = _connectivityService.onlineChanges.listen((
+      isOnline,
+    ) {
+      if (isOnline && _hasAuthenticatedUser) {
+        unawaited(syncWithRemote());
+      }
+    });
+
     if (_hasAuthenticatedUser) {
       unawaited(loadCart());
     }
@@ -35,7 +44,9 @@ class CartState extends ChangeNotifier {
 
   final CartService _cartService;
   final AuthService _authService;
+  final ConnectivityService _connectivityService = ConnectivityService.instance;
   late final StreamSubscription<AuthState> _authSubscription;
+  late final StreamSubscription<bool> _connectivitySubscription;
   final List<CartModel> _items = [];
   bool _isLoading = false;
   String? _error;
@@ -52,6 +63,7 @@ class CartState extends ChangeNotifier {
   double get subtotal =>
       _items.fold(0, (sum, item) => sum + item.totalPrice);
   double get totalPrice => subtotal;
+
   bool get _hasAuthenticatedUser {
     final authUserId = _authService.getCurrentAuthUserId();
     return authUserId != null && authUserId.isNotEmpty;
@@ -89,6 +101,24 @@ class CartState extends ChangeNotifier {
       _setError(e.toString());
     } finally {
       _setLoading(false);
+    }
+  }
+
+  Future<void> syncWithRemote() async {
+    final userId = await _authService.getCurrentUserId();
+    if (userId == null || userId.isEmpty) {
+      return;
+    }
+
+    try {
+      await _cartService.syncCart(userId);
+      final loadedItems = await _cartService.fetchCartItems(userId: userId);
+      _items
+        ..clear()
+        ..addAll(loadedItems);
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
     }
   }
 
@@ -152,12 +182,17 @@ class CartState extends ChangeNotifier {
       return;
     }
 
-    final cartItem = _items[index];
+    final userId = await _authService.getCurrentUserId();
+    if (userId == null || userId.isEmpty) {
+      _setError('Please log in to update your cart.');
+      return;
+    }
+
     _setLoading(true);
     _setError(null);
 
     try {
-      await _cartService.removeCartItem(cartItemId: cartItem.id);
+      await _cartService.removeCartItem(userId: userId, productId: productId);
       _items.removeAt(index);
       notifyListeners();
     } catch (e) {
@@ -173,13 +208,20 @@ class CartState extends ChangeNotifier {
       return;
     }
 
+    final userId = await _authService.getCurrentUserId();
+    if (userId == null || userId.isEmpty) {
+      _setError('Please log in to update your cart.');
+      return;
+    }
+
     final cartItem = _items[index];
     _setLoading(true);
     _setError(null);
 
     try {
       final updatedItem = await _cartService.updateCartItemQuantity(
-        cartItemId: cartItem.id,
+        userId: userId,
+        productId: cartItem.product.id,
         product: cartItem.product,
         quantity: quantity,
       );
@@ -276,6 +318,7 @@ class CartState extends ChangeNotifier {
   @override
   void dispose() {
     _authSubscription.cancel();
+    _connectivitySubscription.cancel();
     super.dispose();
   }
 }

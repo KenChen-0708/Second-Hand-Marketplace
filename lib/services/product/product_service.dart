@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
+import '../local/connectivity_service.dart';
+import '../local/local_database_service.dart';
 
 class ProductService {
   ProductService({SupabaseClient? client})
@@ -10,8 +12,19 @@ class ProductService {
 
   static const String _productImageBucket = ImageHelper.productImageBucket;
   final SupabaseClient _supabase;
+  final LocalDatabaseService _localDatabase = LocalDatabaseService.instance;
+  final ConnectivityService _connectivityService = ConnectivityService.instance;
 
   Future<List<ProductModel>> fetchProducts({String? status, String? sellerId}) async {
+    final cachedProducts = await _localDatabase.getCachedProducts(
+      status: status,
+      sellerId: sellerId,
+    );
+
+    if (!await _connectivityService.isOnline()) {
+      return cachedProducts;
+    }
+
     try {
       var query = _supabase.from('products').select('*, variations:product_variations(*)');
 
@@ -25,21 +38,37 @@ class ProductService {
 
       final data = await query.order('created_at', ascending: false);
 
-      return (data as List)
+      final products = (data as List)
           .map(
             (item) => ProductModel.fromMap(
               _resolveProductImageFields(Map<String, dynamic>.from(item as Map)),
             ),
           )
           .toList();
+      await _localDatabase.cacheProducts(products);
+      return products;
     } on PostgrestException catch (e) {
+      if (cachedProducts.isNotEmpty) {
+        return cachedProducts;
+      }
       throw Exception(e.message);
     } catch (e) {
+      if (cachedProducts.isNotEmpty) {
+        return cachedProducts;
+      }
       throw Exception('Failed to fetch products: $e');
     }
   }
 
   Future<ProductModel> fetchProductById(String productId) async {
+    final cachedProduct = await _localDatabase.getCachedProductById(productId);
+    if (!await _connectivityService.isOnline()) {
+      if (cachedProduct != null) {
+        return cachedProduct;
+      }
+      throw Exception('Failed to fetch product details while offline.');
+    }
+
     try {
       final data = await _supabase
           .from('products')
@@ -47,15 +76,32 @@ class ProductService {
           .eq('id', productId)
           .single();
 
-      return ProductModel.fromMap(
+      final product = ProductModel.fromMap(
         _resolveProductImageFields(Map<String, dynamic>.from(data)),
       );
+      await _localDatabase.cacheProduct(product);
+      return product;
     } on PostgrestException catch (e) {
+      if (cachedProduct != null) {
+        return cachedProduct;
+      }
       throw Exception(e.message);
     } catch (e) {
+      if (cachedProduct != null) {
+        return cachedProduct;
+      }
       throw Exception('Failed to fetch product details: $e');
     }
   }
+
+  Future<List<ProductModel>> getCachedProducts({String? status, String? sellerId}) {
+    return _localDatabase.getCachedProducts(status: status, sellerId: sellerId);
+  }
+
+  Future<List<ProductModel>> searchCachedProducts({
+    required String query,
+    String? status,
+  }) => _localDatabase.searchCachedProducts(query: query, status: status);
 
   Future<List<String>> uploadImages(
     List<String> imagePaths,

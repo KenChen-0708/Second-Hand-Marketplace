@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'state/state.dart';
 import 'models/models.dart';
+import 'services/local/local_database_service.dart';
 import 'services/payment/stripe_service.dart';
 
 import 'features/auth/login_page.dart';
@@ -62,6 +63,7 @@ Future<void> main() async {
       authFlowType: AuthFlowType.pkce,
     ),
   );
+  await LocalDatabaseService.instance.database;
 
   runApp(const MyApp());
 }

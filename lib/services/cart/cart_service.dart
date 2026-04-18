@@ -2,14 +2,23 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
+import '../local/connectivity_service.dart';
+import '../local/local_database_service.dart';
 
 class CartService {
   CartService({SupabaseClient? client})
     : _supabase = client ?? Supabase.instance.client;
 
   final SupabaseClient _supabase;
+  final LocalDatabaseService _localDatabase = LocalDatabaseService.instance;
+  final ConnectivityService _connectivityService = ConnectivityService.instance;
 
   Future<List<CartModel>> fetchCartItems({required String userId}) async {
+    final cachedItems = await _localDatabase.getCachedCartItems(userId);
+    if (!await _connectivityService.isOnline()) {
+      return cachedItems;
+    }
+
     try {
       final cartData = await _supabase
           .from('cart_items')
@@ -25,6 +34,7 @@ class CartService {
           .toList();
 
       if (cartItems.isEmpty) {
+        await _localDatabase.clearCartLocally(userId, markForSync: false);
         return const [];
       }
 
@@ -42,20 +52,29 @@ class CartService {
         productsById[model.id] = model;
       }
 
-      return cartItems
+      final items = cartItems
           .where((item) => productsById.containsKey(item.productId))
           .map(
             (item) => CartModel(
-              id: item.id,
+              id: _localCartId(userId, item.productId),
               product: productsById[item.productId]!,
               quantity: item.quantity,
               addedAt: item.addedAt,
             ),
           )
           .toList();
+      await _localDatabase.cacheProducts(productsById.values.toList());
+      await _localDatabase.replaceCartItems(userId, items);
+      return items;
     } on PostgrestException catch (e) {
+      if (cachedItems.isNotEmpty) {
+        return cachedItems;
+      }
       throw Exception('Unable to load your cart right now. ${e.message}');
     } catch (e) {
+      if (cachedItems.isNotEmpty) {
+        return cachedItems;
+      }
       throw Exception('Unable to load your cart right now. Please try again.');
     }
   }
@@ -76,71 +95,60 @@ class CartService {
       throw Exception('Only $stockQuantity item(s) are currently available.');
     }
 
-    try {
-      final existing = await _supabase
-          .from('cart_items')
-          .select()
-          .eq('user_id', userId)
-          .eq('product_id', product.id)
-          .maybeSingle();
+    final cachedItems = await _localDatabase.getCachedCartItems(userId);
+    final existing = cachedItems.cast<CartModel?>().firstWhere(
+      (item) => item?.product.id == product.id,
+      orElse: () => null,
+    );
+    final updatedQuantity = (existing?.quantity ?? 0) + quantity;
+    if (stockQuantity != null && updatedQuantity > stockQuantity) {
+      throw Exception('Only $stockQuantity item(s) are currently available.');
+    }
 
-      if (existing != null) {
-        final existingItem = CartItemModel.fromMap(
-          Map<String, dynamic>.from(existing),
-        );
-        final updatedQuantity = existingItem.quantity + quantity;
-        if (stockQuantity != null && updatedQuantity > stockQuantity) {
-          throw Exception('Only $stockQuantity item(s) are currently available.');
-        }
+    final localItem = CartModel(
+      id: _localCartId(userId, product.id),
+      product: product,
+      quantity: updatedQuantity,
+      addedAt: existing?.addedAt ?? DateTime.now(),
+    );
+    await _localDatabase.cacheProduct(product);
+    await _localDatabase.upsertCartItem(
+      userId: userId,
+      product: product,
+      quantity: updatedQuantity,
+      addedAt: localItem.addedAt,
+      syncStatus: 'pending',
+    );
 
-        final updated = await _supabase
-            .from('cart_items')
-            .update({
-              'quantity': updatedQuantity,
-            })
-            .eq('id', existingItem.id)
-            .select()
-            .single();
-
-        final updatedItem = CartItemModel.fromMap(
-          Map<String, dynamic>.from(updated),
-        );
-
-        return CartActionResult(
-          success: true,
-          message: 'Item quantity updated in your cart.',
-          item: CartModel(
-            id: updatedItem.id,
-            product: product,
-            quantity: updatedItem.quantity,
-            addedAt: updatedItem.addedAt,
-          ),
-        );
-      }
-
-      final inserted = await _supabase
-          .from('cart_items')
-          .insert({
-            'user_id': userId,
-            'product_id': product.id,
-            'quantity': quantity,
-          })
-          .select()
-          .single();
-
-      final insertedItem = CartItemModel.fromMap(
-        Map<String, dynamic>.from(inserted),
-      );
-
+    if (!await _connectivityService.isOnline()) {
       return CartActionResult(
         success: true,
-        message: 'Item successfully added to your cart.',
-        item: CartModel(
-          id: insertedItem.id,
-          product: product,
-          quantity: insertedItem.quantity,
-          addedAt: insertedItem.addedAt,
-        ),
+        message: existing == null
+            ? 'Item saved to your cart for offline use.'
+            : 'Item quantity updated locally and will sync when online.',
+        item: localItem,
+      );
+    }
+
+    try {
+      await _supabase.from('cart_items').upsert({
+        'user_id': userId,
+        'product_id': product.id,
+        'quantity': updatedQuantity,
+      }, onConflict: 'user_id,product_id');
+      await _localDatabase.upsertCartItem(
+        userId: userId,
+        product: product,
+        quantity: updatedQuantity,
+        addedAt: localItem.addedAt,
+        syncStatus: 'synced',
+      );
+      return CartActionResult(
+        success: true,
+        message: existing == null
+            ? 'Item successfully added to your cart.'
+            : 'Item quantity updated in your cart.',
+        item: localItem,
       );
     } on PostgrestException catch (e) {
       throw Exception(
@@ -155,44 +163,58 @@ class CartService {
   }
 
   Future<CartModel?> updateCartItemQuantity({
-    required String cartItemId,
+    required String userId,
+    required String productId,
     required ProductModel product,
     required int quantity,
   }) async {
-    if (cartItemId.isEmpty) {
+    if (productId.isEmpty) {
       throw Exception('The selected cart item is invalid.');
     }
 
+    final stockQuantity = product.stockQuantity;
+    if (stockQuantity != null && quantity > stockQuantity) {
+      throw Exception('Only $stockQuantity item(s) are currently available.');
+    }
+
+    if (quantity <= 0) {
+      await removeCartItem(userId: userId, productId: productId);
+      return null;
+    }
+
+    await _localDatabase.cacheProduct(product);
+    await _localDatabase.upsertCartItem(
+      userId: userId,
+      product: product,
+      quantity: quantity,
+      syncStatus: 'pending',
+    );
+
+    final updatedItem = CartModel(
+      id: _localCartId(userId, productId),
+      product: product,
+      quantity: quantity,
+      addedAt: DateTime.now(),
+    );
+
+    if (!await _connectivityService.isOnline()) {
+      return updatedItem;
+    }
+
     try {
-      if (quantity <= 0) {
-        await _supabase.from('cart_items').delete().eq('id', cartItemId);
-        return null;
-      }
-
-      final stockQuantity = product.stockQuantity;
-      if (stockQuantity != null && quantity > stockQuantity) {
-        throw Exception('Only $stockQuantity item(s) are currently available.');
-      }
-
-      final updated = await _supabase
-          .from('cart_items')
-          .update({
-            'quantity': quantity,
-          })
-          .eq('id', cartItemId)
-          .select()
-          .single();
-
-      final updatedItem = CartItemModel.fromMap(
-        Map<String, dynamic>.from(updated),
-      );
-
-      return CartModel(
-        id: updatedItem.id,
+      await _supabase.from('cart_items').upsert({
+        'user_id': userId,
+        'product_id': productId,
+        'quantity': quantity,
+      }, onConflict: 'user_id,product_id');
+      await _localDatabase.upsertCartItem(
+        userId: userId,
         product: product,
-        quantity: updatedItem.quantity,
+        quantity: quantity,
         addedAt: updatedItem.addedAt,
+        syncStatus: 'synced',
       );
+      return updatedItem;
     } on PostgrestException catch (e) {
       throw Exception('Unable to update your cart right now. ${e.message}');
     } catch (e) {
@@ -203,13 +225,29 @@ class CartService {
     }
   }
 
-  Future<void> removeCartItem({required String cartItemId}) async {
-    if (cartItemId.isEmpty) {
+  Future<void> removeCartItem({
+    required String userId,
+    required String productId,
+  }) async {
+    if (productId.isEmpty) {
       throw Exception('The selected cart item is invalid.');
     }
 
+    await _localDatabase.markCartItemDeleted(userId: userId, productId: productId);
+    if (!await _connectivityService.isOnline()) {
+      return;
+    }
+
     try {
-      await _supabase.from('cart_items').delete().eq('id', cartItemId);
+      await _supabase
+          .from('cart_items')
+          .delete()
+          .eq('user_id', userId)
+          .eq('product_id', productId);
+      await _localDatabase.deleteCartItemPermanently(
+        userId: userId,
+        productId: productId,
+      );
     } on PostgrestException catch (e) {
       throw Exception(
         'Unable to remove this item from your cart. ${e.message}',
@@ -226,14 +264,62 @@ class CartService {
       throw Exception('A logged-in user is required to manage the cart.');
     }
 
+    final isOnline = await _connectivityService.isOnline();
+    await _localDatabase.clearCartLocally(userId, markForSync: isOnline);
+    if (!isOnline) {
+      return;
+    }
+
     try {
       await _supabase.from('cart_items').delete().eq('user_id', userId);
+      await _localDatabase.clearCartLocally(userId, markForSync: false);
     } on PostgrestException catch (e) {
       throw Exception('Unable to clear your cart right now. ${e.message}');
     } catch (e) {
       throw Exception('Unable to clear your cart right now. Please try again.');
     }
   }
+
+  Future<void> syncCart(String userId) async {
+    if (!await _connectivityService.isOnline()) {
+      return;
+    }
+
+    final pendingRows = await _localDatabase.getPendingCartRows(userId);
+    for (final row in pendingRows) {
+      final productId = row['product_id'] as String;
+      if ((row['is_deleted'] as int) == 1 ||
+          row['sync_status'] == 'pending_delete') {
+        await _supabase
+            .from('cart_items')
+            .delete()
+            .eq('user_id', userId)
+            .eq('product_id', productId);
+        await _localDatabase.deleteCartItemPermanently(
+          userId: userId,
+          productId: productId,
+        );
+        continue;
+      }
+
+      await _supabase.from('cart_items').upsert({
+        'user_id': userId,
+        'product_id': productId,
+        'quantity': row['quantity'],
+      }, onConflict: 'user_id,product_id');
+      await _localDatabase.upsertCartItem(
+        userId: userId,
+        product: ProductModel.fromJson(row['product_data'] as String),
+        quantity: row['quantity'] as int,
+        addedAt: row['added_at'] == null
+            ? null
+            : DateTime.tryParse(row['added_at'] as String),
+        syncStatus: 'synced',
+      );
+    }
+  }
+
+  String _localCartId(String userId, String productId) => '${userId}_$productId';
 
   Map<String, dynamic> _resolveProductMap(Map<String, dynamic> productMap) {
     final resolvedImages = ImageHelper.resolveProductImageUrls(
