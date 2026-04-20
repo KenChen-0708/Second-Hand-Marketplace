@@ -54,6 +54,7 @@ class OrderState extends EntityState<OrderModel> {
                 quantity: item.quantity,
                 unitPrice: item.product.price,
                 subtotal: item.totalPrice,
+                product: item.product, // 🔥 FIXED: Pass the product object
               ),
             )
             .toList(),

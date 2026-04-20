@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/state.dart';
 import '../../models/app_notification_model.dart';
-import '../../models/mock_data.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -15,17 +14,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize with mock data if state is empty for demo purposes
+    // Use addPostFrameCallback to ensure the context is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final state = context.read<AppNotificationState>();
-      if (state.isEmpty) {
-        state.setItems(mockNotifications);
-      }
+      _loadNotifications();
     });
+  }
+
+  Future<void> _loadNotifications() async {
+    final user = context.read<UserState>().currentUser;
+    if (user != null) {
+      await context.read<AppNotificationState>().fetchNotifications(user.id);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<UserState>().currentUser;
     final notificationState = context.watch<AppNotificationState>();
     final notifications = notificationState.items;
 
@@ -43,69 +47,71 @@ class _NotificationsPageState extends State<NotificationsPage> {
           if (notifications.isNotEmpty)
             TextButton(
               onPressed: () {
-                // Logic to mark all as read would go here
-                for (var note in notifications) {
-                  if (!note.isRead) {
-                    notificationState.upsertItem(note.copyWith(isRead: true));
-                  }
+                if (user != null) {
+                  notificationState.markAllAsRead(user.id);
                 }
               },
               child: const Text('Mark all read'),
             ),
         ],
       ),
-      body: notifications.isEmpty
-          ? _buildEmptyState(context)
-          : ListView.separated(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: notifications.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final note = notifications[index];
-                return _NotificationCard(
-                  notification: note,
-                  onTap: () {
-                    if (!note.isRead) {
-                      notificationState.upsertItem(note.copyWith(isRead: true));
-                    }
-                    // Navigation logic based on notificationType could go here
-                  },
-                  onDelete: () {
-                    notificationState.removeById(note.id);
-                  },
-                );
-              },
-            ),
+      body: RefreshIndicator(
+        onRefresh: _loadNotifications,
+        child: notificationState.isLoading && notifications.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : notifications.isEmpty
+                ? _buildEmptyState(context)
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16.0),
+                    itemCount: notifications.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final note = notifications[index];
+                      return _NotificationCard(
+                        notification: note,
+                        onTap: () {
+                          notificationState.markAsRead(note.id);
+                        },
+                        onDelete: () {
+                          notificationState.deleteNotification(note.id);
+                        },
+                      );
+                    },
+                  ),
+      ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.notifications_none_rounded,
-            size: 80,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No notifications yet',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.notifications_none_rounded,
+              size: 80,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'We\'ll notify you when something important happens.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+            const SizedBox(height: 16),
+            Text(
+              'No notifications yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'We\'ll notify you when something important happens.',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -147,12 +153,12 @@ class _NotificationCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: notification.isRead
                 ? colorScheme.surface
-                : colorScheme.primaryContainer.withValues(alpha: 0.2),
+                : colorScheme.primaryContainer.withOpacity(0.1),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: notification.isRead
-                  ? colorScheme.outlineVariant.withValues(alpha: 0.5)
-                  : colorScheme.primary.withValues(alpha: 0.3),
+                  ? colorScheme.outlineVariant.withOpacity(0.5)
+                  : colorScheme.primary.withOpacity(0.3),
             ),
           ),
           child: Row(
@@ -180,7 +186,7 @@ class _NotificationCard extends StatelessWidget {
                           Text(
                             _formatDate(notification.createdAt!),
                             style: TextStyle(
-                              color: colorScheme.onSurface.withValues(alpha: 0.4),
+                              color: colorScheme.onSurface.withOpacity(0.4),
                               fontSize: 11,
                             ),
                           ),
@@ -190,7 +196,7 @@ class _NotificationCard extends StatelessWidget {
                     Text(
                       notification.message,
                       style: TextStyle(
-                        color: colorScheme.onSurface.withValues(alpha: 0.7),
+                        color: colorScheme.onSurface.withOpacity(0.7),
                         fontSize: 13,
                         height: 1.4,
                       ),
@@ -220,10 +226,11 @@ class _NotificationCard extends StatelessWidget {
     Color iconColor = Theme.of(context).colorScheme.primary;
 
     switch (notification.notificationType) {
-      case 'order_status':
+      case 'order':
+      case 'item_bought':
         iconData = Icons.local_shipping_rounded;
         break;
-      case 'sale':
+      case 'item_sold':
         iconData = Icons.sell_rounded;
         iconColor = Colors.orange;
         break;
@@ -231,7 +238,7 @@ class _NotificationCard extends StatelessWidget {
         iconData = Icons.info_outline_rounded;
         iconColor = Colors.blue;
         break;
-      case 'chat':
+      case 'message':
         iconData = Icons.chat_bubble_outline_rounded;
         break;
       default:
@@ -241,7 +248,7 @@ class _NotificationCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: iconColor.withValues(alpha: 0.1),
+        color: iconColor.withOpacity(0.1),
         shape: BoxShape.circle,
       ),
       child: Icon(iconData, color: iconColor, size: 24),
