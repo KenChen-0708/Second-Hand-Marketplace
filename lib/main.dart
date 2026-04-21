@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'state/state.dart';
 import 'models/models.dart';
 import 'services/local/local_database_service.dart';
 import 'services/payment/stripe_service.dart';
+import 'services/notification/local_notification_manager.dart';
+import 'services/notification/push_notification_service.dart';
 
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
@@ -50,14 +52,20 @@ const String supabaseUrl = 'https://yqvgeownycvbzelukmfp.supabase.co';
 const String supabaseKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxdmdlb3dueWN2YnplbHVrbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzc2MjcsImV4cCI6MjA4NzgxMzYyN30.1OOTEJnPr7qXWLGdSUNmydvK6_UFSB38mkJbQnv1Qp0';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("!!! FCM BACKGROUND: Received ${message.notification?.title}");
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (!kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.windows ||
-          defaultTargetPlatform == TargetPlatform.linux)) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    print("!!! FIREBASE INIT ERROR: $e");
   }
 
   if (StripeService.isSupportedPlatform && !kIsWeb) {
@@ -73,6 +81,9 @@ Future<void> main() async {
     ),
   );
   await LocalDatabaseService.instance.database;
+
+  await LocalNotificationManager.instance.initialize();
+  await PushNotificationService.instance.initialize();
 
   runApp(const MyApp());
 }
@@ -117,26 +128,16 @@ final _router = GoRouter(
                            state.matchedLocation == '/reset-password' ||
                            state.matchedLocation == '/admin/login';
 
-    // If not authenticated, only allow auth pages
     if (!userState.isAuthenticated) {
       return isLoggingIn ? null : '/';
     }
 
-    // --- PROTECTED ROUTES (If Logged In) ---
-
-    // 1. Prevent non-admins from entering /admin/*
     if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
       if (user != null && user.role != 'admin') {
         return '/home'; // Kick users back to marketplace
       }
     }
 
-    // 2. Prevent admins from entering /home or other user pages (Optional, but cleaner)
-    // if (user != null && user.role == 'admin' && !state.matchedLocation.startsWith('/admin')) {
-    //   return '/admin/dashboard';
-    // }
-
-    // 3. If authenticated and trying to go to login/register, redirect to appropriate home
     if (isLoggingIn && state.matchedLocation != '/reset-password') {
        if (user?.role == 'admin') return '/admin/dashboard';
        return '/home';
@@ -456,13 +457,17 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => AdminLogState()),
         ChangeNotifierProvider(create: (_) => AdminUserState()),
       ],
-      child: Consumer<ThemeState>(
-        builder: (context, themeState, child) {
+      child: Consumer2<UserState, AppNotificationState>(
+        builder: (context, userState, noteState, child) {
+          // ENSURE NOTIFICATION STATE HAS THE LATEST USER DATA
+          noteState.updateCurrentUser(userState.currentUser);
+
           return MaterialApp.router(
+            scaffoldMessengerKey: LocalNotificationManager.instance.messengerKey,
             debugShowCheckedModeBanner: false,
             title: 'CampusSell',
             routerConfig: _router,
-            themeMode: themeState.themeMode,
+            themeMode: context.watch<ThemeState>().themeMode,
             theme: ThemeData(
               useMaterial3: true,
               colorScheme:

@@ -44,8 +44,7 @@ class NotificationService {
       await _supabase
           .from('notifications')
           .update({'is_read': true})
-          .eq('user_id', userId)
-          .eq('is_read', false);
+          .eq('user_id', userId);
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     }
@@ -80,7 +79,6 @@ class NotificationService {
         'is_read': false,
       });
     } catch (e) {
-      // We don't want notification failure to break the main flow
       print('Silent failure creating notification: $e');
     }
   }

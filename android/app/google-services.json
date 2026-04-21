@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "5186905443",
+    "project_id": "second-hand-e-commerce-a-33528",
+    "storage_bucket": "second-hand-e-commerce-a-33528.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:5186905443:android:479fbde4c134f3ee461f56",
+        "android_client_info": {
+          "package_name": "com.secondhand.marketplace"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAChR7oFFmwZC4hnSHkcmtNvp6_3FZp7bk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

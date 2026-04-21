@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
-
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 import '../services/auth/auth_service.dart';
 import '../services/chat/chat_service.dart';
@@ -13,9 +13,7 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
     AuthService? authService,
   }) : _chatService = chatService ?? ChatService(),
        _authService = authService ?? AuthService() {
-    _connectivitySubscription = _connectivityService.onlineChanges.listen((
-      isOnline,
-    ) {
+    _connectivitySubscription = _connectivityService.onlineChanges.listen((isOnline) {
       if (isOnline) {
         fetchUserConversations();
       }
@@ -26,6 +24,10 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
   final AuthService _authService;
   final ConnectivityService _connectivityService = ConnectivityService.instance;
   late final StreamSubscription<bool> _connectivitySubscription;
+  
+  StreamSubscription? _buyerSubscription;
+  StreamSubscription? _sellerSubscription;
+  
   List<ChatConversationBundle> _bundles = [];
 
   List<ChatConversationBundle> get bundles => List.unmodifiable(_bundles);
@@ -59,12 +61,51 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       final bundles = await _chatService.fetchUserConversations(userId: userId);
       _bundles = bundles;
       setItems(bundles.map((bundle) => bundle.conversation).toList());
+      
+      // Start listening for real-time conversation updates
+      _subscribeToConversations(userId);
+      
       return bundles;
     } catch (e) {
       setError(e.toString().replaceFirst('Exception: ', ''));
       rethrow;
     } finally {
       setLoading(false);
+    }
+  }
+
+  void _subscribeToConversations(String userId) {
+    _buyerSubscription?.cancel();
+    _sellerSubscription?.cancel();
+    
+    // Supabase .stream() doesn't support .or(), so we listen to two targeted streams
+    // to ensure we get updates even in large databases (bypassing the 1000 row global limit).
+    
+    _buyerSubscription = Supabase.instance.client
+        .from('chat_conversations')
+        .stream(primaryKey: ['id'])
+        .eq('buyer_id', userId)
+        .listen((_) => _refreshInbox(userId));
+
+    _sellerSubscription = Supabase.instance.client
+        .from('chat_conversations')
+        .stream(primaryKey: ['id'])
+        .eq('seller_id', userId)
+        .listen((_) => _refreshInbox(userId));
+  }
+
+  Future<void> _refreshInbox(String userId) async {
+    print("!!! CHAT UPDATE: Refreshing inbox for $userId");
+    try {
+      final updatedBundles = await _chatService.fetchUserConversations(userId: userId);
+      
+      scheduleMicrotask(() {
+        _bundles = updatedBundles;
+        setItems(updatedBundles.map((b) => b.conversation).toList());
+        notifyListeners();
+      });
+    } catch (e) {
+      debugPrint("Error refreshing inbox: $e");
     }
   }
 
@@ -185,20 +226,13 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       return b.conversation.id.compareTo(a.conversation.id);
     });
     upsertItem(bundle.conversation);
-    final currentUserId = _lastUserId;
-    if (currentUserId != null && currentUserId.isNotEmpty) {
-      unawaited(
-        _chatService.cacheConversationBundle(
-          currentUserId: currentUserId,
-          bundle: bundle,
-        ),
-      );
-    }
   }
 
   @override
   void dispose() {
     _connectivitySubscription.cancel();
+    _buyerSubscription?.cancel();
+    _sellerSubscription?.cancel();
     super.dispose();
   }
 }

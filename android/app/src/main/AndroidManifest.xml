@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.app">
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -10,6 +11,11 @@
         android:label="app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- Added for Local Notifications -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="high_importance_channel" />
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"
@@ -30,12 +36,10 @@
               android:resource="@style/NormalTheme"
               />
 
-            <!-- Deep Links Configuration -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Accepts links starting with "io.supabase.flutter://login-callback" -->
                 <data android:scheme="io.supabase.flutter" android:host="login-callback" />
             </intent-filter>
 
