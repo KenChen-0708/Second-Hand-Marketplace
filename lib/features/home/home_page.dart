@@ -191,8 +191,7 @@ class _HomePageState extends State<HomePage> {
     // Temp copies — committed only on Apply
     RangeValues tempPrice = _priceRange;
     Set<String> tempConditions = Set.from(_selectedConditions);
-    Set<String> tempCategories = Set.from(_selectedCategories);
-    String tempSort = _selectedSort;
+    Set<String> tempCategories = Set.from(_selectedCategories); String tempSort = _selectedSort;
 
     // useRootNavigator: true → sheet covers the bottom nav bar
     showModalBottomSheet(
@@ -881,7 +880,6 @@ class _HomePageState extends State<HomePage> {
     final cs = Theme.of(context).colorScheme;
     final cartQuantity = context.watch<CartState>().totalQuantity;
     final unreadChats = context.watch<ChatConversationState>().unreadCount;
-    final unreadNotifications = context.watch<AppNotificationState>().unreadCount;
     final showFilter = _searchController.text.isNotEmpty || _searchFocused;
 
     return Container(
@@ -941,14 +939,6 @@ class _HomePageState extends State<HomePage> {
                   onTap: () => context.push('/cart'),
                   badgeCount: cartQuantity,
                 ),
-              const SizedBox(width: 12),
-              // ── Notifications Button ───────────────────────────
-              _buildHeaderIcon(
-                context,
-                icon: Icons.notifications_none_rounded,
-                onTap: () => context.push('/profile/notifications'),
-                badgeCount: unreadNotifications,
-              ),
               const SizedBox(width: 12),
               // ── Chat Button ─────────────────────────────────────
               _buildHeaderIcon(

@@ -134,25 +134,25 @@ class ScaffoldWithNavBar extends StatelessWidget {
                 ),
                 if (badgeCount > 0)
                   Positioned(
-                    right: -4,
-                    top: -2,
+                    right: -2,
+                    top: -1,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.all(2),
                       constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
+                        minWidth: 14,
+                        minHeight: 14,
                       ),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: Colors.redAccent,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
+                        border: Border.all(color: Colors.white, width: 1.2),
                       ),
                       child: Text(
                         badgeCount > 9 ? '9+' : '$badgeCount',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 8,
+                          fontSize: 7,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
