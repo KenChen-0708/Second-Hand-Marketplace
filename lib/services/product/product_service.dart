@@ -26,7 +26,9 @@ class ProductService {
     }
 
     try {
-      var query = _supabase.from('products').select('*, variations:product_variations(*)');
+      var query = _supabase.from('products').select(
+        '*, variations:product_variants(*, attributes:product_variant_attributes(*))',
+      );
 
       if (status != null && status.isNotEmpty) {
         query = query.eq('status', status);
@@ -72,7 +74,9 @@ class ProductService {
     try {
       final data = await _supabase
           .from('products')
-          .select('*, variations:product_variations(*)')
+          .select(
+            '*, variations:product_variants(*, attributes:product_variant_attributes(*))',
+          )
           .eq('id', productId)
           .single();
 
@@ -196,9 +200,15 @@ class ProductService {
 
   Future<String> createProduct(Map<String, dynamic> productData) async {
     try {
+      final payload = Map<String, dynamic>.from(productData);
+      if (!payload.containsKey('base_price') && payload.containsKey('price')) {
+        payload['base_price'] = payload['price'];
+      }
+      payload.remove('price');
+
       final response = await _supabase
           .from('products')
-          .insert(productData)
+          .insert(payload)
           .select('id')
           .single();
       return response['id'] as String;
@@ -215,12 +225,67 @@ class ProductService {
     }
 
     try {
-      await _supabase.from('product_variations').insert(variations);
+      final variantRows = variations
+          .map(
+            (variation) => <String, dynamic>{
+              'product_id': variation['product_id'],
+              'sku': variation['sku'],
+              'price': variation['price'],
+              'quantity':
+                  variation['quantity'] ?? variation['available_quantity'] ?? 0,
+            },
+          )
+          .toList();
+
+      final insertedVariants = await _supabase
+          .from('product_variants')
+          .insert(variantRows)
+          .select('id');
+
+      final attributeRows = <Map<String, dynamic>>[];
+      final insertedVariantList = List<Map<String, dynamic>>.from(
+        insertedVariants as List,
+      );
+      for (var index = 0; index < variations.length; index++) {
+        final variation = variations[index];
+        final insertedVariantId = insertedVariantList[index]['id'] as String;
+        final rawAttributes = variation['attributes'] as List? ??
+            _legacyAttributesForVariation(variation);
+        for (final rawAttribute in rawAttributes) {
+          final attribute = Map<String, dynamic>.from(rawAttribute as Map);
+          attributeRows.add({
+            'variant_id': insertedVariantId,
+            'attribute_name': attribute['attribute_name'],
+            'attribute_value': attribute['attribute_value'],
+          });
+        }
+      }
+
+      if (attributeRows.isNotEmpty) {
+        await _supabase.from('product_variant_attributes').insert(attributeRows);
+      }
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
       throw Exception('Failed to create product variations: $e');
     }
+  }
+
+  List<Map<String, dynamic>> _legacyAttributesForVariation(
+    Map<String, dynamic> variation,
+  ) {
+    final type = variation['variation_type']?.toString().trim() ?? '';
+    final value = variation['variation_value']?.toString().trim() ?? '';
+    if (type.isEmpty || value.isEmpty) {
+      return const [];
+    }
+
+    return [
+      {
+        'attribute_name': type,
+        'attribute_value': value,
+      },
+    ];
   }
 
   Future<void> createMeetupLocation(Map<String, dynamic> locationData) async {
@@ -288,6 +353,10 @@ class ProductService {
         ...updateData,
         'updated_at': DateTime.now().toIso8601String(),
       };
+      if (!data.containsKey('base_price') && data.containsKey('price')) {
+        data['base_price'] = data['price'];
+      }
+      data.remove('price');
       await _supabase.from('products').update(data).eq('id', productId);
     } on PostgrestException catch (e) {
       throw Exception(e.message);

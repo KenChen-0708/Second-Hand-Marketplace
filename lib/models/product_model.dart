@@ -92,11 +92,32 @@ class ProductModel implements AppModel {
   }
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
+    final parsedVariations = (map['variations'] as List? ?? const [])
+        .map(
+          (item) => ProductVariationModel.fromMap(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        )
+        .toList();
+    final parsedPrice =
+        JsonUtils.asDouble(map['price']) ??
+        JsonUtils.asDouble(map['base_price']) ??
+        0;
+    final parsedAvailableQuantity =
+        JsonUtils.asInt(map['available_quantity']) ??
+        JsonUtils.asInt(map['quantity']) ??
+        (parsedVariations.isNotEmpty
+            ? parsedVariations.fold<int>(
+                0,
+                (sum, variation) => sum + variation.availableQuantity,
+              )
+            : null);
+
     return ProductModel(
       id: JsonUtils.asString(map['id']) ?? '',
       title: JsonUtils.asString(map['title']) ?? '',
       description: JsonUtils.asString(map['description']) ?? '',
-      price: JsonUtils.asDouble(map['price']) ?? 0,
+      price: parsedPrice,
       categoryId: JsonUtils.asString(map['category_id']),
       sellerId: JsonUtils.asString(map['seller_id']) ?? '',
       sellerName: map['seller'] != null
@@ -115,14 +136,8 @@ class ProductModel implements AppModel {
           (JsonUtils.asString(map['trade_preference']) != null
               ? [JsonUtils.asString(map['trade_preference'])!]
               : const ['face_to_face']),
-      availableQuantity: JsonUtils.asInt(map['available_quantity']),
-      variations: (map['variations'] as List? ?? const [])
-          .map(
-            (item) => ProductVariationModel.fromMap(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList(),
+      availableQuantity: parsedAvailableQuantity,
+      variations: parsedVariations,
       openToOffers: map['open_to_offers'] == true,
       viewCount: JsonUtils.asInt(map['view_count']) ?? 0,
       likesCount: JsonUtils.asInt(map['likes_count']) ?? 0,
@@ -137,6 +152,7 @@ class ProductModel implements AppModel {
       'title': title,
       'description': description,
       'price': price,
+      'base_price': price,
       'category_id': categoryId,
       'seller_id': sellerId,
       'seller': sellerName != null ? {'name': sellerName} : null,
@@ -161,6 +177,13 @@ class ProductModel implements AppModel {
   String toJson() => json.encode(toMap());
 
   bool get hasVariants => variations.isNotEmpty;
+
+  double priceForVariant(ProductVariationModel? variant) {
+    if (variant == null) {
+      return price;
+    }
+    return variant.effectivePrice(price);
+  }
 
   int? get stockQuantity {
     if (hasVariants) {

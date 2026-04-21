@@ -236,13 +236,22 @@ class CartPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '\$${product.price.toStringAsFixed(2)}',
+                            '\$${cartItem.unitPrice.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                             ),
                           ),
+                          if (cartItem.variantLabel != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              cartItem.variantLabel!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Text(
                             'Item total: \$${cartItem.totalPrice.toStringAsFixed(2)}',
@@ -270,7 +279,7 @@ class CartPage extends StatelessWidget {
                           ? null
                           : () => _runCartAction(
                               context,
-                              (state) => state.decreaseQuantity(product.id),
+                              (state) => state.decreaseQuantity(cartItem),
                             ),
                     ),
                     Padding(
@@ -289,7 +298,7 @@ class CartPage extends StatelessWidget {
                           ? null
                           : () => _runCartAction(
                               context,
-                              (state) => state.increaseQuantity(product.id),
+                              (state) => state.increaseQuantity(cartItem),
                             ),
                     ),
                   ],
@@ -300,7 +309,7 @@ class CartPage extends StatelessWidget {
                       ? null
                       : () => _runCartAction(
                           context,
-                          (state) => state.removeFromCart(product.id),
+                          (state) => state.removeFromCart(cartItem),
                         ),
                   icon: const Icon(Icons.delete_outline_rounded),
                   color: Colors.redAccent,

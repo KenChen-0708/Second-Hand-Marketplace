@@ -531,7 +531,12 @@ class _SellWizardState extends State<_SellWizard> {
 
       await productService.createProductVariations(
         _variations
-            .map((variation) => variation.toInsertMap(productId))
+            .map(
+              (variation) => variation.toInsertMap(
+                productId,
+                basePrice: double.parse(_priceController.text.trim()),
+              ),
+            )
             .toList(),
       );
 
@@ -2234,14 +2239,22 @@ class _DraftVariation {
     return '${typeController.text.trim()}: ${valueController.text.trim()} (${quantityController.text.trim()} qty, $adjustmentText)';
   }
 
-  Map<String, dynamic> toInsertMap(String productId) {
+  Map<String, dynamic> toInsertMap(
+    String productId, {
+    required double basePrice,
+  }) {
+    final adjustment =
+        double.tryParse(priceAdjustmentController.text.trim()) ?? 0;
     return {
       'product_id': productId,
-      'variation_type': typeController.text.trim(),
-      'variation_value': valueController.text.trim(),
-      'available_quantity': int.tryParse(quantityController.text.trim()) ?? 0,
-      'price_adjustment':
-          double.tryParse(priceAdjustmentController.text.trim()) ?? 0,
+      'quantity': int.tryParse(quantityController.text.trim()) ?? 0,
+      'price': basePrice + adjustment,
+      'attributes': [
+        {
+          'attribute_name': typeController.text.trim(),
+          'attribute_value': valueController.text.trim(),
+        },
+      ],
     };
   }
 

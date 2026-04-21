@@ -34,7 +34,7 @@ class ChatService {
           .from('chat_conversations')
           .select(
             '*, '
-            'product:products(*, variations:product_variations(*)), '
+            'product:products(*, variations:product_variants(*, attributes:product_variant_attributes(*))), '
             'buyer:users!chat_conversations_buyer_id_fkey(*), '
             'seller:users!chat_conversations_seller_id_fkey(*)',
           )
@@ -118,7 +118,7 @@ class ChatService {
           .from('chat_conversations')
           .select(
             '*, '
-            'product:products(*, variations:product_variations(*)), '
+            'product:products(*, variations:product_variants(*, attributes:product_variant_attributes(*))), '
             'buyer:users!chat_conversations_buyer_id_fkey(*), '
             'seller:users!chat_conversations_seller_id_fkey(*)',
           )

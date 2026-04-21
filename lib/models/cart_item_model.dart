@@ -7,6 +7,7 @@ class CartItemModel implements AppModel {
   final String id;
   final String userId;
   final String productId;
+  final String? variantId;
   final int quantity;
   final DateTime? addedAt;
 
@@ -14,6 +15,7 @@ class CartItemModel implements AppModel {
     required this.id,
     required this.userId,
     required this.productId,
+    this.variantId,
     this.quantity = 1,
     this.addedAt,
   });
@@ -22,6 +24,7 @@ class CartItemModel implements AppModel {
     String? id,
     String? userId,
     String? productId,
+    String? variantId,
     int? quantity,
     DateTime? addedAt,
   }) {
@@ -29,6 +32,7 @@ class CartItemModel implements AppModel {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       productId: productId ?? this.productId,
+      variantId: variantId ?? this.variantId,
       quantity: quantity ?? this.quantity,
       addedAt: addedAt ?? this.addedAt,
     );
@@ -39,6 +43,7 @@ class CartItemModel implements AppModel {
       id: JsonUtils.asString(map['id']) ?? '',
       userId: JsonUtils.asString(map['user_id']) ?? '',
       productId: JsonUtils.asString(map['product_id']) ?? '',
+      variantId: JsonUtils.asString(map['variant_id']),
       quantity: JsonUtils.asInt(map['quantity']) ?? 1,
       addedAt: JsonUtils.asDateTime(map['added_at']),
     );
@@ -49,6 +54,7 @@ class CartItemModel implements AppModel {
       'id': id,
       'user_id': userId,
       'product_id': productId,
+      'variant_id': variantId,
       'quantity': quantity,
       'added_at': addedAt?.toIso8601String(),
     };

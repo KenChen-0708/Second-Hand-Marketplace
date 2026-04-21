@@ -484,8 +484,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          if (cartItem.variantLabel != null)
+                            Text(
+                              cartItem.variantLabel!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           Text(
-                            '${CurrencyHelper.formatRM(cartItem.product.price)} x ${cartItem.quantity}',
+                            '${CurrencyHelper.formatRM(cartItem.unitPrice)} x ${cartItem.quantity}',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.bold,
