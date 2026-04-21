@@ -36,6 +36,7 @@ import 'features/profile/seller_review_page.dart';
 import 'features/profile/seller_profile_page.dart';
 import 'features/sell/my_listings_page.dart';
 import 'features/sell/edit_product_page.dart';
+import 'features/sell/seller_product_page.dart';
 import 'features/sell/seller_dashboard_page.dart';
 
 import 'shared/widgets/scaffold_with_nav_bar.dart';
@@ -44,6 +45,7 @@ import 'features/admin/admin_login_page.dart';
 import 'features/admin/admin_scaffold.dart';
 import 'features/admin/admin_dashboard_page.dart';
 import 'features/admin/admin_user_management_page.dart';
+import 'features/admin/admin_category_management_page.dart';
 import 'features/admin/admin_listing_moderation_page.dart';
 import 'features/admin/admin_order_management_page.dart';
 import 'features/admin/admin_notification_center_page.dart';
@@ -104,6 +106,9 @@ final _shellNavigatorAdminDashboardKey = GlobalKey<NavigatorState>(
 );
 final _shellNavigatorAdminUsersKey = GlobalKey<NavigatorState>(
   debugLabel: 'adminUsers',
+);
+final _shellNavigatorAdminCategoriesKey = GlobalKey<NavigatorState>(
+  debugLabel: 'adminCategories',
 );
 final _shellNavigatorAdminListingsKey = GlobalKey<NavigatorState>(
   debugLabel: 'adminListings',
@@ -253,6 +258,14 @@ final _router = GoRouter(
       },
     ),
     GoRoute(
+      path: '/seller-product',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final product = state.extra as ProductModel;
+        return SellerProductPage(product: product);
+      },
+    ),
+    GoRoute(
       path: '/edit-product',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) {
@@ -285,6 +298,15 @@ final _router = GoRouter(
             GoRoute(
               path: '/admin/users',
               builder: (context, state) => const AdminUserManagementPage(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _shellNavigatorAdminCategoriesKey,
+          routes: [
+            GoRoute(
+              path: '/admin/categories',
+              builder: (context, state) => const AdminCategoryManagementPage(),
             ),
           ],
         ),
@@ -409,8 +431,17 @@ final _router = GoRouter(
                 GoRoute(
                   path: 'seller-review',
                   parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) =>
-                      SellerReviewPage(product: state.extra as ProductModel?),
+                  builder: (context, state) {
+                    if (state.extra is Map<String, dynamic>) {
+                      final extra = state.extra as Map<String, dynamic>;
+                      return SellerReviewPage(
+                        product: extra['product'] as ProductModel?,
+                        orderId: extra['orderId'] as String?,
+                      );
+                    }
+                    return SellerReviewPage(
+                        product: state.extra as ProductModel?);
+                  },
                 ),
               ],
             ),
@@ -498,61 +529,56 @@ class _MyAppState extends State<MyApp> {
                     surface: surfaceColor,
                     brightness: Brightness.light,
                     primaryContainer: primaryColor.withValues(alpha: 0.1),
-                    onPrimaryContainer: primaryColor,
-                  ).copyWith(
-                    surface: surfaceColor,
-                    onSurface: const Color(0xFF1F2937),
-                    surfaceContainerHighest: const Color(0xFFF3F4F6),
-                    outlineVariant: const Color(0xFFD1D5DB),
+                    onPrimaryContainer: primaryColor.withValues(alpha: 0.1),
                   ),
               scaffoldBackgroundColor: scaffoldBgColor,
-              fontFamily: 'Roboto',
-              textTheme: const TextTheme(
-                headlineSmall: TextStyle(
+              appBarTheme: const AppBarTheme(
+                backgroundColor: surfaceColor,
+                elevation: 0,
+                centerTitle: true,
+                titleTextStyle: TextStyle(
+                  color: Colors.black,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
                 ),
-                titleLarge: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
-                ),
-                bodyLarge: TextStyle(color: Color(0xFF374151)),
-                bodyMedium: TextStyle(color: Color(0xFF4B5563)),
+                iconTheme: IconThemeData(color: Colors.black),
               ),
-              filledButtonTheme: FilledButtonThemeData(
-                style: FilledButton.styleFrom(
+              bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+                backgroundColor: surfaceColor,
+                selectedItemColor: primaryColor,
+                unselectedItemColor: Colors.grey,
+                type: BottomNavigationBarType.fixed,
+                elevation: 10,
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  elevation: 0,
                 ),
               ),
               inputDecorationTheme: InputDecorationTheme(
                 filled: true,
-                fillColor: const Color(0xFFF3F4F6),
+                fillColor: Colors.white,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: primaryColor, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: primaryColor),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               ),
-            ),
-            darkTheme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: primaryColor,
-                primary: primaryColor,
-                brightness: Brightness.dark,
-              ),
-              fontFamily: 'Roboto',
             ),
           );
         },

@@ -266,29 +266,13 @@ class _CartPageState extends State<CartPage> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Title with item count
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'My Cart',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 22,
-                              ),
-                        ),
-                        if (cartState.items.isNotEmpty)
-                          Text(
-                            '${cartState.items.length} ${cartState.items.length == 1 ? 'item' : 'items'}',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontSize: 12,
-                                ),
-                          ),
-                      ],
+                    child: Text(
+                      'My Cart',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                      ),
                     ),
                   ),
                   // Edit/Clear All button
@@ -382,10 +366,10 @@ class _CartPageState extends State<CartPage> {
               // Modern Checkout Summary
               Container(
                 padding: const EdgeInsets.only(
-                  top: 20,
+                  top: 14,
                   left: 20,
                   right: 20,
-                  bottom: 30,
+                  bottom: 18,
                 ),
                 decoration: BoxDecoration(
                   color: colorScheme.surface,
@@ -468,7 +452,7 @@ class _CartPageState extends State<CartPage> {
                     // Checkout button
                     SizedBox(
                       width: double.infinity,
-                      height: 56,
+                      height: 46,
                       child: FilledButton(
                         onPressed: selectedItems.isEmpty
                             ? null
@@ -502,7 +486,7 @@ class _CartPageState extends State<CartPage> {
                                   ? 'Select items to checkout'
                                   : 'Proceed to Checkout',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -0.2,
                               ),
@@ -572,11 +556,11 @@ class _CartPageState extends State<CartPage> {
                         : () => _toggleSelection(cartItem.id, !isSelected),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 // Product image
                 Container(
-                  width: 80,
-                  height: 80,
+                  width: 72,
+                  height: 72,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     color: colorScheme.surfaceContainerHighest,
@@ -587,14 +571,14 @@ class _CartPageState extends State<CartPage> {
                       onTap: () => context.push('/product/${product.id}'),
                       child: ImageHelper.productImage(
                         product.imageUrl,
-                        width: 80,
-                        height: 80,
+                        width: 72,
+                        height: 72,
                         fit: BoxFit.cover,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 // Product details
                 Expanded(
                   child: Column(
@@ -615,7 +599,7 @@ class _CartPageState extends State<CartPage> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       // Variant info
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -637,7 +621,7 @@ class _CartPageState extends State<CartPage> {
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                 ),
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -723,7 +707,7 @@ class _CartPageState extends State<CartPage> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 // Quantity controls
                 Container(
                   decoration: BoxDecoration(
@@ -769,9 +753,8 @@ class _CartPageState extends State<CartPage> {
                       ),
                       // Quantity display
                       Container(
-                        width: 50,
+                        width: 64,
                         height: 40,
-                        alignment: Alignment.center,
                         decoration: BoxDecoration(
                           border: Border.symmetric(
                             vertical: BorderSide(
@@ -781,13 +764,13 @@ class _CartPageState extends State<CartPage> {
                             ),
                           ),
                         ),
-                        child: Text(
-                          cartItem.quantity.toString(),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: colorScheme.onSurface,
-                          ),
+                        child: _CartQuantityField(
+                          value: cartItem.quantity,
+                          enabled:
+                              !cartState.isLoading && !isQuantityActionPending,
+                          maxQuantity: availableQuantity,
+                          onCommitted: (value) =>
+                              _updateCartItemQuantity(context, cartItem, value),
                         ),
                       ),
                       // Increase button

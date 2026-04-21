@@ -7,6 +7,8 @@ class SellerStats {
   final int ordersAwaitingAction;
   final double totalEarnings;
   final int unreadChats;
+  final double averageRating;
+  final int totalReviews;
 
   SellerStats({
     required this.activeListings,
@@ -14,6 +16,8 @@ class SellerStats {
     required this.ordersAwaitingAction,
     required this.totalEarnings,
     required this.unreadChats,
+    this.averageRating = 0.0,
+    this.totalReviews = 0,
   });
 }
 
@@ -39,7 +43,6 @@ class SellerService {
 
   final SupabaseClient _supabase;
 
-  /// NEW: Fetches public profile metrics for a seller (Rating, Sales count, etc.)
   Future<SellerProfileModel?> fetchPublicProfile(String userId) async {
     try {
       final response = await _supabase
@@ -56,13 +59,12 @@ class SellerService {
     }
   }
 
-  /// NEW: Fetches real reviews for a specific seller
   Future<List<ReviewModel>> fetchSellerReviews(String sellerId) async {
     try {
       final response = await _supabase
           .from('reviews')
           .select('*, reviewer:users!reviews_reviewer_id_fkey(*)')
-          .eq('seller_id', sellerId)
+          .eq('reviewee_id', sellerId)
           .order('created_at', ascending: false);
 
       return (response as List)
@@ -75,68 +77,112 @@ class SellerService {
   }
 
   Future<SellerStats> getSellerStats(String userId) async {
+    int activeCount = 0;
+    int soldCount = 0;
+    double avgRating = 0.0;
+    int reviewCount = 0;
+    double earnings = 0.0;
+
     try {
-      // 1. Fetch products count by status
-      final productsResponse = await _supabase
+      final String uid = userId.trim();
+
+      // 1. Fetch products
+      final pResponse = await _supabase
           .from('products')
           .select('id, status')
-          .eq('seller_id', userId);
-
-      final products = productsResponse as List;
-      final activeListings =
-          products.where((p) => p['status'] == 'active').length;
-      final itemsSold = products.where((p) => p['status'] == 'sold').length;
-
-      // 2. Fetch orders awaiting action
-      // Orders where status is 'pending' AND the user is the seller of at least one item
-      final ordersAwaitingActionResponse = await _supabase
-          .from('orders')
-          .select('id, status, order_items!inner(product_id, products!inner(seller_id))')
-          .eq('status', 'pending')
-          .eq('order_items.products.seller_id', userId);
-
-      final ordersAwaitingAction = (ordersAwaitingActionResponse as List).length;
-
-      // 3. Fetch total earnings (sum of total_price of orders with status 'completed' where user is seller)
-      final completedOrdersResponse = await _supabase
-          .from('orders')
-          .select('id, total_price, order_items!inner(product_id, products!inner(seller_id))')
-          .eq('status', 'completed')
-          .eq('order_items.products.seller_id', userId);
-
-      double totalEarnings = 0;
-      for (var order in completedOrdersResponse) {
-        totalEarnings += (order['total_price'] as num).toDouble();
+          .eq('seller_id', uid);
+      
+      final Map<String, String> productStatuses = {};
+      final List<String> pIds = [];
+      if (pResponse != null) {
+        final List<dynamic> pList = pResponse as List;
+        for (var p in pList) {
+          final String id = (p['id'] ?? '').toString();
+          final String s = (p['status'] ?? '').toString().toLowerCase();
+          productStatuses[id] = s;
+          if (id.isNotEmpty) pIds.add(id);
+          if (s == 'active') activeCount++;
+        }
       }
 
-      // 4. Fetch unread chats (Mock logic or actual if possible)
-      // Since chat is mostly mock for now, we'll return a static number or 0
-      final unreadChatsCount = 0; // Set to 0 to avoid touching chat logic
+      // 2. Fetch reviews directly
+      final rResponse = await _supabase
+          .from('reviews')
+          .select('rating')
+          .eq('reviewee_id', uid);
+      
+      if (rResponse != null) {
+        final List<dynamic> rList = rResponse as List;
+        reviewCount = rList.length;
+        if (reviewCount > 0) {
+          double sum = 0;
+          for (var r in rList) {
+            sum += (r['rating'] as num?)?.toDouble() ?? 0.0;
+          }
+          avgRating = sum / reviewCount;
+        }
+      }
 
-      return SellerStats(
-        activeListings: activeListings,
-        itemsSold: itemsSold,
-        ordersAwaitingAction: ordersAwaitingAction,
-        totalEarnings: totalEarnings,
-        unreadChats: unreadChatsCount,
-      );
+      // 3. Fetch Sold Items from Order History
+      final Set<String> productsInOrders = {};
+      
+      if (pIds.isNotEmpty) {
+        // Query order_items for these specific products
+        // We join 'orders' to get the status
+        final oResponse = await _supabase
+            .from('order_items')
+            .select('quantity, unit_price, product_id, orders!inner(status)')
+            .inFilter('product_id', pIds);
+
+        if (oResponse != null) {
+          for (var item in (oResponse as List)) {
+            final Map? orderData = item['orders'] as Map?;
+            String status = '';
+            
+            if (orderData != null) {
+              status = (orderData['status'] ?? '').toString().toLowerCase();
+            }
+
+            // Consider "sold" if order is created and not cancelled/disputed
+            if (status.isNotEmpty && status != 'cancelled' && status != 'disputed') {
+              final int qty = (item['quantity'] as num?)?.toInt() ?? 0;
+              final double price = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
+              final String pid = (item['product_id'] ?? '').toString();
+              
+              soldCount += qty;
+              earnings += (qty * price);
+              if (pid.isNotEmpty) productsInOrders.add(pid);
+            }
+          }
+        }
+      }
+
+      // 4. Merge manual 'sold' status
+      // We count products marked 'sold' manually that are NOT part of any order processed above
+      productStatuses.forEach((id, status) {
+        if (status == 'sold' && !productsInOrders.contains(id)) {
+          soldCount++;
+        }
+      });
+
     } catch (e) {
-      print('Error fetching seller stats: $e');
-      return SellerStats(
-        activeListings: 0,
-        itemsSold: 0,
-        ordersAwaitingAction: 0,
-        totalEarnings: 0,
-        unreadChats: 0,
-      );
+      print('DEBUG: getSellerStats error for $userId: $e');
     }
+
+    return SellerStats(
+      activeListings: activeCount,
+      itemsSold: soldCount,
+      ordersAwaitingAction: 0,
+      totalEarnings: earnings,
+      unreadChats: 0,
+      averageRating: avgRating,
+      totalReviews: reviewCount,
+    );
   }
 
   Future<List<SellerNeedAction>> getNeedsAction(String userId) async {
     List<SellerNeedAction> actions = [];
-
     try {
-      // 1. Check for orders needing confirmation
       final pendingOrders = await _supabase
           .from('orders')
           .select('id, order_number, order_items!inner(product_id, products!inner(title, seller_id))')
@@ -154,7 +200,6 @@ class SellerService {
         ));
       }
 
-      // 2. Check for handovers scheduled today
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day).toIso8601String();
       final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
@@ -177,12 +222,9 @@ class SellerService {
           relatedId: order['id'],
         ));
       }
-
-      // 3. Removed unread message check to avoid touching chat logic
     } catch (e) {
       print('Error fetching needs action: $e');
     }
-
     return actions;
   }
 

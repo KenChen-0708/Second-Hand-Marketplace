@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../services/chat/chat_service.dart';
+import '../../services/review/review_service.dart';
 
 class OrderStatusPage extends StatefulWidget {
   final Object? order;
@@ -17,6 +18,7 @@ class OrderStatusPage extends StatefulWidget {
 
 class _OrderStatusPageState extends State<OrderStatusPage> {
   OrderModel? _currentOrder;
+  ReviewModel? _existingReview;
   bool _isReloading = false;
 
   @override
@@ -24,6 +26,23 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     super.initState();
     if (widget.order is OrderModel) {
       _currentOrder = widget.order as OrderModel;
+      _checkExistingReview();
+    }
+  }
+
+  Future<void> _checkExistingReview() async {
+    final order = _currentOrder;
+    final userState = context.read<UserState>();
+    final currentUserId = userState.currentUser?.id;
+
+    if (order != null && currentUserId != null && order.status.toLowerCase() == 'completed') {
+      final reviewService = ReviewService();
+      final review = await reviewService.fetchReviewForOrder(order.id, currentUserId);
+      if (mounted) {
+        setState(() {
+          _existingReview = review;
+        });
+      }
     }
   }
 
@@ -83,6 +102,8 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
                     title: 'Purchase Summary',
                     child: Column(
                       children: [
+                        _buildSellerSummary(context, currentOrder),
+                        const SizedBox(height: 16),
                         if (currentOrder.orderItems.isEmpty)
                           Text(
                             'No items were found for this order.',
@@ -146,6 +167,7 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       }
       _isReloading = false;
     });
+    await _checkExistingReview();
   }
 
   Future<void> _reloadAfterAction(String successMessage) async {
@@ -199,7 +221,11 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       icon = Icons.security_rounded;
       color = Colors.green;
     } else if (status == 'pending_handover') {
-      message = isBuyer ? 'Bring your confirmation code and inspect item before confirming.' : 'Ensure buyer inspects the item before finalizing.';
+      message = order.handoverDate == null
+          ? 'Set the handover date and time before completing this order.'
+          : isBuyer
+              ? 'Bring your confirmation code and inspect item before confirming.'
+              : 'Ensure buyer inspects the item before finalizing.';
       icon = Icons.handshake_rounded;
       color = Colors.indigo;
     }
@@ -222,17 +248,34 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
 
   Widget _buildTimeline(OrderModel order, _StatusInfo currentInfo) {
     final status = order.status.toLowerCase();
-    final steps = [
-      {'title': 'Order Placed', 'subtitle': 'Confirmation sent', 'key': 'pending'},
-      {'title': 'Paid', 'subtitle': 'Funds held in escrow', 'key': 'paid'},
-      {'title': 'Handover Scheduled', 'subtitle': 'Ready for meet-up', 'key': 'pending_handover'},
-      {'title': 'Completed', 'subtitle': 'Transaction finished', 'key': 'completed'},
+    final showCompletedStep =
+        status == 'completed' ||
+        (order.handoverDate != null && !order.handoverDate!.isAfter(DateTime.now()));
+    final steps = <Map<String, String>>[
+      {
+        'title': 'Order Placed',
+        'subtitle': 'Buyer paid for the order',
+        'key': 'paid',
+      },
+      {
+        'title': 'Handover Scheduled',
+        'subtitle': 'Seller confirmed; arrange date and time for handover',
+        'key': 'pending_handover',
+      },
+      if (showCompletedStep)
+        {
+          'title': 'Completed',
+          'subtitle': 'Buyer confirmed receipt after the scheduled handover',
+          'key': 'completed',
+        },
     ];
 
     int currentStepIndex = 0;
-    if (status == 'paid') currentStepIndex = 1;
-    else if (status == 'pending_handover') currentStepIndex = 2;
-    else if (status == 'completed') currentStepIndex = 3;
+    if (status == 'pending_handover') {
+      currentStepIndex = 1;
+    } else if (status == 'completed') {
+      currentStepIndex = steps.length - 1;
+    }
 
     return Column(
       children: List.generate(steps.length, (index) {
@@ -253,35 +296,44 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
 
   Widget _buildRoleAwareActions(BuildContext context, OrderModel order, bool isBuyer) {
     final status = order.status.toLowerCase();
+    final canBuyerComplete = order.handoverDate != null &&
+        !order.handoverDate!.isAfter(DateTime.now());
+    final canScheduleHandover = status == 'pending_handover';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          if (status == 'pending_handover') ...[
-            if (isBuyer) _buildPrimaryAction('Confirm Received', Icons.check_circle_rounded, Colors.green, () => _showConfirmReceipt(context, order))
-            else _buildPrimaryAction('Handover Done', Icons.handshake_rounded, Colors.indigo, () => _showHandoverConfirmation(context, order)),
+          if (canScheduleHandover) ...[
+            _buildPrimaryAction(
+              order.handoverDate == null ? 'Schedule Handover' : 'Reschedule Handover',
+              Icons.event_available_rounded,
+              Colors.indigo,
+              () => _scheduleHandover(context, order),
+            ),
             const SizedBox(height: 12),
           ],
-          if (status == 'pending' && !isBuyer) ...[
-            _buildPrimaryAction('Confirm Order', Icons.check_circle_rounded, Colors.green, () => _updateStatus(context, order, 'paid')),
+          if (status == 'pending_handover' && isBuyer && canBuyerComplete) ...[
+            _buildPrimaryAction('Confirm Received', Icons.check_circle_rounded, Colors.green, () => _showConfirmReceipt(context, order)),
             const SizedBox(height: 12),
           ],
           if (status == 'paid' && !isBuyer) ...[
-            _buildPrimaryAction('Mark Ready for Handover', Icons.check_circle_rounded, Colors.green, () => _updateStatus(context, order, 'pending_handover')),
+            _buildPrimaryAction('Confirm Handover', Icons.check_circle_rounded, Colors.green, () => _updateStatus(context, order, 'pending_handover')),
             const SizedBox(height: 12),
           ],
           if (status == 'completed' && isBuyer) ...[
-            _buildPrimaryAction('Leave Review', Icons.star_rounded, Colors.amber[700]!, () {}),
+            if (_existingReview == null)
+              _buildPrimaryAction('Leave Review', Icons.star_rounded, Colors.amber[700]!, () => _navigateToReview(context, order))
+            else
+              _buildDisabledAction('Review Submitted', Icons.star_rounded),
             const SizedBox(height: 12),
           ],
           Row(
             children: [
               Expanded(child: _buildSecondaryAction('Chat', Icons.chat_bubble_rounded, Colors.blue, () => _navigateToChat(context, order))),
-              const SizedBox(width: 12),
-              if (status != 'completed' && status != 'cancelled')
+              if (status != 'completed' && status != 'cancelled') ...[
+                const SizedBox(width: 12),
                 Expanded(child: _buildSecondaryAction('Cancel', Icons.cancel_rounded, Colors.grey[700]!, () => _showCancelConfirmation(context, order), isDestructive: true))
-              else
-                Expanded(child: _buildSecondaryAction('Profile', Icons.person_rounded, Colors.blue, () {})),
+              ],
             ],
           ),
         ],
@@ -298,6 +350,21 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
         minimumSize: const Size(double.infinity, 56),
         backgroundColor: color,
         foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+      ),
+    );
+  }
+
+  Widget _buildDisabledAction(String label, IconData icon) {
+    return ElevatedButton.icon(
+      onPressed: null,
+      icon: Icon(icon, size: 20),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      style: ElevatedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 56),
+        backgroundColor: Colors.grey[300],
+        foregroundColor: Colors.grey[600],
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
       ),
@@ -375,6 +442,58 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     );
   }
 
+  Widget _buildSellerSummary(BuildContext context, OrderModel order) {
+    final sellerId = order.primarySellerId;
+    final sellerName = order.primarySellerName ?? 'Seller';
+
+    return InkWell(
+      onTap: sellerId == null ? null : () => context.push('/seller/$sellerId'),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.14)),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              child: Icon(
+                Icons.storefront_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Seller',
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    sellerName,
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildNoPhotoPlaceholder() {
     return Container(
       width: 80,
@@ -422,9 +541,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
 
   _StatusInfo _getStatusDisplayInfo(String status) {
     switch (status.toLowerCase()) {
-      case 'pending': return _StatusInfo(label: 'Awaiting Confirmation', explanation: 'Seller has not prepared the item yet', color: Colors.orange, icon: Icons.hourglass_empty_rounded);
-      case 'paid': return _StatusInfo(label: 'Paid · Ready to Ship', explanation: 'Payment confirmed, funds in escrow', color: Colors.blue, icon: Icons.payments_outlined);
-      case 'pending_handover': return _StatusInfo(label: 'Ready for Handover', explanation: 'It\'s time to meet up!', color: Colors.indigo, icon: Icons.handshake_outlined);
+      case 'pending': return _StatusInfo(label: 'Pending Payment', explanation: 'Waiting for buyer payment', color: Colors.orange, icon: Icons.hourglass_empty_rounded);
+      case 'paid': return _StatusInfo(label: 'Order Placed', explanation: 'Buyer has paid for the order', color: Colors.blue, icon: Icons.payments_outlined);
+      case 'pending_handover': return _StatusInfo(label: 'Handover Scheduled', explanation: 'Seller confirmed; arrange date and time', color: Colors.indigo, icon: Icons.handshake_outlined);
       case 'completed': return _StatusInfo(label: 'Completed', explanation: 'Transaction finished successfully', color: const Color(0xFF10B981), icon: Icons.check_circle_outline_rounded);
       case 'cancelled': return _StatusInfo(label: 'Cancelled', explanation: 'This order was cancelled', color: Colors.grey, icon: Icons.cancel_outlined);
       case 'disputed': return _StatusInfo(label: 'Disputed', explanation: 'Under investigation', color: Colors.redAccent, icon: Icons.gavel_rounded);
@@ -512,6 +631,25 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     }
   }
 
+  void _navigateToReview(BuildContext context, OrderModel order) async {
+    if (order.orderItems.isEmpty) return;
+    final item = order.orderItems.first;
+    await context.push('/profile/seller-review', extra: {
+      'product': item.product,
+      'orderId': order.id,
+    });
+    if (mounted) {
+      _checkExistingReview();
+    }
+  }
+
+  void _navigateToProfile(BuildContext context, OrderModel order, bool isBuyer) {
+    final otherUserId = isBuyer ? order.primarySellerId : order.buyerId;
+    if (otherUserId != null) {
+      context.push('/seller/$otherUserId');
+    }
+  }
+
   void _showCancelConfirmation(BuildContext context, OrderModel order) {
     showDialog(
       context: context,
@@ -563,6 +701,65 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to update order: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _scheduleHandover(
+    BuildContext context,
+    OrderModel order,
+  ) async {
+    final now = DateTime.now();
+    final initial = order.handoverDate != null && order.handoverDate!.isAfter(now)
+        ? order.handoverDate!
+        : now.add(const Duration(hours: 1));
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date == null || !context.mounted) {
+      return;
+    }
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null || !context.mounted) {
+      return;
+    }
+
+    final scheduledAt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+
+    if (scheduledAt.isBefore(now)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose a future handover time.')),
+      );
+      return;
+    }
+
+    try {
+      await context.read<OrderState>().updateHandoverSchedule(
+            order.id,
+            scheduledAt,
+          );
+      if (context.mounted) {
+        await _reloadAfterAction('Handover schedule updated.');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to schedule handover: $e')),
         );
       }
     }
@@ -676,9 +873,6 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     showDialog(context: context, builder: (context) => AlertDialog(title: const Text('Confirm Receipt?'), content: const Text('Only confirm if you have received and inspected the item. This will release the payment to the seller.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not yet')), ElevatedButton(onPressed: () { Navigator.pop(context); _updateStatus(context, order, 'completed'); }, child: const Text('Confirm'))]));
   }
 
-  void _showHandoverConfirmation(BuildContext context, OrderModel order) {
-    showDialog(context: context, builder: (context) => AlertDialog(title: const Text('Handover Done?'), content: const Text('Confirm that you have handed the item to the buyer.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), ElevatedButton(onPressed: () { Navigator.pop(context); _updateStatus(context, order, 'completed'); }, child: const Text('Confirm'))]));
-  }
 }
 
 class _StatusItem extends StatelessWidget {

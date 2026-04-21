@@ -15,15 +15,13 @@ class OrderHistoryPage extends StatefulWidget {
 
 class _OrderHistoryPageState extends State<OrderHistoryPage> {
   final TextEditingController _searchController = TextEditingController();
-  String _selectedStatus = 'All';
+  String _selectedStatus = 'paid';
 
   final List<String> _statusFilters = [
-    'All',
-    'Ongoing',
-    'Awaiting Action',
-    'Completed',
-    'Cancelled',
-    'Disputed',
+    'paid',
+    'pending_handover',
+    'completed',
+    'cancelled',
   ];
 
   @override
@@ -57,17 +55,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       if (!order.isBuyer(currentUserId)) return false;
 
       // Status Filter
-      bool matchesStatus = true;
       final status = order.status.toLowerCase();
-      if (_selectedStatus == 'Ongoing') {
-        matchesStatus = ['pending', 'paid', 'pending_handover'].contains(status);
-      } else if (_selectedStatus == 'Awaiting Action') {
-        matchesStatus = status == 'pending_handover'; // Buyer needs to confirm receipt
-      } else if (_selectedStatus != 'All') {
-        matchesStatus = status == _selectedStatus.toLowerCase();
-      }
-
-      if (!matchesStatus) return false;
+      if (status != _selectedStatus) return false;
 
       // Search Filter
       final query = _searchController.text.toLowerCase();
@@ -177,9 +166,16 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               itemBuilder: (context, index) {
                 final filter = _statusFilters[index];
                 final isSelected = _selectedStatus == filter;
+                final label = filter
+                    .replaceAll('_', ' ')
+                    .split(' ')
+                    .map((word) => word.isEmpty
+                        ? word
+                        : '${word[0].toUpperCase()}${word.substring(1)}')
+                    .join(' ');
                 return ChoiceChip(
                   label: Text(
-                    filter,
+                    label,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -188,7 +184,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   ),
                   selected: isSelected,
                   onSelected: (selected) {
-                    setState(() => _selectedStatus = selected ? filter : 'All');
+                    if (selected) {
+                      setState(() => _selectedStatus = filter);
+                    }
                   },
                   selectedColor: Theme.of(context).colorScheme.primary,
                   backgroundColor: Colors.grey[200],
@@ -471,22 +469,22 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     switch (status.toLowerCase()) {
       case 'pending':
         return _StatusInfo(
-          label: 'Awaiting Confirmation',
-          explanation: 'Seller has not prepared the item yet',
+          label: 'Pending',
+          explanation: 'Order is waiting for payment',
           color: Colors.orange,
           icon: Icons.hourglass_empty_rounded,
         );
       case 'paid':
         return _StatusInfo(
-          label: 'Paid · Ready to Ship',
-          explanation: 'Payment confirmed, awaiting handover',
+          label: 'Paid',
+          explanation: 'Buyer has paid for this order',
           color: Colors.blue,
           icon: Icons.payments_outlined,
         );
       case 'pending_handover':
         return _StatusInfo(
-          label: 'Ready for Handover',
-          explanation: 'Meet-up scheduled',
+          label: 'Pending Handover',
+          explanation: 'Seller confirmed, schedule handover',
           color: Colors.indigo,
           icon: Icons.handshake_outlined,
         );
