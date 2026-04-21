@@ -881,6 +881,7 @@ class _HomePageState extends State<HomePage> {
     final cs = Theme.of(context).colorScheme;
     final cartQuantity = context.watch<CartState>().totalQuantity;
     final unreadChats = context.watch<ChatConversationState>().unreadCount;
+    final unreadNotifications = context.watch<AppNotificationState>().unreadCount;
     final showFilter = _searchController.text.isNotEmpty || _searchFocused;
 
     return Container(
@@ -940,6 +941,14 @@ class _HomePageState extends State<HomePage> {
                   onTap: () => context.push('/cart'),
                   badgeCount: cartQuantity,
                 ),
+              const SizedBox(width: 12),
+              // ── Notifications Button ───────────────────────────
+              _buildHeaderIcon(
+                context,
+                icon: Icons.notifications_none_rounded,
+                onTap: () => context.push('/profile/notifications'),
+                badgeCount: unreadNotifications,
+              ),
               const SizedBox(width: 12),
               // ── Chat Button ─────────────────────────────────────
               _buildHeaderIcon(
