@@ -74,9 +74,9 @@ Future<void> main() async {
     Stripe.publishableKey = StripeService.publishableKey;
     await Stripe.instance.applySettings();
   }
-  
+
   await Supabase.initialize(
-    url: supabaseUrl, 
+    url: supabaseUrl,
     anonKey: supabaseKey,
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
@@ -127,15 +127,15 @@ final _router = GoRouter(
     final userState = context.read<UserState>();
     final user = userState.currentUser;
     final bool isAuthenticated = userState.isAuthenticated;
-    
+
     // Pages that are accessible without login
-    final bool isPublicPage = state.matchedLocation == '/' || 
-                            state.matchedLocation == '/register' ||
-                            state.matchedLocation == '/reset-password' ||
-                            state.matchedLocation == '/admin/login' ||
-                            state.matchedLocation == '/home' ||
-                            state.matchedLocation.startsWith('/product/') ||
-                            state.matchedLocation.startsWith('/seller/');
+    final bool isPublicPage = state.matchedLocation == '/' ||
+        state.matchedLocation == '/register' ||
+        state.matchedLocation == '/reset-password' ||
+        state.matchedLocation == '/admin/login' ||
+        state.matchedLocation == '/home' ||
+        state.matchedLocation.startsWith('/product/') ||
+        state.matchedLocation.startsWith('/seller/');
 
     if (!isAuthenticated && !isPublicPage) {
       return '/'; // Send to login if trying to access private page without login
@@ -149,12 +149,12 @@ final _router = GoRouter(
       }
 
       // If already logged in and at auth pages, go home
-      final bool isAuthPage = state.matchedLocation == '/' || 
-                             state.matchedLocation == '/register' ||
-                             state.matchedLocation == '/admin/login';
+      final bool isAuthPage = state.matchedLocation == '/' ||
+          state.matchedLocation == '/register' ||
+          state.matchedLocation == '/admin/login';
       if (isAuthPage && state.matchedLocation != '/reset-password') {
-         if (user?.role == 'admin') return '/admin/dashboard';
-         return '/home';
+        if (user?.role == 'admin') return '/admin/dashboard';
+        return '/home';
       }
     }
 
@@ -476,7 +476,7 @@ class _MyAppState extends State<MyApp> {
       if (event == AuthChangeEvent.passwordRecovery) {
         _router.go('/reset-password');
       }
-      
+
       // Update isAuthenticated state whenever auth changes
       if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
         setState(() {});
@@ -551,69 +551,55 @@ class _MyAppState extends State<MyApp> {
             themeMode: context.watch<ThemeState>().themeMode,
             theme: ThemeData(
               useMaterial3: true,
-              colorScheme:
-                  ColorScheme.fromSeed(
-                    seedColor: primaryColor,
-                    primary: primaryColor,
-                    surface: surfaceColor,
-                    brightness: Brightness.light,
-                    primaryContainer: primaryColor.withValues(alpha: 0.1),
-                    onPrimaryContainer: primaryColor,
-                  ).copyWith(
-                    surface: surfaceColor,
-                    onSurface: const Color(0xFF1F2937),
-                    surfaceContainerHighest: const Color(0xFFF3F4F6),
-                    outlineVariant: const Color(0xFFD1D5DB),
-                  ),
               colorScheme: appColorScheme,
               scaffoldBackgroundColor: scaffoldBgColor,
-              fontFamily: 'Roboto',
-              textTheme: const TextTheme(
-                headlineSmall: TextStyle(
+              appBarTheme: const AppBarTheme(
+                backgroundColor: surfaceColor,
+                elevation: 0,
+                centerTitle: true,
+                titleTextStyle: TextStyle(
+                  color: Colors.black,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
                 ),
-                titleLarge: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
-                ),
-                bodyLarge: TextStyle(color: Color(0xFF374151)),
-                bodyMedium: TextStyle(color: Color(0xFF4B5563)),
+                iconTheme: IconThemeData(color: Colors.black),
               ),
-              filledButtonTheme: FilledButtonThemeData(
-                style: FilledButton.styleFrom(
+              bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+                backgroundColor: surfaceColor,
+                selectedItemColor: primaryColor,
+                unselectedItemColor: Colors.grey,
+                type: BottomNavigationBarType.fixed,
+                elevation: 10,
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  elevation: 0,
                 ),
               ),
               inputDecorationTheme: InputDecorationTheme(
                 filled: true,
-                fillColor: const Color(0xFFF3F4F6),
+                fillColor: Colors.white,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const Color(0xFF10B981) == primaryColor ? const BorderSide(color: Color(0xFF10B981), width: 2) : const BorderSide(color: primaryColor, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: primaryColor),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               ),
-            ),
-            darkTheme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: primaryColor,
-                primary: primaryColor,
-                brightness: Brightness.dark,
-              ),
-              fontFamily: 'Roboto',
               cardColor: surfaceColor,
               dividerColor: outlineVariantColor,
               iconButtonTheme: const IconButtonThemeData(
