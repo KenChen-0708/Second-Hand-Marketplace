@@ -36,6 +36,7 @@ import 'features/profile/seller_review_page.dart';
 import 'features/profile/seller_profile_page.dart';
 import 'features/sell/my_listings_page.dart';
 import 'features/sell/edit_product_page.dart';
+import 'features/sell/seller_product_page.dart';
 import 'features/sell/seller_dashboard_page.dart';
 
 import 'shared/widgets/scaffold_with_nav_bar.dart';
@@ -254,6 +255,14 @@ final _router = GoRouter(
       builder: (context, state) {
         final id = state.pathParameters['id']!;
         return ProductDetailPage(productId: id);
+      },
+    ),
+    GoRoute(
+      path: '/seller-product',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final product = state.extra as ProductModel;
+        return SellerProductPage(product: product);
       },
     ),
     GoRoute(
@@ -480,6 +489,35 @@ class _MyAppState extends State<MyApp> {
     const primaryColor = Color(0xFF10B981);
     const scaffoldBgColor = Color(0xFFF9FAFB);
     const surfaceColor = Colors.white;
+    const surfaceVariantColor = Color(0xFFF3F4F6);
+    const outlineVariantColor = Color(0xFFE5E7EB);
+    const onSurfaceColor = Color(0xFF111827);
+    const onSurfaceVariantColor = Color(0xFF6B7280);
+    const errorColor = Color(0xFFEF4444);
+    const appColorScheme = ColorScheme.light(
+      primary: primaryColor,
+      onPrimary: Colors.white,
+      primaryContainer: Color(0xFFD1FAE5),
+      onPrimaryContainer: Color(0xFF065F46),
+      secondary: primaryColor,
+      onSecondary: Colors.white,
+      secondaryContainer: Color(0xFFD1FAE5),
+      onSecondaryContainer: Color(0xFF065F46),
+      error: errorColor,
+      onError: Colors.white,
+      errorContainer: Color(0xFFFEE2E2),
+      onErrorContainer: Color(0xFF991B1B),
+      surface: surfaceColor,
+      onSurface: onSurfaceColor,
+      onSurfaceVariant: onSurfaceVariantColor,
+      outline: Color(0xFFD1D5DB),
+      outlineVariant: outlineVariantColor,
+      shadow: Color(0x1F000000),
+      scrim: Color(0x52000000),
+      inverseSurface: Color(0xFF1F2937),
+      onInverseSurface: Colors.white,
+      inversePrimary: Color(0xFF34D399),
+    );
 
     return MultiProvider(
       providers: [
@@ -527,6 +565,7 @@ class _MyAppState extends State<MyApp> {
                     surfaceContainerHighest: const Color(0xFFF3F4F6),
                     outlineVariant: const Color(0xFFD1D5DB),
                   ),
+              colorScheme: appColorScheme,
               scaffoldBackgroundColor: scaffoldBgColor,
               fontFamily: 'Roboto',
               textTheme: const TextTheme(
@@ -575,6 +614,31 @@ class _MyAppState extends State<MyApp> {
                 brightness: Brightness.dark,
               ),
               fontFamily: 'Roboto',
+              cardColor: surfaceColor,
+              dividerColor: outlineVariantColor,
+              iconButtonTheme: const IconButtonThemeData(
+                style: ButtonStyle(
+                  backgroundColor: WidgetStatePropertyAll(surfaceVariantColor),
+                  foregroundColor: WidgetStatePropertyAll(onSurfaceColor),
+                ),
+              ),
+              chipTheme: ChipThemeData(
+                backgroundColor: surfaceVariantColor,
+                selectedColor: appColorScheme.primaryContainer,
+                secondarySelectedColor: appColorScheme.primaryContainer,
+                disabledColor: outlineVariantColor,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                side: const BorderSide(color: outlineVariantColor),
+                labelStyle: const TextStyle(color: onSurfaceColor),
+                secondaryLabelStyle: const TextStyle(color: onSurfaceColor),
+                brightness: Brightness.light,
+              ),
             ),
           );
         },

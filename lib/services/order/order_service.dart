@@ -128,6 +128,35 @@ class OrderService {
     }
   }
 
+  Future<void> updateHandoverSchedule(
+    String orderId,
+    DateTime handoverDate,
+  ) async {
+    try {
+      final response = await _supabase
+          .from('orders')
+          .update({
+            'handover_date': handoverDate.toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', orderId)
+          .select('*, buyer_id')
+          .single();
+
+      await _notificationService.createNotification(
+        userId: response['buyer_id'],
+        title: 'Handover Scheduled',
+        message: 'Your handover date and time has been updated.',
+        type: 'order',
+        relatedOrderId: orderId,
+      );
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to update handover schedule: $e');
+    }
+  }
+
   Future<List<OrderModel>> getUserOrders(String userId) async {
     try {
       final buyerResponse = await _supabase

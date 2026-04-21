@@ -510,9 +510,10 @@ class _GoogleMapsPickerState extends State<GoogleMapsPicker> {
                   ),
                 ),
                 Positioned(
+                  top: 88,
                   right: 16,
-                  bottom: 220,
                   child: SafeArea(
+                    bottom: false,
                     child: Material(
                       color: Colors.white,
                       shape: const CircleBorder(),
