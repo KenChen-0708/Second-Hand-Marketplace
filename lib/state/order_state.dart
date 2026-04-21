@@ -182,6 +182,22 @@ class OrderState extends EntityState<OrderModel> {
     }
   }
 
+  Future<void> updateHandoverSchedule(
+    String orderId,
+    DateTime handoverDate,
+  ) async {
+    try {
+      await _orderService.updateHandoverSchedule(orderId, handoverDate);
+      final existingOrder = getById(orderId);
+      if (existingOrder != null) {
+        upsertItem(existingOrder.copyWith(handoverDate: handoverDate));
+      }
+    } catch (e) {
+      setError(e.toString());
+      rethrow;
+    }
+  }
+
   Future<void> reportOrderIssue({
     required String orderId,
     required String reporterId,
