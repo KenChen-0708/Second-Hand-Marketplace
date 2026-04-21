@@ -163,11 +163,12 @@ class _SellWizardState extends State<_SellWizard> {
       TextEditingController(); // <-- Added Description
   String? _selectedCondition;
   final _priceController = TextEditingController();
-  final List<_DraftVariation> _variations = [];
-  bool _openToOffers = true;
+  final List<_VariationGroup> _variations = [];
+
   bool _faceToFace = false;
   bool _delivery = false;
   final _locationController = TextEditingController();
+  final _stockController = TextEditingController();
   String? _deliveryMethod;
 
   bool _isLoadingLocation = false;
@@ -189,6 +190,7 @@ class _SellWizardState extends State<_SellWizard> {
     _nameController.addListener(rebuild);
     _descriptionController.addListener(rebuild);
     _priceController.addListener(rebuild);
+    _stockController.addListener(rebuild);
     _locationController.addListener(rebuild);
   }
 
@@ -234,6 +236,7 @@ class _SellWizardState extends State<_SellWizard> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _stockController.dispose();
     _locationController.dispose();
     for (final variation in _variations) {
       variation.dispose();
@@ -243,7 +246,17 @@ class _SellWizardState extends State<_SellWizard> {
 
   void _addVariant() {
     setState(() {
-      _variations.add(_DraftVariation());
+      _variations.add(_VariationGroup());
+      _addOption(_variations.length - 1);
+    });
+  }
+
+  void _addOption(int groupIndex) {
+    double? initialPrice = double.tryParse(_priceController.text.trim());
+    setState(() {
+      _variations[groupIndex].options.add(
+        _VariationOption(initialPrice: initialPrice),
+      );
     });
   }
 
@@ -273,6 +286,18 @@ class _SellWizardState extends State<_SellWizard> {
   }
 
   void _onPageChanged(int index) {
+    // If trying to swipe forward beyond currentStep+1, prevent it.
+    // If trying to swipe to currentStep+1 but current step is NOT complete, prevent it.
+    if (index > _currentStep) {
+      if (!_canProceed(_currentStep) || index > _currentStep + 1) {
+        _pageController.animateToPage(
+          _currentStep,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+        );
+        return;
+      }
+    }
     setState(() => _currentStep = index);
   }
 
@@ -281,10 +306,13 @@ class _SellWizardState extends State<_SellWizard> {
       _selectedCategory != null && _selectedSubcategory != null;
   bool get _canProceedStep2 =>
       _nameController.text.trim().isNotEmpty &&
-      _descriptionController.text.trim().isNotEmpty && // Require description
+      _descriptionController.text.trim().isNotEmpty &&
       _selectedCondition != null &&
-      _priceController.text.trim().isNotEmpty &&
-      _variations.every((variation) => variation.isValid);
+      (_variations.isEmpty
+          ? _priceController.text.trim().isNotEmpty &&
+                (int.tryParse(_stockController.text.trim()) ?? 0) >= 1
+          : _variations.every((group) => group.isValid));
+
   bool get _canProceedStep3 =>
       (_faceToFace || _delivery) &&
       (!_faceToFace || _locationController.text.trim().isNotEmpty) &&
@@ -510,23 +538,37 @@ class _SellWizardState extends State<_SellWizard> {
       String finalDescription = _descriptionController.text.trim();
 
       // 8. Insert Product into Database
+      double basePrice = double.tryParse(_priceController.text.trim()) ?? 0;
+      int totalStock = int.tryParse(_stockController.text.trim()) ?? 0;
+
+      if (_variations.isNotEmpty) {
+        // Calculate min price and total stock from variants
+        double minPrice = double.infinity;
+        int sumStock = 0;
+        for (var group in _variations) {
+          for (var opt in group.options) {
+            final p = double.tryParse(opt.priceController.text.trim());
+            if (p != null && p < minPrice) minPrice = p;
+
+            final q = int.tryParse(opt.quantityController.text.trim()) ?? 0;
+            sumStock += q;
+          }
+        }
+
+        if (minPrice != double.infinity) basePrice = minPrice;
+        totalStock = sumStock;
+      }
+
       final productData = <String, dynamic>{
         'title': _nameController.text.trim(),
         'description': finalDescription,
-        'price': double.parse(_priceController.text.trim()),
-        'total_stock': _variations.isEmpty
-            ? 1
-            : _variations.fold<int>(
-                0,
-                (sum, variation) =>
-                    sum + (int.tryParse(variation.quantityController.text.trim()) ?? 0),
-              ),
+        'base_price': basePrice,
+        'total_stock': totalStock,
         'category_id': categoryId,
         'seller_id': sellerId,
         'condition': dbCondition,
         'image_urls': imageUrls,
         'trade_preference': tradePreferences,
-        'open_to_offers': _openToOffers,
         'status': 'active',
       };
 
@@ -536,16 +578,28 @@ class _SellWizardState extends State<_SellWizard> {
 
       final productId = await productService.createProduct(productData);
 
-      await productService.createProductVariations(
-        _variations
-            .map(
-              (variation) => variation.toInsertMap(
-                productId,
-                basePrice: double.parse(_priceController.text.trim()),
-              ),
-            )
-            .toList(),
-      );
+      // 8b. Create Variants from Groups
+      final List<Map<String, dynamic>> variantRows = [];
+      for (var group in _variations) {
+        final attrName = group.nameController.text.trim();
+        for (var opt in group.options) {
+          variantRows.add({
+            'product_id': productId,
+            'quantity': int.tryParse(opt.quantityController.text.trim()) ?? 0,
+            'price': double.tryParse(opt.priceController.text.trim()) ?? 0,
+            'attributes': [
+              {
+                'attribute_name': attrName,
+                'attribute_value': opt.valueController.text.trim(),
+              },
+            ],
+          });
+        }
+      }
+
+      if (variantRows.isNotEmpty) {
+        await productService.createProductVariations(variantRows);
+      }
 
       // 9. Insert Meetup Location into product_meetup_locations table
       if (_faceToFace && _locationController.text.isNotEmpty) {
@@ -616,7 +670,7 @@ class _SellWizardState extends State<_SellWizard> {
             Expanded(
               child: PageView(
                 controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
+                physics: const BouncingScrollPhysics(),
                 onPageChanged: _onPageChanged,
                 children: [
                   _Step0Images(
@@ -629,7 +683,6 @@ class _SellWizardState extends State<_SellWizard> {
                   _Step1Category(
                     selectedCategory: _selectedCategory,
                     selectedSubcategory: _selectedSubcategory,
-                    images: _selectedImages,
                     dbCategories: _categoriesList,
                     dbSubcategories: _subcategoriesList,
                     isLoading: _isLoadingCategories,
@@ -646,9 +699,6 @@ class _SellWizardState extends State<_SellWizard> {
                     onSubcategorySelected: (subName) => setState(() {
                       _selectedSubcategory = subName;
                     }),
-                    onPickGallery: _pickFromGallery,
-                    onRemove: (i) =>
-                        setState(() => _selectedImages.removeAt(i)),
                   ),
                   _Step2Details(
                     nameController: _nameController,
@@ -656,13 +706,13 @@ class _SellWizardState extends State<_SellWizard> {
                     priceController: _priceController,
                     variations: _variations,
                     selectedCondition: _selectedCondition,
-                    openToOffers: _openToOffers,
                     onConditionSelected: (c) =>
                         setState(() => _selectedCondition = c),
-                    onOffersChanged: (v) => setState(() => _openToOffers = v),
                     onAddVariant: _addVariant,
                     onRemoveVariant: _removeVariant,
+                    onAddOption: _addOption,
                     onVariantChanged: () => setState(() {}),
+                    stockController: _stockController,
                   ),
                   _Step3TradeMethod(
                     faceToFace: _faceToFace,
@@ -690,18 +740,61 @@ class _SellWizardState extends State<_SellWizard> {
                     description: _descriptionController.text,
                     condition: _selectedCondition,
                     price: _priceController.text,
-                    openToOffers: _openToOffers,
+                    stock: _stockController.text,
                     variations: _variations,
                     faceToFace: _faceToFace,
                     delivery: _delivery,
                     location: _locationController.text,
                     deliveryMethod: _deliveryMethod,
                     isPublishing: _isPublishing,
-                    onEdit: (step) => _pageController.animateToPage(
-                      step,
-                      duration: const Duration(milliseconds: 350),
-                      curve: Curves.easeInOutCubic,
-                    ),
+                    onPickGallery: _pickFromGallery,
+                    onTakePhoto: _takePhoto,
+                    onRemoveImage: (idx) {
+                      if (_selectedImages.length > 1) {
+                        setState(() => _selectedImages.removeAt(idx));
+                      }
+                    },
+                    onUpdateField: (field, value) {
+                      setState(() {
+                        switch (field) {
+                          case 'name':
+                            _nameController.text = value;
+                            break;
+                          case 'description':
+                            _descriptionController.text = value;
+                            break;
+                          case 'price':
+                            _priceController.text = value;
+                            break;
+                          case 'stock':
+                            _stockController.text = value;
+                            break;
+                          case 'condition':
+                            _selectedCondition = value;
+                            break;
+                        }
+                      });
+                    },
+                    onUpdateVariations: () => setState(() {}),
+                    onUpdateCategory: (cat, sub) {
+                      setState(() {
+                        _selectedCategory = cat;
+                        _selectedSubcategory = sub;
+                      });
+                    },
+                    onUpdateTradeMethod: (f2f, del, loc, delMethod) {
+                      setState(() {
+                        _faceToFace = f2f;
+                        _delivery = del;
+                        _locationController.text = loc;
+                        _deliveryMethod = delMethod;
+                      });
+                    },
+                    dbCategories: _categoriesList,
+                    fetchSubcategories: (catId) async {
+                      final productService = ProductService();
+                      return await productService.fetchSubcategories(catId);
+                    },
                     onPublish: _publish,
                   ),
                 ],
@@ -1155,28 +1248,22 @@ class _Step0Images extends StatelessWidget {
 class _Step1Category extends StatelessWidget {
   final String? selectedCategory;
   final String? selectedSubcategory;
-  final List<String> images;
   final List<Map<String, dynamic>> dbCategories;
   final List<Map<String, dynamic>> dbSubcategories;
   final bool isLoading;
   final bool isLoadingSubcategories;
   final void Function(String catName) onCategorySelected;
   final void Function(String subName) onSubcategorySelected;
-  final VoidCallback onPickGallery;
-  final void Function(int) onRemove;
 
   const _Step1Category({
     required this.selectedCategory,
     required this.selectedSubcategory,
-    required this.images,
     required this.dbCategories,
     required this.dbSubcategories,
     required this.isLoading,
     required this.isLoadingSubcategories,
     required this.onCategorySelected,
     required this.onSubcategorySelected,
-    required this.onPickGallery,
-    required this.onRemove,
   });
 
   IconData _getCategoryIcon(String name) {
@@ -1207,17 +1294,7 @@ class _Step1Category extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (images.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _ImageStrip(
-              images: images,
-              onAdd: onPickGallery,
-              onRemove: onRemove,
-              height: 90,
-            ),
-            const SizedBox(height: 16),
-          ] else
-            const SizedBox(height: 16),
+          const SizedBox(height: 24),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Text(
@@ -1380,13 +1457,15 @@ class _Step2Details extends StatelessWidget {
   final TextEditingController
   descriptionController; // <-- Added Description Controller
   final TextEditingController priceController;
-  final List<_DraftVariation> variations;
+  final TextEditingController stockController;
+  final List<_VariationGroup> variations;
+
   final String? selectedCondition;
-  final bool openToOffers;
   final void Function(String) onConditionSelected;
-  final void Function(bool) onOffersChanged;
   final VoidCallback onAddVariant;
   final void Function(int) onRemoveVariant;
+  final void Function(int) onAddOption;
+
   final VoidCallback onVariantChanged;
 
   const _Step2Details({
@@ -1395,12 +1474,12 @@ class _Step2Details extends StatelessWidget {
     required this.priceController,
     required this.variations,
     required this.selectedCondition,
-    required this.openToOffers,
     required this.onConditionSelected,
-    required this.onOffersChanged,
     required this.onAddVariant,
     required this.onRemoveVariant,
+    required this.onAddOption,
     required this.onVariantChanged,
+    required this.stockController,
   });
 
   static const List<String> _conditions = [
@@ -1485,18 +1564,33 @@ class _Step2Details extends StatelessWidget {
             }).toList(),
           ),
           const SizedBox(height: 24),
-          _SectionLabel('Price (RM)'),
-          const SizedBox(height: 10),
-          _StyledField(
-            controller: priceController,
-            hint: '0.00',
-            icon: Icons.sell_rounded,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-            ],
-            prefixText: 'RM ',
-          ),
+          if (variations.isEmpty) ...[
+            _SectionLabel('Price (RM)'),
+            const SizedBox(height: 10),
+            _StyledField(
+              controller: priceController,
+              hint: '0.00',
+              icon: Icons.sell_rounded,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+              ],
+              prefixText: 'RM ',
+            ),
+            const SizedBox(height: 24),
+            _SectionLabel('Available Stock'),
+            const SizedBox(height: 10),
+            _StyledField(
+              controller: stockController,
+              hint: '0',
+              icon: Icons.inventory_2_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+          ],
+
           const SizedBox(height: 24),
           Row(
             children: [
@@ -1510,12 +1604,13 @@ class _Step2Details extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Optional. Add stock by variation such as size, color, or storage.',
+            'Add variation types like Size or Color, and then add attributes for each.',
             style: TextStyle(
               fontSize: 12,
               color: colors.onSurface.withOpacity(0.55),
             ),
           ),
+
           const SizedBox(height: 12),
           if (variations.isEmpty)
             Container(
@@ -1539,20 +1634,32 @@ class _Step2Details extends StatelessWidget {
               children: List.generate(
                 variations.length,
                 (index) => Padding(
-                  padding: EdgeInsets.only(
-                    bottom: index == variations.length - 1 ? 0 : 12,
-                  ),
-                  child: _VariantEditorCard(
-                    variation: variations[index],
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _VariationGroupEditor(
+                    group: variations[index],
                     index: index,
+                    onAddOption: () => onAddOption(index),
                     onChanged: onVariantChanged,
                     onRemove: () => onRemoveVariant(index),
                   ),
                 ),
               ),
             ),
-          const SizedBox(height: 20),
-          _OfferToggle(value: openToOffers, onChanged: onOffersChanged),
+          if (variations.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: OutlinedButton.icon(
+                onPressed: onAddVariant,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add Another Variant Type'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1694,17 +1801,27 @@ class _Step4Review extends StatelessWidget {
   final String? category;
   final String? subcategory;
   final String name;
-  final String description; // <-- Added
+  final String description;
   final String? condition;
   final String price;
-  final bool openToOffers;
-  final List<_DraftVariation> variations;
+  final String stock;
+  final List<_VariationGroup> variations;
   final bool faceToFace;
   final bool delivery;
   final String location;
   final String? deliveryMethod;
-  final bool isPublishing; // <-- Added for loading state
-  final void Function(int) onEdit;
+  final bool isPublishing;
+  final VoidCallback onPickGallery;
+  final VoidCallback onTakePhoto;
+  final void Function(int) onRemoveImage;
+  final void Function(String field, String value) onUpdateField;
+  final VoidCallback onUpdateVariations;
+  final void Function(String cat, String sub) onUpdateCategory;
+  final void Function(bool f2f, bool del, String loc, String? delMethod)
+  onUpdateTradeMethod;
+  final List<Map<String, dynamic>> dbCategories;
+  final Future<List<Map<String, dynamic>>> Function(String catId)
+  fetchSubcategories;
   final VoidCallback onPublish;
 
   const _Step4Review({
@@ -1715,16 +1832,249 @@ class _Step4Review extends StatelessWidget {
     required this.description,
     required this.condition,
     required this.price,
-    required this.openToOffers,
+    required this.stock,
     required this.variations,
     required this.faceToFace,
     required this.delivery,
     required this.location,
     required this.deliveryMethod,
     required this.isPublishing,
-    required this.onEdit,
+    required this.onPickGallery,
+    required this.onTakePhoto,
+    required this.onRemoveImage,
+    required this.onUpdateField,
+    required this.onUpdateVariations,
+    required this.onUpdateCategory,
+    required this.onUpdateTradeMethod,
+    required this.dbCategories,
+    required this.fetchSubcategories,
     required this.onPublish,
   });
+
+  void _showModernModal(
+    BuildContext context, {
+    required String title,
+    required Widget child,
+  }) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black.withOpacity(0.4),
+      transitionDuration: const Duration(milliseconds: 350),
+      pageBuilder: (ctx, anim1, anim2) => const SizedBox(),
+      transitionBuilder: (ctx, anim1, anim2, _) {
+        final curve = CurvedAnimation(parent: anim1, curve: Curves.easeOutBack);
+        return ScaleTransition(
+          scale: curve,
+          child: FadeTransition(
+            opacity: anim1,
+            child: AlertDialog(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey[50],
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              ),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 340),
+                child: SingleChildScrollView(child: child),
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditModal(
+    BuildContext context, {
+    required String title,
+    required String initialValue,
+    required void Function(String) onSave,
+    bool isNumber = false,
+    int maxLines = 1,
+  }) {
+    final controller = TextEditingController(text: initialValue);
+    _showModernModal(
+      context,
+      title: title,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Column(
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: maxLines,
+              keyboardType: isNumber
+                  ? const TextInputType.numberWithOptions(decimal: true)
+                  : TextInputType.text,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.grey[50],
+                hintText: 'Enter $title',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey[200]!),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey[200]!),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () {
+                onSave(controller.text);
+                Navigator.pop(context);
+              },
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: const Text(
+                'Save Changes',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCategoryModal(BuildContext context) {
+    _showModernModal(
+      context,
+      title: 'Change Category',
+      child: _CategoryEditContent(
+        initialCategory: category,
+        initialSubcategory: subcategory,
+        dbCategories: dbCategories,
+        fetchSubcategories: fetchSubcategories,
+        onSave: (cat, sub) {
+          onUpdateCategory(cat, sub);
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  void _showConditionModal(BuildContext context) {
+    final conditions = ['New', 'Like New', 'Excellent', 'Good', 'Fair'];
+    _showModernModal(
+      context,
+      title: 'Change Condition',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+        child: Column(
+          children: conditions.map((c) {
+            final sel = condition == c;
+            return ListTile(
+              leading: Icon(
+                sel
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: sel
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey,
+              ),
+              title: Text(
+                c,
+                style: TextStyle(
+                  fontWeight: sel ? FontWeight.w800 : FontWeight.w500,
+                ),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              onTap: () {
+                onUpdateField('condition', c);
+                Navigator.pop(context);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _showTradeMethodModal(BuildContext context) {
+    _showModernModal(
+      context,
+      title: 'Trade Preferences',
+      child: _TradeMethodEditContent(
+        initialF2F: faceToFace,
+        initialDel: delivery,
+        initialLoc: location,
+        initialDelMethod: deliveryMethod,
+        onSave: (f2f, del, loc, dm) {
+          onUpdateTradeMethod(f2f, del, loc, dm);
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  void _showImagePickerChoice(BuildContext context) {
+    _showModernModal(
+      context,
+      title: 'Add Photo',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+        child: Row(
+          children: [
+            Expanded(
+              child: _PickerOption(
+                icon: Icons.photo_library_rounded,
+                label: 'Gallery',
+                onTap: () {
+                  Navigator.pop(context);
+                  onPickGallery();
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _PickerOption(
+                icon: Icons.camera_alt_rounded,
+                label: 'Camera',
+                onTap: () {
+                  Navigator.pop(context);
+                  onTakePhoto();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1733,92 +2083,100 @@ class _Step4Review extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       child: Column(
         children: [
-          if (images.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _ImageStrip(
-              images: images,
-              onAdd: () {},
-              onRemove: (_) {},
-              height: 100,
-            ),
-            const SizedBox(height: 8),
-          ],
+          const SizedBox(height: 12),
+          _ImageStrip(
+            images: images,
+            onAdd: () => _showImagePickerChoice(context),
+            onRemove: (idx) {
+              if (images.length > 1) onRemoveImage(idx);
+            },
+            height: 110,
+          ),
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
             child: Column(
               children: [
-                _ReviewSection(
-                  title: 'Photos',
-                  value:
-                      '${images.length} photo${images.length == 1 ? '' : 's'}',
-                  onEdit: () => onEdit(0),
-                ),
                 _ReviewSection(
                   title: 'Category',
                   value: [
                     category,
                     subcategory,
                   ].where((e) => e != null && e.isNotEmpty).join(' › '),
-                  onEdit: () => onEdit(1),
+                  onEdit: () => _showCategoryModal(context),
                 ),
                 _ReviewSection(
                   title: 'Product Name',
                   value: name.isEmpty ? '—' : name,
-                  onEdit: () => onEdit(2),
+                  onEdit: () => _showEditModal(
+                    context,
+                    title: 'Edit Name',
+                    initialValue: name,
+                    onSave: (v) => onUpdateField('name', v),
+                  ),
+                ),
+                _ReviewSection(
+                  title: 'Description',
+                  value: description.isEmpty ? '—' : description,
+                  maxLines: 2,
+                  onEdit: () => _showEditModal(
+                    context,
+                    title: 'Edit Description',
+                    initialValue: description,
+                    maxLines: 5,
+                    onSave: (v) => onUpdateField('description', v),
+                  ),
                 ),
                 _ReviewSection(
                   title: 'Condition',
                   value: condition ?? '—',
-                  onEdit: () => onEdit(2),
+                  onEdit: () => _showConditionModal(context),
                 ),
-                _ReviewSection(
-                  title: 'Price',
-                  value: price.isEmpty ? '—' : 'RM $price',
-                  onEdit: () => onEdit(2),
-                ),
-                _ReviewSection(
-                  title: 'Open to Offers',
-                  value: openToOffers ? 'Yes' : 'No',
-                  onEdit: () => onEdit(2),
-                ),
-                _ReviewSection(
-                  title: 'Variants',
-                  value: variations.isEmpty
-                      ? 'None'
-                      : variations
-                          .map((variation) => variation.reviewLabel)
-                          .join(' | '),
-                  onEdit: () => onEdit(2),
-                ),
+                if (variations.isEmpty) ...[
+                  _ReviewSection(
+                    title: 'Price',
+                    value: price.isEmpty ? '—' : 'RM $price',
+                    onEdit: () => _showEditModal(
+                      context,
+                      title: 'Edit Price',
+                      initialValue: price,
+                      isNumber: true,
+                      onSave: (v) => onUpdateField('price', v),
+                    ),
+                  ),
+                  _ReviewSection(
+                    title: 'Stock',
+                    value: stock.isEmpty ? '0' : stock,
+                    onEdit: () => _showEditModal(
+                      context,
+                      title: 'Edit Stock',
+                      initialValue: stock,
+                      isNumber: true,
+                      onSave: (v) => onUpdateField('stock', v),
+                    ),
+                  ),
+                ],
+                if (variations.isNotEmpty)
+                  _VariantReviewList(
+                    variations: variations,
+                    onUpdate: onUpdateVariations,
+                  ),
                 _ReviewSection(
                   title: 'Trade Method',
                   value: () {
                     List<String> methods = [];
                     if (faceToFace) methods.add('Face-to-Face');
-                    if (delivery) {
-                      methods.add(
-                        deliveryMethod == 'official'
-                            ? 'Official Delivery'
-                            : 'Self-Delivery',
-                      );
-                    }
+                    if (delivery) methods.add('Delivery');
                     return methods.isEmpty ? '—' : methods.join(' & ');
                   }(),
-                  onEdit: () => onEdit(3),
+                  onEdit: () => _showTradeMethodModal(context),
                 ),
                 if (faceToFace && location.isNotEmpty)
                   _ReviewSection(
                     title: 'Meeting Location',
                     value: location,
-                    onEdit: () => onEdit(3),
-                  ),
-                if (delivery && deliveryMethod != null)
-                  _ReviewSection(
-                    title: 'Delivery Method',
-                    value: deliveryMethod == 'official'
-                        ? 'Official Delivery'
-                        : 'Self-Delivery',
-                    onEdit: () => onEdit(3),
+                    // location is updated via TradeMethod modal
+                    onEdit: () => _showTradeMethodModal(context),
                   ),
                 const SizedBox(height: 24),
                 Container(
@@ -1833,9 +2191,7 @@ class _Step4Review extends StatelessWidget {
                     ],
                   ),
                   child: FilledButton.icon(
-                    onPressed: isPublishing
-                        ? null
-                        : onPublish, // Prevent double taps
+                    onPressed: isPublishing ? null : onPublish,
                     icon: isPublishing
                         ? const SizedBox(
                             width: 20,
@@ -1863,6 +2219,255 @@ class _Step4Review extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PickerOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PickerOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 100,
+        decoration: BoxDecoration(
+          color: colors.primary.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: colors.primary.withOpacity(0.1)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: colors.primary, size: 32),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryEditContent extends StatefulWidget {
+  final String? initialCategory;
+  final String? initialSubcategory;
+  final List<Map<String, dynamic>> dbCategories;
+  final Future<List<Map<String, dynamic>>> Function(String catId)
+  fetchSubcategories;
+  final void Function(String cat, String sub) onSave;
+
+  const _CategoryEditContent({
+    required this.initialCategory,
+    required this.initialSubcategory,
+    required this.dbCategories,
+    required this.fetchSubcategories,
+    required this.onSave,
+  });
+
+  @override
+  State<_CategoryEditContent> createState() => _CategoryEditContentState();
+}
+
+class _CategoryEditContentState extends State<_CategoryEditContent> {
+  String? _tempCat;
+  String? _tempSub;
+  List<Map<String, dynamic>> _tempSubList = [];
+  bool _isLoadingSubs = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tempCat = widget.initialCategory;
+    _tempSub = widget.initialSubcategory;
+    if (_tempCat != null) {
+      final cat = widget.dbCategories.firstWhere((c) => c['name'] == _tempCat);
+      _loadSubcategories(cat['id']);
+    }
+  }
+
+  Future<void> _loadSubcategories(String catId) async {
+    setState(() => _isLoadingSubs = true);
+    final subs = await widget.fetchSubcategories(catId);
+    setState(() {
+      _tempSubList = subs;
+      _isLoadingSubs = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 100,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            itemCount: widget.dbCategories.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final cat = widget.dbCategories[index];
+              final name = cat['name'] as String;
+              final sel = _tempCat == name;
+              return ChoiceChip(
+                label: Text(name),
+                selected: sel,
+                onSelected: (val) {
+                  if (val) {
+                    setState(() {
+                      _tempCat = name;
+                      _tempSub = null;
+                      _tempSubList = [];
+                    });
+                    _loadSubcategories(cat['id']);
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        const Divider(),
+        if (_isLoadingSubs)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: CircularProgressIndicator(),
+          )
+        else if (_tempSubList.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Wrap(
+              spacing: 8,
+              children: _tempSubList.map((sub) {
+                final name = sub['name'] as String;
+                final sel = _tempSub == name;
+                return ChoiceChip(
+                  label: Text(name),
+                  selected: sel,
+                  onSelected: (val) {
+                    if (val) setState(() => _tempSub = name);
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: FilledButton(
+            onPressed: (_tempCat != null && _tempSub != null)
+                ? () => widget.onSave(_tempCat!, _tempSub!)
+                : null,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(56),
+            ),
+            child: const Text('Confirm'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TradeMethodEditContent extends StatefulWidget {
+  final bool initialF2F;
+  final bool initialDel;
+  final String initialLoc;
+  final String? initialDelMethod;
+  final void Function(bool f2f, bool del, String loc, String? dm) onSave;
+
+  const _TradeMethodEditContent({
+    required this.initialF2F,
+    required this.initialDel,
+    required this.initialLoc,
+    required this.initialDelMethod,
+    required this.onSave,
+  });
+
+  @override
+  State<_TradeMethodEditContent> createState() =>
+      _TradeMethodEditContentState();
+}
+
+class _TradeMethodEditContentState extends State<_TradeMethodEditContent> {
+  late bool _f2f;
+  late bool _del;
+  late TextEditingController _locController;
+  String? _delMethod;
+
+  @override
+  void initState() {
+    super.initState();
+    _f2f = widget.initialF2F;
+    _del = widget.initialDel;
+    _locController = TextEditingController(text: widget.initialLoc);
+    _delMethod = widget.initialDelMethod;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      child: Column(
+        children: [
+          SwitchListTile(
+            title: const Text('Face-to-Face'),
+            value: _f2f,
+            onChanged: (v) => setState(() => _f2f = v),
+          ),
+          if (_f2f)
+            TextField(
+              controller: _locController,
+              decoration: const InputDecoration(labelText: 'Meeting Location'),
+            ),
+          SwitchListTile(
+            title: const Text('Delivery'),
+            value: _del,
+            onChanged: (v) => setState(() => _del = v),
+          ),
+          if (_del)
+            Row(
+              children: [
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Official'),
+                    selected: _delMethod == 'official',
+                    onSelected: (v) => setState(() => _delMethod = 'official'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Self'),
+                    selected: _delMethod == 'self',
+                    onSelected: (v) => setState(() => _delMethod = 'self'),
+                  ),
+                ),
+              ],
+            ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: (_f2f || _del)
+                ? () =>
+                      widget.onSave(_f2f, _del, _locController.text, _delMethod)
+                : null,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(56),
+            ),
+            child: const Text('Update Preferences'),
           ),
         ],
       ),
@@ -2039,12 +2644,14 @@ class _DeliveryMethodTile extends StatelessWidget {
 class _ReviewSection extends StatelessWidget {
   final String title;
   final String value;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
+  final int maxLines;
 
   const _ReviewSection({
     required this.title,
     required this.value,
-    required this.onEdit,
+    this.onEdit,
+    this.maxLines = 1,
   });
 
   @override
@@ -2083,6 +2690,8 @@ class _ReviewSection extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   value,
+                  maxLines: maxLines,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -2091,35 +2700,41 @@ class _ReviewSection extends StatelessWidget {
               ],
             ),
           ),
-          TextButton(
-            onPressed: onEdit,
-            style: TextButton.styleFrom(
-              foregroundColor: colors.primary,
-              minimumSize: Size.zero,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          if (onEdit != null)
+            TextButton(
+              onPressed: onEdit,
+              style: TextButton.styleFrom(
+                foregroundColor: colors.primary,
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Edit',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
             ),
-            child: const Text(
-              'Edit',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-            ),
-          ),
         ],
       ),
     );
   }
 }
 
-class _VariantEditorCard extends StatelessWidget {
-  const _VariantEditorCard({
-    required this.variation,
+class _VariationGroupEditor extends StatelessWidget {
+  const _VariationGroupEditor({
+    required this.group,
     required this.index,
+    required this.onAddOption,
     required this.onChanged,
     required this.onRemove,
   });
 
-  final _DraftVariation variation;
+  final _VariationGroup group;
   final int index;
+  final VoidCallback onAddOption;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
 
@@ -2128,70 +2743,211 @@ class _VariantEditorCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return Container(
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colors.outline.withOpacity(0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'Variant ${index + 1}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Variation Type ${index + 1}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: colors.primary,
+                  ),
                 ),
               ),
               const Spacer(),
               IconButton(
                 onPressed: onRemove,
-                icon: const Icon(Icons.delete_outline_rounded),
-                tooltip: 'Remove variant',
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                ),
+                tooltip: 'Remove type',
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _StyledField(
+            controller: group.nameController,
+            hint: 'e.g. Color, Size, Storage',
+            icon: Icons.category_rounded,
+            label: 'Variation Type Name',
+            onChanged: (_) => onChanged(),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Text(
+                'Attributes',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          _StyledField(
-            controller: variation.typeController,
-            hint: 'Variation type, e.g. size',
-            icon: Icons.category_outlined,
-            onChanged: (_) => onChanged(),
-          ),
+          if (group.options.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: Text(
+                  'No attributes added yet.',
+                  style: TextStyle(
+                    color: colors.onSurface.withOpacity(0.4),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            )
+          else
+            ...List.generate(group.options.length, (optIndex) {
+              final opt = group.options[optIndex];
+              return _VariationOptionCard(
+                option: opt,
+                showRemove: group.options.length > 1,
+                onRemove: () {
+                  group.options[optIndex].dispose();
+                  group.options.removeAt(optIndex);
+                  onChanged();
+                },
+                onChanged: onChanged,
+              );
+            }),
           const SizedBox(height: 12),
-          _StyledField(
-            controller: variation.valueController,
-            hint: 'Variation value, e.g. XL',
-            icon: Icons.label_outline_rounded,
-            onChanged: (_) => onChanged(),
+          TextButton.icon(
+            onPressed: onAddOption,
+            icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+            label: const Text(
+              'Add Another Attribute',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            style: TextButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+              backgroundColor: colors.primary.withOpacity(0.05),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          if (!group.isValid && group.nameController.text.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'Please add at least one valid attribute.',
+                style: TextStyle(
+                  color: colors.error,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VariationOptionCard extends StatelessWidget {
+  final _VariationOption option;
+  final bool showRemove;
+  final VoidCallback onRemove;
+  final VoidCallback onChanged;
+
+  const _VariationOptionCard({
+    required this.option,
+    required this.showRemove,
+    required this.onRemove,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outline.withOpacity(0.08)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _StyledField(
+                  controller: option.valueController,
+                  label: 'Value',
+                  hint: 'e.g. Red, XL, 128GB',
+                  icon: Icons.label_important_outline_rounded,
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (showRemove)
+                IconButton(
+                  onPressed: onRemove,
+                  icon: const Icon(
+                    Icons.remove_circle_outline_rounded,
+                    color: Colors.redAccent,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: _StyledField(
-                  controller: variation.quantityController,
-                  hint: 'Stock',
+                  controller: option.quantityController,
+                  label: 'Stock',
+                  hint: '0',
                   icon: Icons.inventory_2_outlined,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   onChanged: (_) => onChanged(),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StyledField(
-                  controller: variation.priceAdjustmentController,
+                  controller: option.priceController,
+                  label: 'Price',
                   hint: '0.00',
-                  icon: Icons.tune_rounded,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  icon: Icons.sell_outlined,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d{0,2}')),
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,2}'),
+                    ),
                   ],
                   prefixText: 'RM ',
                   onChanged: (_) => onChanged(),
@@ -2199,90 +2955,59 @@ class _VariantEditorCard extends StatelessWidget {
               ),
             ],
           ),
-          if (!variation.isValid) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Fill in type, value, and quantity to keep this variant.',
-              style: TextStyle(
-                fontSize: 12,
-                color: colors.error,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 }
 
-class _DraftVariation {
-  _DraftVariation()
-      : typeController = TextEditingController(),
-        valueController = TextEditingController(),
-        quantityController = TextEditingController(text: '1'),
-        priceAdjustmentController = TextEditingController(text: '0');
+class _VariationGroup {
+  final TextEditingController nameController;
+  final List<_VariationOption> options;
 
-  final TextEditingController typeController;
-  final TextEditingController valueController;
-  final TextEditingController quantityController;
-  final TextEditingController priceAdjustmentController;
+  _VariationGroup({String name = ''})
+    : nameController = TextEditingController(text: name),
+      options = [];
 
-  bool get isValid {
-    final quantity = int.tryParse(quantityController.text.trim());
-    return typeController.text.trim().isNotEmpty &&
-        valueController.text.trim().isNotEmpty &&
-        quantity != null &&
-        quantity >= 0;
-  }
-
-  String get reviewLabel {
-    final adjustment = double.tryParse(priceAdjustmentController.text.trim()) ?? 0;
-    final adjustmentText = adjustment == 0
-        ? 'no price change'
-        : adjustment > 0
-        ? '+RM ${adjustment.toStringAsFixed(2)}'
-        : '-RM ${adjustment.abs().toStringAsFixed(2)}';
-    return '${typeController.text.trim()}: ${valueController.text.trim()} (${quantityController.text.trim()} qty, $adjustmentText)';
-  }
-
-  Map<String, dynamic> toInsertMap(
-    String productId, {
-    required double basePrice,
-  }) {
-    final adjustment =
-        double.tryParse(priceAdjustmentController.text.trim()) ?? 0;
-    return {
-      'product_id': productId,
-      'quantity': int.tryParse(quantityController.text.trim()) ?? 0,
-      'price': basePrice + adjustment,
-      'attributes': [
-        {
-          'attribute_name': typeController.text.trim(),
-          'attribute_value': valueController.text.trim(),
-        },
-      ],
-    };
-  }
+  bool get isValid =>
+      nameController.text.trim().isNotEmpty &&
+      options.isNotEmpty &&
+      options.every((o) => o.isValid);
 
   void dispose() {
-    typeController.dispose();
-    valueController.dispose();
-    quantityController.dispose();
-    priceAdjustmentController.dispose();
+    nameController.dispose();
+    for (var opt in options) {
+      opt.dispose();
+    }
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
+class _VariationOption {
+  final TextEditingController valueController;
+  final TextEditingController priceController;
+  final TextEditingController quantityController;
 
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-    );
+  _VariationOption({double? initialPrice})
+    : valueController = TextEditingController(),
+      priceController = TextEditingController(
+        text: initialPrice?.toStringAsFixed(2) ?? '',
+      ),
+      quantityController = TextEditingController(text: '1');
+
+  bool get isValid {
+    final quantity = int.tryParse(quantityController.text.trim());
+    final price = double.tryParse(priceController.text.trim());
+    return valueController.text.trim().isNotEmpty &&
+        quantity != null &&
+        quantity >= 1 &&
+        price != null &&
+        price > 0;
+  }
+
+  void dispose() {
+    valueController.dispose();
+    priceController.dispose();
+    quantityController.dispose();
   }
 }
 
@@ -2295,7 +3020,7 @@ class _StyledField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final String? prefixText;
   final Widget? suffixIcon;
-  final int maxLines; // <-- Added to support description
+  final int maxLines;
   final ValueChanged<String>? onChanged;
 
   const _StyledField({
@@ -2318,13 +3043,13 @@ class _StyledField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
-      maxLines: maxLines, // <-- Supports tall text area
+      maxLines: maxLines,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         filled: true,
-        fillColor: const Color(0xFFF9FAFC),
+        fillColor: Colors.white,
         prefixText: prefixText,
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 6, right: 2),
@@ -2338,11 +3063,11 @@ class _StyledField extends StatelessWidget {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: colors.outline.withOpacity(0.12)),
+          borderSide: BorderSide(color: colors.outline.withOpacity(0.2)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: colors.outline.withOpacity(0.12)),
+          borderSide: BorderSide(color: colors.outline.withOpacity(0.2)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
@@ -2353,62 +3078,201 @@ class _StyledField extends StatelessWidget {
   }
 }
 
-class _OfferToggle extends StatelessWidget {
-  final bool value;
-  final void Function(bool) onChanged;
+class _VariantReviewList extends StatelessWidget {
+  final List<_VariationGroup> variations;
+  final VoidCallback onUpdate;
 
-  const _OfferToggle({required this.value, required this.onChanged});
+  const _VariantReviewList({required this.variations, required this.onUpdate});
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: value ? colors.primary.withOpacity(0.07) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: value
-              ? colors.primary.withOpacity(0.14)
-              : colors.outline.withOpacity(0.12),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: colors.primary,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.handshake_outlined,
-              color: Colors.white,
-              size: 20,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Variants',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              color: Colors.grey,
             ),
           ),
-          const SizedBox(width: 12),
-          const Expanded(
+        ),
+        ...variations.map((group) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: colors.outline.withOpacity(0.12)),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Open to Offers',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      group.nameController.text.toUpperCase(),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        letterSpacing: 1.2,
+                        color: colors.primary,
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Let buyers negotiate the price.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                const Divider(height: 20),
+                ...group.options.map((opt) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            opt.valueController.text,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            'RM ${opt.priceController.text}',
+                            style: TextStyle(
+                              color: colors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${opt.quantityController.text} qty',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: () => _showVariantEditModal(context, opt),
+                          icon: const Icon(Icons.edit_rounded, size: 16),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  void _showVariantEditModal(BuildContext context, _VariationOption opt) {
+    final valueController = TextEditingController(
+      text: opt.valueController.text,
+    );
+    final priceController = TextEditingController(
+      text: opt.priceController.text,
+    );
+    final qtyController = TextEditingController(
+      text: opt.quantityController.text,
+    );
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (ctx, anim1, anim2) => const SizedBox(),
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: FadeTransition(
+            opacity: anim1,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              title: const Text(
+                'Edit Variant',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: valueController,
+                    decoration: const InputDecoration(
+                      labelText: 'Variation Value',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: priceController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Price (RM)',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: qtyController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Stock'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    opt.valueController.text = valueController.text;
+                    opt.priceController.text = priceController.text;
+                    opt.quantityController.text = qtyController.text;
+                    onUpdate();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Save'),
                 ),
               ],
             ),
           ),
-          Switch.adaptive(value: value, onChanged: onChanged),
-        ],
-      ),
+        );
+      },
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
     );
   }
 }

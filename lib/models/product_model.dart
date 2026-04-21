@@ -111,6 +111,7 @@ class ProductModel implements AppModel {
         JsonUtils.asInt(map['total_stock']) ??
         JsonUtils.asInt(map['available_quantity']) ??
         JsonUtils.asInt(map['quantity']) ??
+        JsonUtils.asInt(map['total_stock']) ??
         (parsedVariations.isNotEmpty
             ? parsedVariations.fold<int>(
                 0,
@@ -169,6 +170,7 @@ class ProductModel implements AppModel {
       'trade_preference': tradePreference,
       'total_stock': totalStock ?? availableQuantity,
       'available_quantity': availableQuantity,
+      'total_stock': availableQuantity,
       'variations': variations.map((variation) => variation.toMap()).toList(),
       'open_to_offers': openToOffers,
       'view_count': viewCount,
