@@ -18,6 +18,9 @@ class ProfilePage extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final unreadNotifications = context.watch<AppNotificationState>().unreadCount;
+    final unreadChats = context.watch<ChatConversationState>().unreadCount;
+
     // Resolve the full URL using our helper with initial fallback
     final avatarUrl = ImageHelper.resolveProfileImageUrl(user.avatarUrl, name: user.name);
 
@@ -32,14 +35,14 @@ class ProfilePage extends StatelessWidget {
             context,
             icon: Icons.shopping_cart_outlined,
             onTap: () => context.push('/cart'),
-            badgeCount: 2, 
+            badgeCount: context.watch<CartState>().totalQuantity, 
           ),
           const SizedBox(width: 12),
           _buildActionIcon(
             context,
             icon: Icons.chat_bubble_outline_rounded,
             onTap: () => context.push('/messages'),
-            badgeCount: 0, 
+            badgeCount: unreadChats, 
           ),
           const SizedBox(width: 16),
         ],
@@ -127,6 +130,7 @@ class ProfilePage extends StatelessWidget {
                     icon: Icons.notifications_none_rounded,
                     title: 'Notifications',
                     onTap: () => context.push('/profile/notifications'),
+                    badgeCount: unreadNotifications,
                   ),
                   const Divider(height: 1),
                   _buildMenuItem(
@@ -255,7 +259,7 @@ class ProfilePage extends StatelessWidget {
                   border: Border.all(color: Colors.white, width: 2),
                 ),
                 child: Text(
-                  '$badgeCount',
+                  badgeCount > 9 ? '9+' : '$badgeCount',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 9,
@@ -276,21 +280,42 @@ class ProfilePage extends StatelessWidget {
     required VoidCallback onTap,
     int badgeCount = 0,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Theme.of(
-            context,
-          ).colorScheme.primaryContainer.withValues(alpha: 0.5),
+          color: cs.primaryContainer.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        child: Icon(icon, color: cs.primary),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      trailing: Icon(
-        Icons.chevron_right_rounded,
-        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (badgeCount > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: Colors.redAccent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$badgeCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: cs.onSurface.withValues(alpha: 0.3),
+          ),
+        ],
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       onTap: onTap,

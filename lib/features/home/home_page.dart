@@ -191,8 +191,7 @@ class _HomePageState extends State<HomePage> {
     // Temp copies — committed only on Apply
     RangeValues tempPrice = _priceRange;
     Set<String> tempConditions = Set.from(_selectedConditions);
-    Set<String> tempCategories = Set.from(_selectedCategories);
-    String tempSort = _selectedSort;
+    Set<String> tempCategories = Set.from(_selectedCategories); String tempSort = _selectedSort;
 
     // useRootNavigator: true → sheet covers the bottom nav bar
     showModalBottomSheet(

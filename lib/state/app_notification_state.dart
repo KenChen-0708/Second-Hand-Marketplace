@@ -16,6 +16,8 @@ class AppNotificationState extends EntityState<AppNotificationModel> {
   UserModel? _currentUser;
   String? _subscribedUserId;
 
+  int get unreadCount => items.where((n) => !n.isRead).length;
+
   void updateCurrentUser(UserModel? user) {
     if (_currentUser?.id == user?.id && _currentUser?.pushEnabled == user?.pushEnabled) return;
     
