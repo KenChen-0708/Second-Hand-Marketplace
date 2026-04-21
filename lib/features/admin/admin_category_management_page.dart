@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../state/state.dart';
+import '../../state/category_state.dart';
 import '../../models/models.dart';
 
 class AdminCategoryManagementPage extends StatefulWidget {
@@ -14,6 +14,7 @@ class AdminCategoryManagementPage extends StatefulWidget {
 class _AdminCategoryManagementPageState
     extends State<AdminCategoryManagementPage> {
   final TextEditingController _categoryController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -30,6 +31,7 @@ class _AdminCategoryManagementPageState
   @override
   void dispose() {
     _categoryController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -44,7 +46,9 @@ class _AdminCategoryManagementPageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              _buildSearchAndSortBar(),
+              const SizedBox(height: 16),
               Expanded(
                 child: Consumer<CategoryState>(
                   builder: (context, categoryState, child) {
@@ -56,25 +60,40 @@ class _AdminCategoryManagementPageState
                       return _buildErrorState(categoryState.error);
                     }
 
-                    if (categoryState.items.isEmpty) {
+                    final filteredItems = categoryState.filteredItems;
+
+                    if (filteredItems.isEmpty) {
                       return const Center(child: Text('No categories found.'));
                     }
 
-                    return ReorderableListView.builder(
-                      itemCount: categoryState.items.length,
-                      onReorder: (oldIndex, newIndex) {
-                        if (newIndex > oldIndex) newIndex -= 1;
-                        final items = List<CategoryModel>.from(categoryState.items);
-                        final item = items.removeAt(oldIndex);
-                        items.insert(newIndex, item);
-                        // Save the new order to the database
-                        context.read<CategoryState>().updateCategoryOrder(items);
-                      },
-                      itemBuilder: (context, index) {
-                        final category = categoryState.items[index];
-                        return _buildCategoryCard(category, key: ValueKey(category.id));
-                      },
-                    );
+                    // Only enable reordering if in "Custom" sort mode and not searching
+                    final bool canReorder = categoryState.sortMode == CategorySortMode.custom && 
+                                          categoryState.searchQuery.isEmpty;
+
+                    if (canReorder) {
+                      return ReorderableListView.builder(
+                        itemCount: filteredItems.length,
+                        onReorder: (oldIndex, newIndex) {
+                          if (newIndex > oldIndex) newIndex -= 1;
+                          final items = List<CategoryModel>.from(filteredItems);
+                          final item = items.removeAt(oldIndex);
+                          items.insert(newIndex, item);
+                          context.read<CategoryState>().updateCategoryOrder(items);
+                        },
+                        itemBuilder: (context, index) {
+                          final category = filteredItems[index];
+                          return _buildCategoryCard(category, key: ValueKey(category.id), canReorder: true);
+                        },
+                      );
+                    } else {
+                      return ListView.builder(
+                        itemCount: filteredItems.length,
+                        itemBuilder: (context, index) {
+                          final category = filteredItems[index];
+                          return _buildCategoryCard(category, key: ValueKey(category.id), canReorder: false);
+                        },
+                      );
+                    }
                   },
                 ),
               ),
@@ -107,16 +126,109 @@ class _AdminCategoryManagementPageState
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        const Text(
-          'Drag handle to reorder. Toggle to enable/disable.',
-          style: TextStyle(color: Colors.black54, fontSize: 13),
-        ),
       ],
     );
   }
 
-  Widget _buildCategoryCard(CategoryModel category, {required Key key}) {
+  Widget _buildSearchAndSortBar() {
+    return Consumer<CategoryState>(
+      builder: (context, state, child) {
+        return Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => state.setSearchQuery(val),
+                decoration: InputDecoration(
+                  hintText: 'Search categories...',
+                  prefixIcon: const Icon(Icons.search),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.black12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.black12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: PopupMenuButton<CategorySortMode>(
+                initialValue: state.sortMode,
+                onSelected: (mode) => state.setSortMode(mode),
+                icon: const Icon(Icons.sort_rounded),
+                tooltip: 'Sort Options',
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: CategorySortMode.custom,
+                    child: Row(
+                      children: [
+                        Icon(Icons.drag_handle, size: 20),
+                        SizedBox(width: 8),
+                        Text('Custom (Manual)'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: CategorySortMode.nameAsc,
+                    child: Row(
+                      children: [
+                        Icon(Icons.sort_by_alpha, size: 20),
+                        SizedBox(width: 8),
+                        Text('Name (A-Z)'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: CategorySortMode.nameDesc,
+                    child: Row(
+                      children: [
+                        Icon(Icons.sort_by_alpha, size: 20),
+                        SizedBox(width: 8),
+                        Text('Name (Z-A)'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: CategorySortMode.countDesc,
+                    child: Row(
+                      children: [
+                        Icon(Icons.trending_up, size: 20),
+                        SizedBox(width: 8),
+                        Text('Most Products'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: CategorySortMode.countAsc,
+                    child: Row(
+                      children: [
+                        Icon(Icons.trending_down, size: 20),
+                        SizedBox(width: 8),
+                        Text('Least Products'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCategoryCard(CategoryModel category, {required Key key, required bool canReorder}) {
     final theme = Theme.of(context);
     final bool isEnabled = category.isEnabled;
 
@@ -131,14 +243,18 @@ class _AdminCategoryManagementPageState
       color: isEnabled ? Colors.white : Colors.grey.shade50,
       child: ExpansionTile(
         tilePadding: const EdgeInsets.only(left: 8, right: 12),
-        // FIXED: Explicit Drag Handle
-        leading: ReorderableDragStartListener(
-          index: context.read<CategoryState>().items.indexOf(category),
-          child: const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Icon(Icons.drag_handle_rounded, color: Colors.black26),
-          ),
-        ),
+        leading: canReorder 
+          ? ReorderableDragStartListener(
+              index: context.read<CategoryState>().filteredItems.indexOf(category),
+              child: const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Icon(Icons.drag_handle_rounded, color: Colors.black26),
+              ),
+            )
+          : const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Icon(Icons.category_outlined, color: Colors.black26),
+            ),
         title: Row(
           children: [
             Expanded(
@@ -164,14 +280,11 @@ class _AdminCategoryManagementPageState
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // FIXED Switch: Logic now correctly handles the flip
             Switch.adaptive(
               value: isEnabled,
               activeColor: theme.primaryColor,
               onChanged: (bool val) async {
                 try {
-                  // val is the new state (e.g. user dragged to off, val is false)
-                  // toggleCategoryStatus takes 'currentStatus', so we pass !val
                   await context.read<CategoryState>().toggleCategoryStatus(category.id, !val);
                 } catch (e) {
                   _showErrorSnackBar(e.toString());

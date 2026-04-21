@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../state/state.dart';
 import '../../models/models.dart';
 
@@ -17,6 +18,10 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
   @override
   void initState() {
     super.initState();
+    _refresh();
+  }
+
+  void _refresh() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AdminUserState>().fetchAllUsers();
     });
@@ -39,6 +44,11 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
                   color: Colors.black87,
                 ),
               ),
+              const SizedBox(height: 8),
+              const Text(
+                'View and manage all registered users. Tap a user to see their profile.',
+                style: TextStyle(color: Colors.black54),
+              ),
               const SizedBox(height: 24),
               TextField(
                 decoration: InputDecoration(
@@ -54,122 +64,132 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: Consumer<AdminUserState>(
-                  builder: (context, adminState, child) {
-                    if (adminState.isLoading && adminState.users.isEmpty) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    await context.read<AdminUserState>().fetchAllUsers();
+                  },
+                  child: Consumer<AdminUserState>(
+                    builder: (context, adminState, child) {
+                      if (adminState.isLoading && adminState.users.isEmpty) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                    final filteredUsers = adminState.users.where((u) {
-                      final text = '${u.name} ${u.email}'.toLowerCase();
-                      return text.contains(_searchQuery.toLowerCase());
-                    }).toList();
+                      final filteredUsers = adminState.users.where((u) {
+                        final text = '${u.name} ${u.email}'.toLowerCase();
+                        return text.contains(_searchQuery.toLowerCase());
+                      }).toList();
 
-                    if (filteredUsers.isEmpty) {
-                      return const Center(child: Text('No users found.'));
-                    }
+                      if (filteredUsers.isEmpty) {
+                        return ListView(
+                          children: const [
+                             SizedBox(height: 100),
+                             Center(child: Text('No users found.')),
+                          ],
+                        );
+                      }
 
-                    return ListView.separated(
-                      itemCount: filteredUsers.length,
-                      separatorBuilder: (context, index) => const Divider(),
-                      itemBuilder: (context, index) {
-                        final user = filteredUsers[index];
-                        final statusLabel = user.isActive ? 'Active' : 'Banned';
-                        
-                        return ListTile(
-                          tileColor: Colors.white,
-                          shape: RoundedRectangleBorder(
+                      return ListView.separated(
+                        itemCount: filteredUsers.length,
+                        separatorBuilder: (context, index) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final user = filteredUsers[index];
+                          final statusLabel = user.isActive ? 'Active' : 'Banned';
+                          
+                          return InkWell(
+                            onTap: () => context.push('/seller/${user.id}'),
                             borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          leading: CircleAvatar(
-                            backgroundColor: _getStatusColor(statusLabel)
-                                .withValues(alpha: 0.2),
-                            child: Text(
-                              user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                              style: TextStyle(
-                                color: _getStatusColor(statusLabel),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
                               ),
-                            ),
-                          ),
-                          title: Text(
-                            user.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(user.email),
-                              Text(
-                                'Role: ${user.role}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(statusLabel)
-                                      .withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                              leading: CircleAvatar(
+                                backgroundColor: _getStatusColor(statusLabel)
+                                    .withOpacity(0.2),
                                 child: Text(
-                                  statusLabel,
+                                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                                   style: TextStyle(
                                     color: _getStatusColor(statusLabel),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              PopupMenuButton<String>(
-                                onSelected: (val) {
-                                  if (val == 'ToggleStatus') {
-                                    _confirmToggleStatus(user);
-                                  } else if (val == 'MakeAdmin') {
-                                    _updateRole(user, 'admin');
-                                  } else if (val == 'MakeUser') {
-                                    _updateRole(user, 'user');
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  PopupMenuItem(
-                                    value: 'ToggleStatus',
+                              title: Text(
+                                user.name,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(user.email),
+                                  Text(
+                                    'Role: ${user.role}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(statusLabel)
+                                          .withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                     child: Text(
-                                      user.isActive ? 'Ban User' : 'Unban User',
+                                      statusLabel,
                                       style: TextStyle(
-                                        color: user.isActive ? Colors.red : Colors.green,
+                                        color: _getStatusColor(statusLabel),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ),
-                                  if (user.role != 'admin')
-                                    const PopupMenuItem(
-                                      value: 'MakeAdmin',
-                                      child: Text('Promote to Admin'),
-                                    ),
-                                  if (user.role == 'admin')
-                                    const PopupMenuItem(
-                                      value: 'MakeUser',
-                                      child: Text('Demote to User'),
-                                    ),
+                                  const SizedBox(width: 8),
+                                  PopupMenuButton<String>(
+                                    onSelected: (val) {
+                                      if (val == 'ToggleStatus') {
+                                        _confirmToggleStatus(user);
+                                      } else if (val == 'MakeAdmin') {
+                                        _updateRole(user, 'admin');
+                                      } else if (val == 'MakeUser') {
+                                        _updateRole(user, 'user');
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                        value: 'ToggleStatus',
+                                        child: Text(
+                                          user.isActive ? 'Ban User' : 'Unban User',
+                                          style: TextStyle(
+                                            color: user.isActive ? Colors.red : Colors.green,
+                                          ),
+                                        ),
+                                      ),
+                                      if (user.role != 'admin')
+                                        const PopupMenuItem(
+                                          value: 'MakeAdmin',
+                                          child: Text('Promote to Admin'),
+                                        ),
+                                      if (user.role == 'admin')
+                                        const PopupMenuItem(
+                                          value: 'MakeUser',
+                                          child: Text('Demote to User'),
+                                        ),
+                                    ],
+                                  ),
                                 ],
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
             ],

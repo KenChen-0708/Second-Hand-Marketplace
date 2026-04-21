@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/models.dart';
 import '../../state/state.dart';
 
@@ -19,6 +21,10 @@ class _AdminListingModerationPageState
   @override
   void initState() {
     super.initState();
+    _refresh();
+  }
+
+  void _refresh() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProductState>().fetchProducts(status: null);
     });
@@ -39,42 +45,52 @@ class _AdminListingModerationPageState
               _buildFilters(),
               const SizedBox(height: 24),
               Expanded(
-                child: Consumer<ProductState>(
-                  builder: (context, productState, child) {
-                    if (productState.isLoading && productState.items.isEmpty) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final filteredListings = productState.items.where((p) {
-                      final matchesSearch = p.title
-                          .toLowerCase()
-                          .contains(_searchQuery.toLowerCase());
-                      final matchesStatus = _selectedStatus == 'all' ||
-                          p.status.toLowerCase() == _selectedStatus;
-                      return matchesSearch && matchesStatus;
-                    }).toList();
-
-                    if (filteredListings.isEmpty) {
-                      return const Center(
-                        child: Text('No listings found matching your criteria.'),
-                      );
-                    }
-
-                    return GridView.builder(
-                      gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 350,
-                        childAspectRatio: 0.75,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: filteredListings.length,
-                      itemBuilder: (context, index) {
-                        final product = filteredListings[index];
-                        return _buildListingCard(product);
-                      },
-                    );
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    await context.read<ProductState>().fetchProducts(status: null);
                   },
+                  child: Consumer<ProductState>(
+                    builder: (context, productState, child) {
+                      if (productState.isLoading && productState.items.isEmpty) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final filteredListings = productState.items.where((p) {
+                        final matchesSearch = p.title
+                            .toLowerCase()
+                            .contains(_searchQuery.toLowerCase());
+                        final matchesStatus = _selectedStatus == 'all' ||
+                            p.status.toLowerCase() == _selectedStatus;
+                        return matchesSearch && matchesStatus;
+                      }).toList();
+
+                      if (filteredListings.isEmpty) {
+                        return ListView(
+                          children: [
+                            const SizedBox(height: 100),
+                            const Center(
+                              child: Text('No listings found matching your criteria.'),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return GridView.builder(
+                        gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 350,
+                          childAspectRatio: 0.72,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                        ),
+                        itemCount: filteredListings.length,
+                        itemBuilder: (context, index) {
+                          final product = filteredListings[index];
+                          return _buildListingCard(product);
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -97,7 +113,7 @@ class _AdminListingModerationPageState
         ),
         const SizedBox(height: 8),
         Text(
-          'Manage all listings on the platform. Deactivate or remove inappropriate items.',
+          'Manage platform listings. Tap to view full details or share with staff.',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Colors.black54,
           ),
@@ -153,108 +169,123 @@ class _AdminListingModerationPageState
   Widget _buildListingCard(ProductModel product) {
     final bool isInactive = product.status.toLowerCase() == 'inactive';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            offset: const Offset(0, 4),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                  child: Image.network(
-                    product.imageUrl ?? 'https://via.placeholder.com/400',
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: const Color(0xFFF3F4F6),
-                      child: const Center(
-                        child: Icon(
-                          Icons.image_rounded,
-                          size: 64,
-                          color: Colors.black26,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: _buildStatusChip(product.status),
-                ),
-              ],
+    return InkWell(
+      onTap: () => context.push('/product/${product.id}'),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.black12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              offset: const Offset(0, 4),
+              blurRadius: 10,
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Seller ID: ${product.sellerId.length > 8 ? product.sellerId.substring(0, 8) : product.sellerId}...',
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '\$${product.price.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _toggleStatus(product),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isInactive ? Colors.green : Colors.orange,
-                          side: BorderSide(
-                            color: isInactive ? Colors.green : Colors.orange,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: Image.network(
+                      product.imageUrl ?? 'https://via.placeholder.com/400',
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: const Color(0xFFF3F4F6),
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_rounded,
+                            size: 64,
+                            color: Colors.black26,
                           ),
                         ),
-                        child: Text(isInactive ? 'Activate' : 'Deactivate'),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: () => _confirmDelete(product),
-                      icon: const Icon(Icons.delete_rounded, color: Colors.red),
-                      tooltip: 'Delete Permanently',
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: _buildStatusChip(product.status),
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        onPressed: () => Share.share('Check this listing for moderation: ${product.title} \n ID: ${product.id}'),
+                        icon: const Icon(Icons.share_rounded, size: 20, color: Colors.blueAccent),
+                        tooltip: 'Share Listing',
+                      ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'RM ${product.price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _toggleStatus(product),
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            foregroundColor: isInactive ? Colors.green : Colors.orange,
+                            side: BorderSide(
+                              color: isInactive ? Colors.green : Colors.orange,
+                            ),
+                          ),
+                          child: Text(isInactive ? 'Activate' : 'Deactivate', style: const TextStyle(fontSize: 12)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () => _confirmDelete(product),
+                        icon: const Icon(Icons.delete_rounded, color: Colors.red, size: 20),
+                        tooltip: 'Delete Permanently',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -276,7 +307,7 @@ class _AdminListingModerationPageState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.9),
+        color: color.withOpacity(0.9),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
