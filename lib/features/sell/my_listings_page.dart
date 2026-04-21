@@ -10,10 +10,7 @@ import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 
 class ListingDetailArguments {
-  const ListingDetailArguments({
-    required this.product,
-    required this.orders,
-  });
+  const ListingDetailArguments({required this.product, required this.orders});
 
   final ProductModel product;
   final List<OrderModel> orders;
@@ -80,8 +77,10 @@ class _MyListingsPageState extends State<MyListingsPage> {
           if (item.product?.sellerId != sellerId) {
             continue;
           }
-          final productOrders =
-              ordersByProductId.putIfAbsent(item.productId, () => []);
+          final productOrders = ordersByProductId.putIfAbsent(
+            item.productId,
+            () => [],
+          );
           if (!productOrders.any((existing) => existing.id == order.id)) {
             productOrders.add(order);
           }
@@ -144,31 +143,35 @@ class _MyListingsPageState extends State<MyListingsPage> {
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Error: $_error'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _fetchMyProducts,
-                          child: const Text('Retry'),
-                        ),
-                      ],
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Error: $_error'),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _fetchMyProducts,
+                      child: const Text('Retry'),
                     ),
-                  )
-                : TabBarView(
-                    children: [
-                      RefreshIndicator(
-                        onRefresh: _fetchMyProducts,
-                        child: _buildListingTab(context, _activeProducts),
-                      ),
-                      RefreshIndicator(
-                        onRefresh: _fetchMyProducts,
-                        child: _buildListingTab(context, _soldProducts, isSold: true),
-                      ),
-                    ],
+                  ],
+                ),
+              )
+            : TabBarView(
+                children: [
+                  RefreshIndicator(
+                    onRefresh: _fetchMyProducts,
+                    child: _buildListingTab(context, _activeProducts),
                   ),
+                  RefreshIndicator(
+                    onRefresh: _fetchMyProducts,
+                    child: _buildListingTab(
+                      context,
+                      _soldProducts,
+                      isSold: true,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -194,7 +197,10 @@ class _MyListingsPageState extends State<MyListingsPage> {
       itemBuilder: (context, index) {
         final product = products[index];
         final relatedOrders = _ordersByProductId[product.id] ?? const [];
-        final needsActionCount = _needsActionCountFor(product.id, _ordersByProductId);
+        final needsActionCount = _needsActionCountFor(
+          product.id,
+          _ordersByProductId,
+        );
         final needsAction = needsActionCount > 0;
         return InkWell(
           onTap: () async {
@@ -268,9 +274,9 @@ class _MyListingsPageState extends State<MyListingsPage> {
                               decoration: BoxDecoration(
                                 color: isSold
                                     ? Colors.grey[300]
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .primaryContainer,
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
@@ -280,9 +286,9 @@ class _MyListingsPageState extends State<MyListingsPage> {
                                   fontWeight: FontWeight.bold,
                                   color: isSold
                                       ? Colors.grey[700]
-                                      : Theme.of(context)
-                                          .colorScheme
-                                          .onPrimaryContainer,
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onPrimaryContainer,
                                 ),
                               ),
                             ),
@@ -292,14 +298,21 @@ class _MyListingsPageState extends State<MyListingsPage> {
                           const SizedBox(height: 10),
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.orange.withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.priority_high_rounded, color: Colors.orange, size: 16),
+                                const Icon(
+                                  Icons.priority_high_rounded,
+                                  color: Colors.orange,
+                                  size: 16,
+                                ),
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
@@ -337,8 +350,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
 
   static bool _orderNeedsAction(OrderModel order) {
     final status = order.status.toLowerCase();
-    return status == 'paid' ||
-        (status == 'pending_handover' && order.handoverDate == null);
+    return status == 'paid' || status == 'pending_handover';
   }
 }
 
@@ -375,12 +387,17 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
         return bTime.compareTo(aTime);
       });
     final actionCount = orders.where(_needsAction).length;
-    final statusColor = actionCount > 0 ? Colors.orange : Theme.of(context).colorScheme.primary;
+    final statusColor = actionCount > 0
+        ? Colors.orange
+        : Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        title: const Text('Listing Details', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text(
+          'Listing Details',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -408,7 +425,9 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          actionCount > 0 ? Icons.notification_important_rounded : Icons.storefront_rounded,
+                          actionCount > 0
+                              ? Icons.notification_important_rounded
+                              : Icons.storefront_rounded,
                           color: statusColor,
                           size: 28,
                         ),
@@ -419,15 +438,24 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              actionCount > 0 ? '$actionCount buyer action needed' : 'Listing is active',
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                              actionCount > 0
+                                  ? '$actionCount buyer action needed'
+                                  : 'Listing is active',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               actionCount > 0
                                   ? 'Review buyer orders for this listing.'
                                   : 'No buyer action is waiting right now.',
-                              style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
@@ -438,7 +466,12 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                 _section(
                   title: 'Listing Summary',
                   child: InkWell(
-                    onTap: () => context.push('/seller-product', extra: product),
+                    onTap: () async {
+                      await context.push('/product/${product.id}');
+                      if (mounted) {
+                        await _reloadOrders();
+                      }
+                    },
                     borderRadius: BorderRadius.circular(16),
                     child: Padding(
                       padding: const EdgeInsets.all(4),
@@ -459,22 +492,36 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(product.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                                Text(
+                                  product.title,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
                                 const SizedBox(height: 8),
                                 Text(
                                   '\$${product.price.toStringAsFixed(2)}',
                                   style: TextStyle(
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                     fontSize: 20,
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                _pill(product.status.toUpperCase(), Theme.of(context).colorScheme.primary),
+                                _pill(
+                                  product.status.toUpperCase(),
+                                  Theme.of(context).colorScheme.primary,
+                                ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.grey,
+                          ),
                         ],
                       ),
                     ),
@@ -484,8 +531,14 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                   title: 'Information',
                   child: Column(
                     children: [
-                      _infoRow('Condition', product.condition.replaceAll('_', ' ').toUpperCase()),
-                      _infoRow('Stock', '${product.stockQuantity ?? 0} available'),
+                      _infoRow(
+                        'Condition',
+                        product.condition.replaceAll('_', ' ').toUpperCase(),
+                      ),
+                      _infoRow(
+                        'Stock',
+                        '${product.stockQuantity ?? 0} available',
+                      ),
                       _infoRow('Views', product.viewCount.toString()),
                       _infoRow('Likes', product.likesCount.toString()),
                       if (product.description.trim().isNotEmpty)
@@ -498,10 +551,15 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                   child: orders.isEmpty
                       ? Text(
                           'No buyer has purchased this listing yet.',
-                          style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w600,
+                          ),
                         )
                       : Column(
-                          children: orders.map((order) => _orderCard(context, order)).toList(),
+                          children: orders
+                              .map((order) => _orderCard(context, order))
+                              .toList(),
                         ),
                 ),
                 Padding(
@@ -510,26 +568,40 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => context.push('/edit-product', extra: product),
+                          onPressed: () async {
+                            await context.push('/edit-product', extra: product);
+                            if (context.mounted) {
+                              await _reloadOrders();
+                            }
+                          },
                           icon: const Icon(Icons.edit_rounded),
                           label: const Text('Edit Listing'),
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 50),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _confirmRemoveListing(context, product),
+                          onPressed: () =>
+                              _confirmRemoveListing(context, product),
                           icon: const Icon(Icons.delete_outline_rounded),
                           label: const Text('Remove Listing'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 50),
-                            foregroundColor: Theme.of(context).colorScheme.error,
-                            side: BorderSide(color: Theme.of(context).colorScheme.error),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.error,
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
                         ),
                       ),
@@ -554,7 +626,9 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
   Future<void> _reloadOrders() async {
     setState(() => _isReloading = true);
     try {
-      final sellerOrders = await _orderService.getSellerOrders(widget.args.product.sellerId);
+      final sellerOrders = await _orderService.getSellerOrders(
+        widget.args.product.sellerId,
+      );
       final updatedOrders = <OrderModel>[];
       for (final order in sellerOrders) {
         final hasProduct = order.orderItems.any(
@@ -576,12 +650,17 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
     }
   }
 
-  Future<void> _confirmRemoveListing(BuildContext context, ProductModel product) async {
+  Future<void> _confirmRemoveListing(
+    BuildContext context,
+    ProductModel product,
+  ) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove Listing?'),
-        content: const Text('This listing will be removed from the marketplace.'),
+        content: const Text(
+          'This listing will be removed from the marketplace.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -612,21 +691,22 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove listing: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to remove listing: $e')));
       }
     }
   }
 
   static bool _needsAction(OrderModel order) {
     final status = order.status.toLowerCase();
-    return status == 'paid' ||
-        (status == 'pending_handover' && order.handoverDate == null);
+    return status == 'paid' || status == 'pending_handover';
   }
 
   Widget _orderCard(BuildContext context, OrderModel order) {
-    final date = order.createdAt == null ? '' : DateFormat('MMM dd, yyyy').format(order.createdAt!);
+    final date = order.createdAt == null
+        ? ''
+        : DateFormat('MMM dd, yyyy').format(order.createdAt!);
     final needsAction = _needsAction(order);
     return InkWell(
       onTap: () async {
@@ -654,66 +734,78 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
         child: Column(
           children: [
             Row(
-            children: [
-              Icon(
-                needsAction ? Icons.notification_important_rounded : Icons.receipt_long_rounded,
-                color: needsAction ? Colors.orange : Colors.grey,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.buyer?.name ?? 'Buyer',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '#${order.orderNumber} ${date.isEmpty ? '' : '- $date'}',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                  ],
+              children: [
+                Icon(
+                  needsAction
+                      ? Icons.notification_important_rounded
+                      : Icons.receipt_long_rounded,
+                  color: needsAction ? Colors.orange : Colors.grey,
                 ),
-              ),
-              _pill(order.status.replaceAll('_', ' ').toUpperCase(), _statusColor(order.status)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (order.status.toLowerCase() == 'paid') ...[
+                const SizedBox(width: 12),
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _updateOrderStatus(context, order, 'pending_handover'),
-                    child: const Text('Confirm Handover'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.buyer?.name ?? 'Buyer',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '#${order.orderNumber} ${date.isEmpty ? '' : '- $date'}',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
+                    ],
                   ),
                 ),
-              ] else if (needsAction) ...[
-                Expanded(
-                  child: Text(
-                    'Tap to schedule handover',
-                    style: TextStyle(
-                      color: Colors.orange[800],
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ] else ...[
-                Expanded(
-                  child: Text(
-                    'Tap to view order details',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                _pill(
+                  order.status.replaceAll('_', ' ').toUpperCase(),
+                  _statusColor(order.status),
                 ),
               ],
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                if (order.status.toLowerCase() == 'paid') ...[
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _updateOrderStatus(
+                        context,
+                        order,
+                        'pending_handover',
+                      ),
+                      child: const Text('Confirm Handover'),
+                    ),
+                  ),
+                ] else if (needsAction) ...[
+                  Expanded(
+                    child: Text(
+                      'Tap to schedule handover',
+                      style: TextStyle(
+                        color: Colors.orange[800],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  Expanded(
+                    child: Text(
+                      'Tap to view order details',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),
@@ -727,17 +819,21 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
   ) async {
     try {
       await context.read<OrderState>().updateOrderStatus(order.id, status);
-      if (context.mounted) {
-        await _reloadOrders();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Order updated to ${status.replaceAll('_', ' ')}')),
-        );
+      if (!context.mounted) {
+        return;
       }
+      final messenger = ScaffoldMessenger.of(context);
+      await _reloadOrders();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Order updated to ${status.replaceAll('_', ' ')}'),
+        ),
+      );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update order: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update order: $e')));
       }
     }
   }
@@ -753,7 +849,12 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
         children: [
           Text(
             title.toUpperCase(),
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey[400], letterSpacing: 1),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: Colors.grey[400],
+              letterSpacing: 1,
+            ),
           ),
           const SizedBox(height: 20),
           child,
@@ -770,10 +871,20 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
         children: [
           SizedBox(
             width: 92,
-            child: Text(label, style: TextStyle(color: Colors.grey[500], fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700, height: 1.35)),
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w700, height: 1.35),
+            ),
           ),
         ],
       ),
@@ -789,7 +900,11 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900),
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
