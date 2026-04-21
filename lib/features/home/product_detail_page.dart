@@ -63,7 +63,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     List<ReviewModel> reviews;
     try {
-      reviews = await ReviewService().fetchProductReviews(product.id);
+      // Fetch reviews for the seller instead of just this specific product
+      reviews = await ReviewService().fetchSellerReviews(product.sellerId);
     } catch (_) {
       reviews = const [];
     }
@@ -369,7 +370,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final averageRating = detail.reviews.isEmpty
             ? 0.0
             : detail.reviews
-                    .fold<int>(0, (sum, review) => sum + review.rating) /
+                    .fold<double>(0, (sum, review) => sum + review.rating) /
                 detail.reviews.length;
         
         final favoriteState = context.watch<FavoriteState>();
@@ -590,7 +591,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          // --- Added Trade Details Section ---
+                          // --- Trade Details Section ---
                           Text(
                             'Trade Details',
                             style: Theme.of(context).textTheme.titleMedium
@@ -745,7 +746,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            'Reviews',
+                            'Seller Reviews',
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
@@ -761,7 +762,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: const Text(
-                                'No reviews for this product yet.',
+                                'No reviews for this seller yet.',
                               ),
                             )
                           else ...[

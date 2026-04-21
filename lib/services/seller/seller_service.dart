@@ -86,19 +86,22 @@ class SellerService {
     try {
       final String uid = userId.trim();
 
-      // 1. Fetch products count
+      // 1. Fetch products
       final pResponse = await _supabase
           .from('products')
-          .select('status')
+          .select('id, status')
           .eq('seller_id', uid);
       
+      final Map<String, String> productStatuses = {};
+      final List<String> pIds = [];
       if (pResponse != null) {
-        final pList = (pResponse as List);
+        final List<dynamic> pList = pResponse as List;
         for (var p in pList) {
-          final s = (p['status'] as String? ?? '').toLowerCase();
+          final String id = (p['id'] ?? '').toString();
+          final String s = (p['status'] ?? '').toString().toLowerCase();
+          productStatuses[id] = s;
+          if (id.isNotEmpty) pIds.add(id);
           if (s == 'active') activeCount++;
-          // Manual product status "sold" also counts
-          if (s == 'sold') soldCount++;
         }
       }
 
@@ -109,7 +112,7 @@ class SellerService {
           .eq('reviewee_id', uid);
       
       if (rResponse != null) {
-        final rList = (rResponse as List);
+        final List<dynamic> rList = rResponse as List;
         reviewCount = rList.length;
         if (reviewCount > 0) {
           double sum = 0;
@@ -121,45 +124,49 @@ class SellerService {
       }
 
       // 3. Fetch Sold Items from Order History
-      // We query order_items and join both orders and products
-      final oResponse = await _supabase
-          .from('order_items')
-          .select('quantity, unit_price, orders!inner(status), products!inner(seller_id)')
-          .eq('products.seller_id', uid);
+      final Set<String> productsInOrders = {};
+      
+      if (pIds.isNotEmpty) {
+        // Query order_items for these specific products
+        // We join 'orders' to get the status
+        final oResponse = await _supabase
+            .from('order_items')
+            .select('quantity, unit_price, product_id, orders!inner(status)')
+            .inFilter('product_id', pIds);
 
-      if (oResponse != null) {
-        int orderSoldItems = 0;
-        for (var item in (oResponse as List)) {
-          final orderData = item['orders'];
-          String orderStatus = '';
-          
-          if (orderData is Map) {
-            orderStatus = (orderData['status'] as String? ?? '').toLowerCase();
-          } else if (orderData is List && orderData.isNotEmpty) {
-            orderStatus = (orderData[0]['status'] as String? ?? '').toLowerCase();
-          }
+        if (oResponse != null) {
+          for (var item in (oResponse as List)) {
+            final Map? orderData = item['orders'] as Map?;
+            String status = '';
+            
+            if (orderData != null) {
+              status = (orderData['status'] ?? '').toString().toLowerCase();
+            }
 
-          if (orderStatus == 'completed') {
-            final qty = (item['quantity'] as num?)?.toInt() ?? 0;
-            final price = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
-            orderSoldItems += qty;
-            earnings += (qty * price);
+            // Consider "sold" if order is created and not cancelled/disputed
+            if (status.isNotEmpty && status != 'cancelled' && status != 'disputed') {
+              final int qty = (item['quantity'] as num?)?.toInt() ?? 0;
+              final double price = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
+              final String pid = (item['product_id'] ?? '').toString();
+              
+              soldCount += qty;
+              earnings += (qty * price);
+              if (pid.isNotEmpty) productsInOrders.add(pid);
+            }
           }
-        }
-        
-        // Merge counts: products marked as 'sold' + items in 'completed' orders
-        // Note: Usually a completed order item refers to a product that might 
-        // or might not have its status updated to 'sold' in the products table.
-        // We take the max or sum depending on how your app marks things.
-        // Let's take the items from completed orders as the source of truth for volume.
-        if (orderSoldItems > 0) {
-           // If we have items in completed orders, that's our true sold count
-           soldCount = orderSoldItems;
         }
       }
 
+      // 4. Merge manual 'sold' status
+      // We count products marked 'sold' manually that are NOT part of any order processed above
+      productStatuses.forEach((id, status) {
+        if (status == 'sold' && !productsInOrders.contains(id)) {
+          soldCount++;
+        }
+      });
+
     } catch (e) {
-      print('DEBUG: getSellerStats error: $e');
+      print('DEBUG: getSellerStats error for $userId: $e');
     }
 
     return SellerStats(
