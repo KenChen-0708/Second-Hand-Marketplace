@@ -519,7 +519,6 @@ class _CartPageState extends State<CartPage> {
     );
     final variantText = cartItem.selectedVariant?.attributeSummary ?? 'Generic';
     final canIncrease =
-        !cartState.isLoading &&
         !isQuantityActionPending &&
         (availableQuantity == null ||
             (availableQuantity > 0 && cartItem.quantity < availableQuantity));
@@ -628,9 +627,7 @@ class _CartPageState extends State<CartPage> {
                             if (product.variations.isNotEmpty) ...[
                               const SizedBox(width: 6),
                               InkWell(
-                                onTap:
-                                    cartState.isLoading ||
-                                        isQuantityActionPending
+                                onTap: isQuantityActionPending
                                     ? null
                                     : () => _editCartItemSelection(
                                         context,
@@ -681,7 +678,7 @@ class _CartPageState extends State<CartPage> {
               children: [
                 // Delete button
                 IconButton(
-                  onPressed: cartState.isLoading
+                  onPressed: isQuantityActionPending
                       ? null
                       : () => _runCartAction(
                           context,
@@ -724,8 +721,7 @@ class _CartPageState extends State<CartPage> {
                         width: 40,
                         height: 40,
                         child: IconButton(
-                          onPressed:
-                              cartState.isLoading || isQuantityActionPending
+                          onPressed: isQuantityActionPending
                               ? null
                               : () => _runCartAction(
                                   context,
@@ -736,7 +732,7 @@ class _CartPageState extends State<CartPage> {
                             Icons.remove_rounded,
                             size: 18,
                             color:
-                                cartState.isLoading || isQuantityActionPending
+                                isQuantityActionPending
                                 ? colorScheme.onSurfaceVariant.withOpacity(0.5)
                                 : colorScheme.onSurface,
                           ),
@@ -766,8 +762,7 @@ class _CartPageState extends State<CartPage> {
                         ),
                         child: _CartQuantityField(
                           value: cartItem.quantity,
-                          enabled:
-                              !cartState.isLoading && !isQuantityActionPending,
+                          enabled: !isQuantityActionPending,
                           maxQuantity: availableQuantity,
                           onCommitted: (value) =>
                               _updateCartItemQuantity(context, cartItem, value),
@@ -1044,8 +1039,17 @@ class _CartQuantityFieldState extends State<_CartQuantityField> {
   }
 
   void _commit() {
-    final parsedValue = int.tryParse(_controller.text.trim()) ?? widget.value;
-    var nextValue = parsedValue < 1 ? 1 : parsedValue;
+    final rawValue = _controller.text.trim();
+    final parsedValue = int.tryParse(rawValue);
+    if (parsedValue == null) {
+      _controller.value = TextEditingValue(
+        text: '${widget.value}',
+        selection: TextSelection.collapsed(offset: '${widget.value}'.length),
+      );
+      return;
+    }
+
+    var nextValue = parsedValue < 0 ? 0 : parsedValue;
     final maxQuantity = widget.maxQuantity;
     if (maxQuantity != null && maxQuantity > 0 && nextValue > maxQuantity) {
       nextValue = maxQuantity;
