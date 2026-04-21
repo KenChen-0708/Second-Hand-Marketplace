@@ -123,8 +123,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       SnackbarHelper.showInfo(
         context,
         _selectedHandoverOption == _meetUpOption
-            ? 'Seller meetup location is required before making payment.'
-            : 'Please provide a location before making payment.',
+            ? 'Meet-up location is required.'
+            : 'Delivery address is required.',
       );
       return;
     }
@@ -132,7 +132,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (!_hasCompatibleHandoverOption) {
       SnackbarHelper.showInfo(
         context,
-        'Selected items have different handover methods. Please checkout them separately.',
+        'Please check out these items separately.',
       );
       return;
     }
@@ -140,7 +140,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (_selectedHandoverOption == _meetUpOption && !_meetUpAvailable) {
       SnackbarHelper.showInfo(
         context,
-        'Meet up is not available for all selected items.',
+        'Meet-up is not available for these items.',
       );
       return;
     }
@@ -148,7 +148,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (!_availableHandoverOptions.contains(_selectedHandoverOption)) {
       SnackbarHelper.showInfo(
         context,
-        'That handover option is not available for all selected items.',
+        'This handover option is not available.',
       );
       return;
     }
@@ -156,7 +156,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (_isCardPayment && _grandTotal <= 0) {
       SnackbarHelper.showInfo(
         context,
-        'Card payment is only available when the total is more than RM 0.00. Please choose another payment method.',
+        'Card payment is unavailable for this total.',
       );
       return;
     }
@@ -188,8 +188,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         handoverLocation: _resolvedHandoverLocation,
         notes: _buildCheckoutNotes(),
         additionalFee: _deliveryFee,
-        status: _isCardPayment ? 'paid' : 'pending',
-        paymentStatus: _isCardPayment ? 'paid' : 'pending',
+        status: 'paid',
+        paymentStatus: 'paid',
       );
 
       if (!mounted) {
@@ -292,7 +292,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         return;
       }
 
-      SnackbarHelper.showError(context, 'Checkout failed. Please try again.');
+      SnackbarHelper.showError(context, 'Unable to place order. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -338,14 +338,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 const Icon(Icons.cloud_off_rounded, size: 72),
                 const SizedBox(height: 16),
                 Text(
-                  'You\'re offline',
+                  'No internet connection',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Checkout needs an internet connection so we can confirm payment, stock, and order details.',
+                  'Please check your connection and try again. Checkout needs internet so we can confirm payment, stock, and order details.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
@@ -717,6 +717,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Subtotal: ${CurrencyHelper.formatRM(cartItem.totalPrice)}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -842,8 +850,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ? '$title (Mobile only)'
         : '$title (Min RM 0.01)';
     final disabledMessage = !StripeService.isSupportedPlatform
-        ? 'Card payments are available on mobile devices only.'
-        : 'Card payment is unavailable when the total is RM 0.00.';
+        ? 'Card payment is only available on mobile.'
+        : 'Card payment is unavailable for this total.';
 
     return InkWell(
       onTap: isDisabled

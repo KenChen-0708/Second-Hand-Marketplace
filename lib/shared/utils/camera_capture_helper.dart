@@ -47,8 +47,8 @@ class CameraCaptureHelper {
       SnackbarHelper.showSuccess(
         context,
         source == ImageSource.camera
-            ? 'Photo captured successfully.'
-            : 'Image selected successfully.',
+            ? 'Photo added.'
+            : 'Image selected.',
       );
     } catch (_) {
       if (!context.mounted) {
@@ -56,7 +56,7 @@ class CameraCaptureHelper {
       }
       SnackbarHelper.showError(
         context,
-        'Unable to open the camera right now. Please try again.',
+        'Unable to open camera. Please try again.',
       );
     }
   }

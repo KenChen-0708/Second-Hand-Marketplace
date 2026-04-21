@@ -238,7 +238,7 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
                                 width: 36,
@@ -257,16 +257,20 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
                               ),
                               const SizedBox(width: 16),
                               Expanded(
-                                child: Text(
-                                  widget.message,
-                                  softWrap: true,
-                                  overflow: TextOverflow.visible,
-                                  style: TextStyle(
-                                    color: colorScheme.onInverseSurface,
-                                    fontSize: 16,
-                                    height: 1.4,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: -0.2,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    widget.message,
+                                    softWrap: true,
+                                    overflow: TextOverflow.visible,
+                                    textAlign: TextAlign.left,
+                                    style: TextStyle(
+                                      color: colorScheme.onInverseSurface,
+                                      fontSize: 15,
+                                      height: 1.4,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: -0.1,
+                                    ),
                                   ),
                                 ),
                               ),

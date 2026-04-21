@@ -113,7 +113,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     }
 
     if (currentUser.id == widget.sellerId) {
-      SnackbarHelper.showTopMessage(context, 'This is your own profile.');
+      SnackbarHelper.showTopMessage(context, 'This is your profile.');
       return;
     }
 
@@ -121,7 +121,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
       if (_activeListings.isEmpty) {
         SnackbarHelper.showTopMessage(
           context,
-          'This seller has no active product to start a chat.',
+          'No active listings available.',
         );
         return;
       }
@@ -138,7 +138,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
       if (mounted) {
         SnackbarHelper.showError(
           context,
-          e.toString().replaceFirst('Exception: ', ''),
+          'Unable to open chat. Please try again.',
         );
       }
     }
@@ -184,7 +184,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                 Navigator.pop(context);
                 SnackbarHelper.showTopMessage(
                   context,
-                  'Link copied to clipboard!',
+                  'Link copied.',
                 );
               },
             ),
@@ -236,7 +236,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
               Navigator.pop(context);
               SnackbarHelper.showTopMessage(
                 context,
-                'Request submitted for review.',
+                'Request submitted.',
               );
             },
             child: Text(
