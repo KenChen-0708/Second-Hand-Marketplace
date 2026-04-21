@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/state.dart';
 import '../../models/models.dart';
+import '../../services/chat/chat_service.dart';
 
 class AdminOrderManagementPage extends StatefulWidget {
   const AdminOrderManagementPage({super.key});
@@ -83,9 +84,9 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
       builder: (context, orderState, child) {
         final activeOrders = orderState.items
             .where((o) =>
-                o.status.toLowerCase() == 'pending' ||
-                o.status.toLowerCase() == 'paid' ||
-                o.status.toLowerCase() == 'disputed')
+        o.status.toLowerCase() == 'pending' ||
+            o.status.toLowerCase() == 'paid' ||
+            o.status.toLowerCase() == 'disputed')
             .toList();
         return _buildOrderList(activeOrders, orderState);
       },
@@ -96,7 +97,7 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
     return Consumer2<DisputeState, OrderState>(
       builder: (context, disputeState, orderState, child) {
         final openDisputes =
-            disputeState.items.where((d) => d.status == 'open').toList();
+        disputeState.items.where((d) => d.status == 'open').toList();
 
         if (disputeState.isLoading) {
           return const Center(child: CircularProgressIndicator());
@@ -168,6 +169,13 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        if (order != null)
+                          TextButton.icon(
+                            onPressed: () => _viewChatHistory(order),
+                            icon: const Icon(Icons.chat_outlined),
+                            label: const Text('View Chat History'),
+                          ),
+                        const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: () => _showResolveDialog(dispute),
                           child: const Text('Resolve Dispute'),
@@ -189,9 +197,9 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
       builder: (context, orderState, child) {
         final historyOrders = orderState.items
             .where((o) =>
-                o.status.toLowerCase() == 'handed over' ||
-                o.status.toLowerCase() == 'cancelled' ||
-                o.status.toLowerCase() == 'completed')
+        o.status.toLowerCase() == 'handed over' ||
+            o.status.toLowerCase() == 'cancelled' ||
+            o.status.toLowerCase() == 'completed')
             .toList();
         return _buildOrderList(historyOrders, orderState);
       },
@@ -389,11 +397,11 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
       BuildContext context) async {
     try {
       await context.read<DisputeState>().resolveDispute(
-            disputeId: dispute.id,
-            orderId: dispute.orderId,
-            resolutionStatus: status,
-            resolutionNotes: notes,
-          );
+        disputeId: dispute.id,
+        orderId: dispute.orderId,
+        resolutionStatus: status,
+        resolutionNotes: notes,
+      );
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -409,5 +417,99 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
         );
       }
     }
+  }
+
+  void _viewChatHistory(OrderModel order) {
+    final productId = order.primaryProductId;
+    final buyerId = order.buyerId;
+    final sellerId = order.primarySellerId;
+
+    if (productId == null || sellerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not identify chat details.')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.chat_bubble_outline),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Chat Monitoring')),
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          height: 600,
+          child: FutureBuilder<List<ChatMessageModel>>(
+            future: ChatService().fetchDisputeChatHistory(
+              productId: productId,
+              buyerId: buyerId,
+              sellerId: sellerId,
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              final messages = snapshot.data ?? [];
+              if (messages.isEmpty) {
+                return const Center(child: Text('No messages found for this transaction.'));
+              }
+
+              return ListView.builder(
+                itemCount: messages.length,
+                itemBuilder: (context, index) {
+                  final msg = messages[index];
+                  final isBuyer = msg.senderId == buyerId;
+
+                  return Align(
+                    alignment: isBuyer ? Alignment.centerLeft : Alignment.centerRight,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isBuyer ? Colors.blue.shade50 : Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isBuyer ? Colors.blue.shade100 : Colors.green.shade100),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: isBuyer ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            isBuyer ? 'Buyer' : 'Seller',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isBuyer ? Colors.blue : Colors.green,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(msg.messageText),
+                          const SizedBox(height: 4),
+                          Text(
+                            msg.createdAt?.toLocal().toString().substring(0, 16) ?? '',
+                            style: const TextStyle(fontSize: 9, color: Colors.black38),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 }
