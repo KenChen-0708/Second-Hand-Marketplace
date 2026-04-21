@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../state/state.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../models/models.dart';
+import '../../services/order/order_service.dart';
 import '../../services/seller/seller_service.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -16,7 +17,8 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   SellerStats? _sellerStats;
-  bool _isLoadingStats = false;
+  int _orderHistoryActionCount = 0;
+  int _myListingsActionCount = 0;
 
   @override
   void initState() {
@@ -28,18 +30,28 @@ class _ProfilePageState extends State<ProfilePage> {
     final user = context.read<UserState>().currentUser;
     if (user == null) return;
 
-    setState(() => _isLoadingStats = true);
     try {
       final sellerService = SellerService();
-      final stats = await sellerService.getSellerStats(user.id);
+      final orderService = OrderService();
+      final statsFuture = sellerService.getSellerStats(user.id);
+      final buyerOrdersFuture = orderService.getBuyerOrders(user.id);
+      final sellerOrdersFuture = orderService.getSellerOrders(user.id);
+      final stats = await statsFuture;
+      final buyerOrders = await buyerOrdersFuture;
+      final sellerOrders = await sellerOrdersFuture;
       if (mounted) {
         setState(() {
           _sellerStats = stats;
-          _isLoadingStats = false;
+          _orderHistoryActionCount = buyerOrders
+              .where(_buyerOrderNeedsAction)
+              .length;
+          _myListingsActionCount = sellerOrders
+              .where(_sellerOrderNeedsAction)
+              .length;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoadingStats = false);
+      // Keep the profile usable even if seller/order counters fail.
     }
   }
 
@@ -53,10 +65,15 @@ class _ProfilePageState extends State<ProfilePage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final unreadNotifications = context.watch<AppNotificationState>().unreadCount;
+    final unreadNotifications = context
+        .watch<AppNotificationState>()
+        .unreadCount;
     final unreadChats = context.watch<ChatConversationState>().unreadCount;
 
-    final avatarUrl = ImageHelper.resolveProfileImageUrl(user.avatarUrl, name: user.name);
+    final avatarUrl = ImageHelper.resolveProfileImageUrl(
+      user.avatarUrl,
+      name: user.name,
+    );
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -69,14 +86,14 @@ class _ProfilePageState extends State<ProfilePage> {
             context,
             icon: Icons.shopping_cart_outlined,
             onTap: () => context.push('/cart'),
-            badgeCount: context.watch<CartState>().totalQuantity, 
+            badgeCount: context.watch<CartState>().totalQuantity,
           ),
           const SizedBox(width: 12),
           _buildActionIcon(
             context,
             icon: Icons.chat_bubble_outline_rounded,
             onTap: () => context.push('/messages'),
-            badgeCount: unreadChats, 
+            badgeCount: unreadChats,
           ),
           const SizedBox(width: 16),
         ],
@@ -88,7 +105,7 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Column(
             children: [
               const SizedBox(height: 24),
-        
+
               Center(
                 child: Column(
                   children: [
@@ -103,9 +120,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 16),
                     Text(
                       user.name,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -116,7 +132,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Seller Stats Row
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -125,7 +141,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         children: [
                           _buildStatItem(
                             context,
-                            _sellerStats?.averageRating.toStringAsFixed(1) ?? '0.0',
+                            _sellerStats?.averageRating.toStringAsFixed(1) ??
+                                '0.0',
                             'Rating',
                             icon: Icons.star_rounded,
                           ),
@@ -142,7 +159,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ],
                       ),
                     ),
-                    
+
                     const SizedBox(height: 24),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -166,7 +183,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
               const SizedBox(height: 32),
-        
+
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 24),
                 decoration: BoxDecoration(
@@ -185,9 +202,41 @@ class _ProfilePageState extends State<ProfilePage> {
                   children: [
                     _buildMenuItem(
                       context,
-                      icon: Icons.person_outline_rounded,
-                      title: 'Edit Profile',
-                      onTap: () => context.push('/profile/edit'),
+                      icon: Icons.shopping_bag_outlined,
+                      title: 'Order History',
+                      onTap: () async {
+                        await context.push('/profile/orders');
+                        if (mounted) {
+                          await _loadSellerStats();
+                        }
+                      },
+                      badgeCount: _orderHistoryActionCount,
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.list_alt_rounded,
+                      title: 'My Listings',
+                      onTap: () async {
+                        await context.push('/profile/listings');
+                        if (mounted) {
+                          await _loadSellerStats();
+                        }
+                      },
+                      badgeCount: _myListingsActionCount,
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.bar_chart_rounded,
+                      title: 'Seller Dashboard',
+                      onTap: () async {
+                        await context.push('/profile/dashboard');
+                        if (mounted) {
+                          await _loadSellerStats();
+                        }
+                      },
+                      badgeCount: _myListingsActionCount,
                     ),
                     const Divider(height: 1),
                     _buildMenuItem(
@@ -207,36 +256,15 @@ class _ProfilePageState extends State<ProfilePage> {
                     const Divider(height: 1),
                     _buildMenuItem(
                       context,
-                      icon: Icons.shopping_bag_outlined,
-                      title: 'Order History',
-                      onTap: () => context.push('/profile/orders'),
-                    ),
-                    const Divider(height: 1),
-                    _buildMenuItem(
-                      context,
                       icon: Icons.settings_outlined,
                       title: 'Settings',
                       onTap: () => context.push('/profile/settings'),
-                    ),
-                    const Divider(height: 1),
-                    _buildMenuItem(
-                      context,
-                      icon: Icons.list_alt_rounded,
-                      title: 'My Listings',
-                      onTap: () => context.push('/profile/listings'),
-                    ),
-                    const Divider(height: 1),
-                    _buildMenuItem(
-                      context,
-                      icon: Icons.bar_chart_rounded,
-                      title: 'Seller Dashboard',
-                      onTap: () => context.push('/profile/dashboard'),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 32),
-        
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Material(
@@ -246,7 +274,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     onTap: () async {
                       await userState.logout();
                       if (context.mounted) {
-                        context.go('/'); 
+                        context.go('/');
                       }
                     },
                     borderRadius: BorderRadius.circular(20),
@@ -315,12 +343,12 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         const SizedBox(height: 4),
         Text(
-          label, 
+          label,
           style: TextStyle(
-            color: cs.onSurface.withValues(alpha: 0.5), 
+            color: cs.onSurface.withValues(alpha: 0.5),
             fontSize: 12,
             fontWeight: FontWeight.w500,
-          )
+          ),
         ),
       ],
     );
@@ -421,5 +449,15 @@ class _ProfilePageState extends State<ProfilePage> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       onTap: onTap,
     );
+  }
+
+  static bool _buyerOrderNeedsAction(OrderModel order) {
+    final status = order.status.toLowerCase();
+    return status == 'paid' || status == 'pending_handover';
+  }
+
+  static bool _sellerOrderNeedsAction(OrderModel order) {
+    final status = order.status.toLowerCase();
+    return status == 'paid' || status == 'pending_handover';
   }
 }

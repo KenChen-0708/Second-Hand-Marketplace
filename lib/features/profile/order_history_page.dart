@@ -15,9 +15,10 @@ class OrderHistoryPage extends StatefulWidget {
 
 class _OrderHistoryPageState extends State<OrderHistoryPage> {
   final TextEditingController _searchController = TextEditingController();
-  String _selectedStatus = 'paid';
+  String _selectedStatus = 'all';
 
   final List<String> _statusFilters = [
+    'all',
     'paid',
     'pending_handover',
     'completed',
@@ -55,17 +56,21 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       if (!order.isBuyer(currentUserId)) return false;
 
       // Status Filter
-      final status = order.status.toLowerCase();
-      if (status != _selectedStatus) return false;
+      if (_selectedStatus != 'all') {
+        final status = order.status.toLowerCase();
+        if (status != _selectedStatus) return false;
+      }
 
       // Search Filter
       final query = _searchController.text.toLowerCase();
-      final matchesSearch = query.isEmpty ||
+      final matchesSearch =
+          query.isEmpty ||
           order.orderNumber.toLowerCase().contains(query) ||
           (order.primarySellerName?.toLowerCase().contains(query) ?? false) ||
           (order.handoverLocation?.toLowerCase().contains(query) ?? false) ||
           order.orderItems.any(
-            (item) => item.product?.title.toLowerCase().contains(query) ?? false,
+            (item) =>
+                item.product?.title.toLowerCase().contains(query) ?? false,
           );
 
       return matchesSearch;
@@ -99,17 +104,17 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             child: orderState.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : filteredOrders.isEmpty
-                    ? _buildEmptyState(context)
-                    : RefreshIndicator(
-                        onRefresh: _refreshOrders,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                          itemCount: filteredOrders.length,
-                          itemBuilder: (context, index) {
-                            return _buildOrderCard(context, filteredOrders[index]);
-                          },
-                        ),
-                      ),
+                ? _buildEmptyState(context)
+                : RefreshIndicator(
+                    onRefresh: _refreshOrders,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      itemCount: filteredOrders.length,
+                      itemBuilder: (context, index) {
+                        return _buildOrderCard(context, filteredOrders[index]);
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
@@ -167,18 +172,23 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 final filter = _statusFilters[index];
                 final isSelected = _selectedStatus == filter;
                 final label = filter
+                    .replaceAll('paid', 'pending')
                     .replaceAll('_', ' ')
                     .split(' ')
-                    .map((word) => word.isEmpty
-                        ? word
-                        : '${word[0].toUpperCase()}${word.substring(1)}')
+                    .map(
+                      (word) => word.isEmpty
+                          ? word
+                          : '${word[0].toUpperCase()}${word.substring(1)}',
+                    )
                     .join(' ');
                 return ChoiceChip(
                   label: Text(
                     label,
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                       color: isSelected ? Colors.white : Colors.black87,
                     ),
                   ),
@@ -192,7 +202,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   backgroundColor: Colors.grey[200],
                   checkmarkColor: Colors.white,
                   showCheckmark: false,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 0,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                     side: BorderSide.none,
@@ -207,7 +220,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -217,7 +231,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               color: Colors.grey[100],
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[400]),
+            child: Icon(
+              Icons.receipt_long_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -231,13 +249,24 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             style: TextStyle(color: Colors.grey[600], fontSize: 14),
           ),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () => context.go('/home'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => context.go('/home'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Start Shopping'),
+              ),
             ),
-            child: const Text('Start Shopping'),
           ),
         ],
       ),
@@ -249,7 +278,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     final firstProduct = order.orderItems.isNotEmpty
         ? order.orderItems.first.product
         : null;
-    
+
     final otherPartyName = order.primarySellerName ?? 'Unknown Seller';
     final statusInfo = _getStatusDisplayInfo(order.status);
 
@@ -285,7 +314,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.indigo[50],
                           borderRadius: BorderRadius.circular(6),
@@ -308,7 +340,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       Flexible(
                         child: Text(
                           otherPartyName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -316,7 +351,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       const Spacer(),
                       Text(
                         '#${order.orderNumber}',
-                        style: TextStyle(color: Colors.grey[400], fontSize: 10, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
@@ -358,7 +397,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             if (order.orderItems.length > 1)
                               Text(
                                 '+ ${order.orderItems.length - 1} more items',
-                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
                               ),
                             const SizedBox(height: 8),
                             _buildStatusBadge(statusInfo),
@@ -379,14 +421,20 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            order.createdAt != null ? dateFormat.format(order.createdAt!) : '',
-                            style: TextStyle(color: Colors.grey[400], fontSize: 10),
+                            order.createdAt != null
+                                ? dateFormat.format(order.createdAt!)
+                                : '',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 10,
+                            ),
                           ),
                         ],
                       ),
                     ],
                   ),
-                  if (order.handoverLocation != null || order.handoverDate != null) ...[
+                  if (order.handoverLocation != null ||
+                      order.handoverDate != null) ...[
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -396,7 +444,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.location_on_rounded, size: 16, color: Colors.blue[700]),
+                          Icon(
+                            Icons.location_on_rounded,
+                            size: 16,
+                            color: Colors.blue[700],
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -431,7 +483,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         color: Colors.grey[100],
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[400], size: 24),
+      child: Icon(
+        Icons.image_not_supported_outlined,
+        color: Colors.grey[400],
+        size: 24,
+      ),
     );
   }
 

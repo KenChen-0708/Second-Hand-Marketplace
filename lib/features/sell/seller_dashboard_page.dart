@@ -69,7 +69,9 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
         _sellerProfile = results[1] as SellerProfileModel?;
         _needsAction = results[2] as List<SellerNeedAction>;
         _ordersSummary = results[3] as Map<String, List<OrderModel>>;
-        _listings = results[4] as List<ProductModel>;
+        _listings = (results[4] as List<ProductModel>)
+            .where((product) => product.status.toLowerCase() != 'draft')
+            .toList();
         _recentConversations = results[5] as List<ChatConversationBundle>;
         _isLoading = false;
       });
@@ -91,44 +93,44 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _buildErrorState(context)
-              : RefreshIndicator(
-                  onRefresh: _loadDashboardData,
-                  child: CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      SliverToBoxAdapter(child: _buildHeader(context)),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-                        sliver: SliverList.list(
-                          children: [
-                            _buildSummaryCards(context),
-                            const SizedBox(height: 24),
-                            if (_needsAction.isNotEmpty) ...[
-                              _buildSectionTitle(
-                                'Needs Action',
-                                actionLabel: '${_needsAction.length}',
-                                attention: true,
-                              ),
-                              const SizedBox(height: 12),
-                              ..._needsAction.take(4).map(_buildActionCard),
-                              const SizedBox(height: 24),
-                            ],
-                            _buildUpcomingHandovers(context),
-                            const SizedBox(height: 24),
-                            _buildRecentOrders(context),
-                            const SizedBox(height: 24),
-                            _buildListingsOverview(context),
-                            const SizedBox(height: 24),
-                            _buildPerformance(context),
-                            const SizedBox(height: 24),
-                            _buildRecentChats(context),
-                          ],
-                        ),
-                      ),
-                    ],
+          ? _buildErrorState(context)
+          : RefreshIndicator(
+              onRefresh: _loadDashboardData,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(child: _buildHeader(context)),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+                    sliver: SliverList.list(
+                      children: [
+                        _buildSummaryCards(context),
+                        const SizedBox(height: 24),
+                        if (_needsAction.isNotEmpty) ...[
+                          _buildSectionTitle(
+                            'Needs Action',
+                            actionLabel: '${_needsAction.length}',
+                            attention: true,
+                          ),
+                          const SizedBox(height: 12),
+                          ..._needsAction.take(4).map(_buildActionCard),
+                          const SizedBox(height: 24),
+                        ],
+                        _buildUpcomingHandovers(context),
+                        const SizedBox(height: 24),
+                        _buildRecentOrders(context),
+                        const SizedBox(height: 24),
+                        _buildListingsOverview(context),
+                        const SizedBox(height: 24),
+                        _buildPerformance(context),
+                        const SizedBox(height: 24),
+                        _buildRecentChats(context),
+                      ],
+                    ),
                   ),
-                ),
+                ],
+              ),
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/sell'),
         backgroundColor: colors.primary,
@@ -146,7 +148,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, size: 44, color: Colors.redAccent),
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 44,
+              color: Colors.redAccent,
+            ),
             const SizedBox(height: 14),
             Text(
               _error!,
@@ -215,14 +221,22 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                   runSpacing: 8,
                   children: [
                     _statusChip(
-                      profile?.isVerified == true ? 'Verified Seller' : 'Seller',
+                      profile?.isVerified == true
+                          ? 'Verified Seller'
+                          : 'Seller',
                       profile?.isVerified == true
                           ? Icons.verified_user_rounded
                           : Icons.storefront_rounded,
-                      profile?.isVerified == true ? const Color(0xFF10B981) : colors.primary,
+                      profile?.isVerified == true
+                          ? const Color(0xFF10B981)
+                          : colors.primary,
                     ),
                     if (joined != null)
-                      _statusChip('Joined $joined', Icons.calendar_month_rounded, Colors.blueGrey),
+                      _statusChip(
+                        'Joined $joined',
+                        Icons.calendar_month_rounded,
+                        Colors.blueGrey,
+                      ),
                   ],
                 ),
               ],
@@ -249,7 +263,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),
@@ -270,11 +288,38 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 620;
         final cards = [
-          _DashboardMetric('Active Listings', '${stats?.activeListings ?? _activeListings.length}', Icons.inventory_2_outlined, Colors.blue),
-          _DashboardMetric('Items Sold', '${stats?.itemsSold ?? 0}', Icons.shopping_bag_outlined, const Color(0xFF10B981)),
-          _DashboardMetric('Awaiting Action', '$awaiting', Icons.notification_important_outlined, Colors.orange, highlight: awaiting > 0),
-          _DashboardMetric('Total Earnings', CurrencyHelper.formatRM(stats?.totalEarnings ?? 0), Icons.account_balance_wallet_outlined, Colors.purple),
-          _DashboardMetric('Unread Chats', '$unreadChats', Icons.chat_bubble_outline_rounded, Colors.teal, highlight: unreadChats > 0),
+          _DashboardMetric(
+            'Active Listings',
+            '${stats?.activeListings ?? _activeListings.length}',
+            Icons.inventory_2_outlined,
+            Colors.blue,
+          ),
+          _DashboardMetric(
+            'Items Sold',
+            '${stats?.itemsSold ?? 0}',
+            Icons.shopping_bag_outlined,
+            const Color(0xFF10B981),
+          ),
+          _DashboardMetric(
+            'Awaiting Action',
+            '$awaiting',
+            Icons.notification_important_outlined,
+            Colors.orange,
+            highlight: awaiting > 0,
+          ),
+          _DashboardMetric(
+            'Total Earnings',
+            CurrencyHelper.formatRM(stats?.totalEarnings ?? 0),
+            Icons.account_balance_wallet_outlined,
+            Colors.purple,
+          ),
+          _DashboardMetric(
+            'Unread Chats',
+            '$unreadChats',
+            Icons.chat_bubble_outline_rounded,
+            Colors.teal,
+            highlight: unreadChats > 0,
+          ),
         ];
 
         if (isWide) {
@@ -282,7 +327,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
             spacing: 12,
             runSpacing: 12,
             children: cards
-                .map((metric) => SizedBox(width: (constraints.maxWidth - 24) / 3, child: _metricCard(metric)))
+                .map(
+                  (metric) => SizedBox(
+                    width: (constraints.maxWidth - 24) / 3,
+                    child: _metricCard(metric),
+                  ),
+                )
                 .toList(),
           );
         }
@@ -291,7 +341,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
           spacing: 12,
           runSpacing: 12,
           children: cards
-              .map((metric) => SizedBox(width: (constraints.maxWidth - 12) / 2, child: _metricCard(metric)))
+              .map(
+                (metric) => SizedBox(
+                  width: (constraints.maxWidth - 12) / 2,
+                  child: _metricCard(metric),
+                ),
+              )
               .toList(),
         );
       },
@@ -367,7 +422,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               Flexible(
                 child: Text(
                   title,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
               if (attention) ...[
@@ -375,7 +433,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ],
             ],
@@ -384,7 +445,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
         if (actionLabel != null)
           TextButton(
             onPressed: onAction,
-            child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
+            child: Text(
+              actionLabel,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
           ),
       ],
     );
@@ -393,63 +457,86 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
   Widget _buildActionCard(SellerNeedAction action) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.bolt_rounded, color: Colors.orange),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openAction(action),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
               children: [
-                Text(action.title, style: const TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 3),
-                Text(
-                  action.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12, height: 1.25),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.bolt_rounded, color: Colors.orange),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        action.title,
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        action.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    action.ctaLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          FilledButton(
-            onPressed: () => _openAction(action),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(action.ctaLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildUpcomingHandovers(BuildContext context) {
-    final handovers = [...(_ordersSummary['ready_for_handover'] ?? const <OrderModel>[])]
-      ..sort((a, b) {
-        final aTime = a.handoverDate ?? DateTime(9999);
-        final bTime = b.handoverDate ?? DateTime(9999);
-        return aTime.compareTo(bTime);
-      });
+    final handovers =
+        [...(_ordersSummary['ready_for_handover'] ?? const <OrderModel>[])]
+          ..sort((a, b) {
+            final aTime = a.handoverDate ?? DateTime(9999);
+            final bTime = b.handoverDate ?? DateTime(9999);
+            return aTime.compareTo(bTime);
+          });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,16 +572,27 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                   color: Colors.indigo.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.handshake_outlined, color: Colors.indigo),
+                child: const Icon(
+                  Icons.handshake_outlined,
+                  color: Colors.indigo,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(productTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text(
+                      productTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
                     const SizedBox(height: 3),
-                    Text('Buyer: ${order.buyer?.name ?? 'Unknown'}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                    Text(
+                      'Buyer: ${order.buyer?.name ?? 'Unknown'}',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -502,7 +600,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(date, style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.w900, fontSize: 12)),
+                  Text(
+                    date,
+                    style: const TextStyle(
+                      color: Colors.indigo,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
+                  ),
                   const SizedBox(height: 3),
                   SizedBox(
                     width: 96,
@@ -531,7 +636,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () => context.push('/profile/order-status', extra: order),
+                  onPressed: () async {
+                    await context.push('/profile/order-status', extra: order);
+                    if (mounted) {
+                      await _loadDashboardData();
+                    }
+                  },
                   icon: const Icon(Icons.receipt_long_rounded, size: 16),
                   label: const Text('Details'),
                 ),
@@ -545,8 +655,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
 
   Widget _buildRecentOrders(BuildContext context) {
     final tabs = [
-      ('Pending', _ordersSummary['awaiting_confirmation'] ?? const <OrderModel>[]),
-      ('Handover', _ordersSummary['ready_for_handover'] ?? const <OrderModel>[]),
+      (
+        'Pending',
+        _ordersSummary['awaiting_confirmation'] ?? const <OrderModel>[],
+      ),
+      (
+        'Handover',
+        _ordersSummary['ready_for_handover'] ?? const <OrderModel>[],
+      ),
       ('Completed', _ordersSummary['completed'] ?? const <OrderModel>[]),
       ('Closed', _ordersSummary['cancelled'] ?? const <OrderModel>[]),
     ];
@@ -554,7 +670,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Recent Orders', actionLabel: 'View All', onAction: () => context.push('/profile/orders')),
+        _buildSectionTitle(
+          'Recent Orders',
+          actionLabel: 'View All',
+          onAction: () => context.push('/profile/orders'),
+        ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(4),
@@ -577,8 +697,13 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                   ),
                   labelColor: Theme.of(context).colorScheme.primary,
                   unselectedLabelColor: Colors.grey[600],
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                  tabs: tabs.map((tab) => Tab(text: '${tab.$1} (${tab.$2.length})')).toList(),
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                  tabs: tabs
+                      .map((tab) => Tab(text: '${tab.$1} (${tab.$2.length})'))
+                      .toList(),
                 ),
                 const SizedBox(height: 10),
                 SizedBox(
@@ -607,7 +732,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
       itemBuilder: (context, index) {
         final order = orders[index];
         return ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 2,
+          ),
           title: Text(
             _orderTitle(order),
             maxLines: 1,
@@ -622,9 +750,18 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
           ),
           trailing: Text(
             CurrencyHelper.formatRM(order.totalPrice),
-            style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF10B981), fontSize: 12),
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF10B981),
+              fontSize: 12,
+            ),
           ),
-          onTap: () => context.push('/profile/order-status', extra: order),
+          onTap: () async {
+            await context.push('/profile/order-status', extra: order);
+            if (mounted) {
+              await _loadDashboardData();
+            }
+          },
         );
       },
     );
@@ -632,14 +769,26 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
 
   Widget _buildListingsOverview(BuildContext context) {
     final active = _activeListings;
-    final sold = _listings.where((product) => product.status.toLowerCase() == 'sold').toList();
-    final drafts = _listings.where((product) => product.status.toLowerCase() == 'draft').toList();
-    final lowStock = active.where((product) => (product.stockQuantity ?? 1) <= 1).toList();
+    final sold = _listings
+        .where((product) => product.status.toLowerCase() == 'sold')
+        .toList();
+    final lowStock = active
+        .where((product) => (product.stockQuantity ?? 1) <= 1)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('My Listings', actionLabel: 'Manage All', onAction: () => context.push('/profile/listings')),
+        _buildSectionTitle(
+          'My Listings',
+          actionLabel: 'Manage All',
+          onAction: () async {
+            await context.push('/profile/listings');
+            if (mounted) {
+              await _loadDashboardData();
+            }
+          },
+        ),
         const SizedBox(height: 12),
         SizedBox(
           height: 96,
@@ -648,7 +797,6 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
             children: [
               _listingCountCard('Active', active.length, Colors.blue),
               _listingCountCard('Sold', sold.length, const Color(0xFF10B981)),
-              _listingCountCard('Drafts', drafts.length, Colors.blueGrey),
               _listingCountCard('Low Stock', lowStock.length, Colors.redAccent),
             ],
           ),
@@ -681,9 +829,20 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('$count', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color)),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 5),
-          Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+          ),
         ],
       ),
     );
@@ -691,7 +850,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
 
   Widget _productCard(ProductModel product) {
     return InkWell(
-      onTap: () => context.push('/seller-product', extra: product),
+      onTap: () async {
+        await context.push('/product/${product.id}');
+        if (mounted) {
+          await _loadDashboardData();
+        }
+      },
       borderRadius: BorderRadius.circular(16),
       child: Container(
         width: 138,
@@ -713,9 +877,24 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(product.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                  Text(
+                    product.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const SizedBox(height: 3),
-                  Text(CurrencyHelper.formatRM(product.price), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF10B981))),
+                  Text(
+                    CurrencyHelper.formatRM(product.price),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF10B981),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -729,7 +908,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     final stats = _stats;
     final completedOrders = _ordersSummary['completed'] ?? const <OrderModel>[];
     final monthlyEarnings = _monthlyEarnings(completedOrders);
-    final maxY = monthlyEarnings.fold<double>(0, (max, item) => item > max ? item : max);
+    final maxY = monthlyEarnings.fold<double>(
+      0,
+      (max, item) => item > max ? item : max,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -746,7 +928,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                   Expanded(
                     child: _performanceMetric(
                       'Average Rating',
-                      (stats?.averageRating ?? _sellerProfile?.averageRating ?? 0).toStringAsFixed(1),
+                      (stats?.averageRating ??
+                              _sellerProfile?.averageRating ??
+                              0)
+                          .toStringAsFixed(1),
                       Icons.star_rounded,
                       Colors.amber[700]!,
                     ),
@@ -766,10 +951,21 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Last 6 Months', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const Text(
+                    'Last 6 Months',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
                   Text(
-                    CurrencyHelper.formatRM(monthlyEarnings.fold<double>(0, (sum, value) => sum + value)),
-                    style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w900),
+                    CurrencyHelper.formatRM(
+                      monthlyEarnings.fold<double>(
+                        0,
+                        (sum, value) => sum + value,
+                      ),
+                    ),
+                    style: const TextStyle(
+                      color: Color(0xFF10B981),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -787,7 +983,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                       LineChartBarData(
                         spots: List.generate(
                           monthlyEarnings.length,
-                          (index) => FlSpot(index.toDouble(), monthlyEarnings[index]),
+                          (index) =>
+                              FlSpot(index.toDouble(), monthlyEarnings[index]),
                         ),
                         isCurved: true,
                         color: Theme.of(context).colorScheme.primary,
@@ -796,7 +993,9 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                         dotData: const FlDotData(show: false),
                         belowBarData: BarAreaData(
                           show: true,
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.1),
                         ),
                       ),
                     ],
@@ -810,7 +1009,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     );
   }
 
-  Widget _performanceMetric(String label, String value, IconData icon, Color color) {
+  Widget _performanceMetric(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -825,8 +1029,23 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[700], fontSize: 11, fontWeight: FontWeight.w800)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                  ),
+                ),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
           ),
@@ -844,7 +1063,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Recent Buyer Chats', actionLabel: 'Inbox', onAction: () => context.push('/messages')),
+        _buildSectionTitle(
+          'Recent Buyer Chats',
+          actionLabel: 'Inbox',
+          onAction: () => context.push('/messages'),
+        ),
         const SizedBox(height: 12),
         if (conversations.isEmpty)
           _emptyPanel('No buyer chats yet', Icons.chat_bubble_outline_rounded)
@@ -885,7 +1108,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               ),
           ],
         ),
-        title: Text(bundle.otherUser.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+        title: Text(
+          bundle.otherUser.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
         subtitle: Text(
           'Re: ${bundle.product.title}${_relativeTime(bundle.lastMessage?.createdAt).isEmpty ? '' : ' - ${_relativeTime(bundle.lastMessage?.createdAt)}'}',
           maxLines: 1,
@@ -910,7 +1138,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w800),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
@@ -932,13 +1163,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     );
   }
 
-  List<ProductModel> get _activeListings =>
-      _listings.where((product) => product.status.toLowerCase() == 'active').toList();
+  List<ProductModel> get _activeListings => _listings
+      .where((product) => product.status.toLowerCase() == 'active')
+      .toList();
 
   List<OrderModel> get _awaitingActionOrders {
     final awaiting = <OrderModel>[
       ...(_ordersSummary['awaiting_confirmation'] ?? const <OrderModel>[]),
-      ...(_ordersSummary['ready_for_handover'] ?? const <OrderModel>[]).where((order) => order.handoverDate == null),
+      ...(_ordersSummary['ready_for_handover'] ?? const <OrderModel>[]),
     ];
     return awaiting;
   }
@@ -951,10 +1183,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     });
 
     return months.map((month) {
-      return completedOrders.where((order) {
-        final date = order.updatedAt ?? order.createdAt;
-        return date != null && date.year == month.year && date.month == month.month;
-      }).fold<double>(0, (sum, order) => sum + order.totalPrice);
+      return completedOrders
+          .where((order) {
+            final date = order.updatedAt ?? order.createdAt;
+            return date != null &&
+                date.year == month.year &&
+                date.month == month.month;
+          })
+          .fold<double>(0, (sum, order) => sum + order.totalPrice);
     }).toList();
   }
 
@@ -966,10 +1202,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
   }
 
   String _statusLabel(String status) {
-    return status.replaceAll('_', ' ').split(' ').map((part) {
-      if (part.isEmpty) return part;
-      return '${part[0].toUpperCase()}${part.substring(1)}';
-    }).join(' ');
+    return status
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((part) {
+          if (part.isEmpty) return part;
+          return '${part[0].toUpperCase()}${part.substring(1)}';
+        })
+        .join(' ');
   }
 
   String _relativeTime(DateTime? date) {
@@ -982,13 +1222,19 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     return DateFormat('MMM dd').format(date);
   }
 
-  void _openAction(SellerNeedAction action) {
+  Future<void> _openAction(SellerNeedAction action) async {
     final order = _findOrder(action.relatedId);
     if (order != null) {
-      context.push('/profile/order-status', extra: order);
+      await context.push('/profile/order-status', extra: order);
+      if (mounted) {
+        await _loadDashboardData();
+      }
       return;
     }
-    context.push('/profile/orders');
+    await context.push('/profile/orders');
+    if (mounted) {
+      await _loadDashboardData();
+    }
   }
 
   OrderModel? _findOrder(String? orderId) {
@@ -1018,9 +1264,9 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to open chat: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to open chat: $e')));
     }
   }
 }

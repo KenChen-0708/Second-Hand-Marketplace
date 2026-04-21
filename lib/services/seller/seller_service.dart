@@ -186,16 +186,34 @@ class SellerService {
       final pendingOrders = await _supabase
           .from('orders')
           .select('id, order_number, order_items!inner(product_id, products!inner(title, seller_id))')
-          .eq('status', 'pending')
+          .eq('status', 'paid')
           .eq('order_items.products.seller_id', userId);
 
       for (var order in pendingOrders) {
         final productName = order['order_items'][0]['products']['title'];
         actions.add(SellerNeedAction(
-          title: 'Order Confirmation Needed',
-          description: 'A buyer wants to purchase "$productName".',
-          ctaLabel: 'Confirm Order',
+          title: 'Handover Confirmation Needed',
+          description: 'A buyer paid for "$productName". Confirm the order to proceed.',
+          ctaLabel: 'Open Order',
           actionType: 'confirm_order',
+          relatedId: order['id'],
+        ));
+      }
+
+      final unscheduledHandovers = await _supabase
+          .from('orders')
+          .select('id, order_number, order_items!inner(product_id, products!inner(title, seller_id))')
+          .eq('status', 'pending_handover')
+          .isFilter('handover_date', null)
+          .eq('order_items.products.seller_id', userId);
+
+      for (var order in unscheduledHandovers) {
+        final productName = order['order_items'][0]['products']['title'];
+        actions.add(SellerNeedAction(
+          title: 'Schedule Handover',
+          description: 'Choose a handover date and time for "$productName".',
+          ctaLabel: 'Schedule',
+          actionType: 'schedule_handover',
           relatedId: order['id'],
         ));
       }
@@ -241,7 +259,7 @@ class SellerService {
           .toList();
 
       return {
-        'awaiting_confirmation': orders.where((o) => o.status.toLowerCase() == 'pending').toList(),
+        'awaiting_confirmation': orders.where((o) => o.status.toLowerCase() == 'paid').toList(),
         'ready_for_handover': orders.where((o) => o.status.toLowerCase() == 'pending_handover').toList(),
         'completed': orders.where((o) => o.status.toLowerCase() == 'completed').toList(),
         'cancelled': orders.where((o) => o.status.toLowerCase() == 'cancelled' || o.status.toLowerCase() == 'disputed').toList(),
@@ -263,6 +281,7 @@ class SellerService {
           .from('products')
           .select()
           .eq('seller_id', userId)
+          .neq('status', 'draft')
           .order('created_at', ascending: false);
 
       return (response as List)
