@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../services/chat/chat_service.dart';
+import '../../services/review/review_service.dart';
 
 class OrderStatusPage extends StatefulWidget {
   final Object? order;
@@ -17,6 +18,7 @@ class OrderStatusPage extends StatefulWidget {
 
 class _OrderStatusPageState extends State<OrderStatusPage> {
   OrderModel? _currentOrder;
+  ReviewModel? _existingReview;
   bool _isReloading = false;
 
   @override
@@ -24,6 +26,23 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     super.initState();
     if (widget.order is OrderModel) {
       _currentOrder = widget.order as OrderModel;
+      _checkExistingReview();
+    }
+  }
+
+  Future<void> _checkExistingReview() async {
+    final order = _currentOrder;
+    final userState = context.read<UserState>();
+    final currentUserId = userState.currentUser?.id;
+
+    if (order != null && currentUserId != null && order.status.toLowerCase() == 'completed') {
+      final reviewService = ReviewService();
+      final review = await reviewService.fetchReviewForOrder(order.id, currentUserId);
+      if (mounted) {
+        setState(() {
+          _existingReview = review;
+        });
+      }
     }
   }
 
@@ -146,6 +165,7 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       }
       _isReloading = false;
     });
+    await _checkExistingReview();
   }
 
   Future<void> _reloadAfterAction(String successMessage) async {
@@ -271,7 +291,10 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
             const SizedBox(height: 12),
           ],
           if (status == 'completed' && isBuyer) ...[
-            _buildPrimaryAction('Leave Review', Icons.star_rounded, Colors.amber[700]!, () {}),
+            if (_existingReview == null)
+              _buildPrimaryAction('Leave Review', Icons.star_rounded, Colors.amber[700]!, () => _navigateToReview(context, order))
+            else
+              _buildDisabledAction('Review Submitted', Icons.star_rounded),
             const SizedBox(height: 12),
           ],
           Row(
@@ -281,7 +304,7 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
               if (status != 'completed' && status != 'cancelled')
                 Expanded(child: _buildSecondaryAction('Cancel', Icons.cancel_rounded, Colors.grey[700]!, () => _showCancelConfirmation(context, order), isDestructive: true))
               else
-                Expanded(child: _buildSecondaryAction('Profile', Icons.person_rounded, Colors.blue, () {})),
+                Expanded(child: _buildSecondaryAction('Profile', Icons.person_rounded, Colors.blue, () => _navigateToProfile(context, order, isBuyer))),
             ],
           ),
         ],
@@ -298,6 +321,21 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
         minimumSize: const Size(double.infinity, 56),
         backgroundColor: color,
         foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+      ),
+    );
+  }
+
+  Widget _buildDisabledAction(String label, IconData icon) {
+    return ElevatedButton.icon(
+      onPressed: null,
+      icon: Icon(icon, size: 20),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      style: ElevatedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 56),
+        backgroundColor: Colors.grey[300],
+        foregroundColor: Colors.grey[600],
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
       ),
@@ -509,6 +547,25 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error opening chat: $e')));
       }
+    }
+  }
+
+  void _navigateToReview(BuildContext context, OrderModel order) async {
+    if (order.orderItems.isEmpty) return;
+    final item = order.orderItems.first;
+    await context.push('/profile/seller-review', extra: {
+      'product': item.product,
+      'orderId': order.id,
+    });
+    if (mounted) {
+      _checkExistingReview();
+    }
+  }
+
+  void _navigateToProfile(BuildContext context, OrderModel order, bool isBuyer) {
+    final otherUserId = isBuyer ? order.primarySellerId : order.buyerId;
+    if (otherUserId != null) {
+      context.push('/seller/$otherUserId');
     }
   }
 
