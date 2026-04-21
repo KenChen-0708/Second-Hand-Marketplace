@@ -164,6 +164,7 @@ class _SellWizardState extends State<_SellWizard> {
   String? _selectedCondition;
   final _priceController = TextEditingController();
   final List<_VariationGroup> _variations = [];
+  final List<_VariantCombination> _variantCombinations = [];
 
   bool _faceToFace = false;
   bool _delivery = false;
@@ -241,22 +242,25 @@ class _SellWizardState extends State<_SellWizard> {
     for (final variation in _variations) {
       variation.dispose();
     }
+    for (final combination in _variantCombinations) {
+      combination.dispose();
+    }
     super.dispose();
   }
 
   void _addVariant() {
     setState(() {
-      _variations.add(_VariationGroup());
-      _addOption(_variations.length - 1);
+      final group = _VariationGroup();
+      group.options.add(_VariationOption());
+      _variations.add(group);
+      _rebuildVariantCombinations();
     });
   }
 
   void _addOption(int groupIndex) {
-    double? initialPrice = double.tryParse(_priceController.text.trim());
     setState(() {
-      _variations[groupIndex].options.add(
-        _VariationOption(initialPrice: initialPrice),
-      );
+      _variations[groupIndex].options.add(_VariationOption());
+      _rebuildVariantCombinations();
     });
   }
 
@@ -264,7 +268,137 @@ class _SellWizardState extends State<_SellWizard> {
     setState(() {
       _variations[index].dispose();
       _variations.removeAt(index);
+      _rebuildVariantCombinations();
     });
+  }
+
+  void _onVariantDimensionsChanged() {
+    setState(_rebuildVariantCombinations);
+  }
+
+  String _normalizeCombinationPart(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  String _combinationKey(Map<String, String> attributes) {
+    final entries =
+        attributes.entries
+            .map(
+              (entry) =>
+                  '${_normalizeCombinationPart(entry.key)}:${_normalizeCombinationPart(entry.value)}',
+            )
+            .toList()
+          ..sort();
+    return entries.join('|');
+  }
+
+  String _combinationValueKey(Map<String, String> attributes) {
+    final values = attributes.values.map(_normalizeCombinationPart).toList()
+      ..sort();
+    return values.join('|');
+  }
+
+  List<Map<String, String>> _cartesianProduct(
+    List<MapEntry<String, List<String>>> dimensions,
+  ) {
+    if (dimensions.isEmpty) return [];
+
+    List<Map<String, String>> combinations = [{}];
+    for (final dimension in dimensions) {
+      final next = <Map<String, String>>[];
+      for (final partial in combinations) {
+        for (final value in dimension.value) {
+          next.add({...partial, dimension.key: value});
+        }
+      }
+      combinations = next;
+    }
+    return combinations;
+  }
+
+  List<MapEntry<String, List<String>>> _validVariationDimensions() {
+    final dimensions = <MapEntry<String, List<String>>>[];
+    final seenGroupNames = <String>{};
+
+    for (final group in _variations) {
+      final name = group.nameController.text.trim();
+      if (name.isEmpty) return [];
+      final normalizedName = _normalizeCombinationPart(name);
+      if (seenGroupNames.contains(normalizedName)) return [];
+      seenGroupNames.add(normalizedName);
+
+      final values = <String>[];
+      final seenValues = <String>{};
+      for (final option in group.options) {
+        final value = option.valueController.text.trim();
+        if (value.isEmpty) return [];
+
+        final normalized = _normalizeCombinationPart(value);
+        if (seenValues.contains(normalized)) return [];
+        seenValues.add(normalized);
+        values.add(value);
+      }
+
+      if (values.isEmpty) return [];
+      dimensions.add(MapEntry(name, values));
+    }
+
+    return dimensions;
+  }
+
+  void _rebuildVariantCombinations() {
+    final oldByKey = {
+      for (final combination in _variantCombinations)
+        combination.key: combination,
+    };
+    final oldByValueKey = {
+      for (final combination in _variantCombinations)
+        _combinationValueKey(combination.attributes): combination,
+    };
+
+    final dimensions = _validVariationDimensions();
+    final rawCombinations = _cartesianProduct(dimensions);
+    final nextCombinations = <_VariantCombination>[];
+    final usedKeys = <String>{};
+    final defaultPrice = double.tryParse(_priceController.text.trim());
+
+    for (final attributes in rawCombinations) {
+      final key = _combinationKey(attributes);
+      usedKeys.add(key);
+      final existing =
+          oldByKey[key] ?? oldByValueKey[_combinationValueKey(attributes)];
+      if (existing != null) {
+        existing.attributes = attributes;
+        nextCombinations.add(existing);
+      } else {
+        nextCombinations.add(
+          _VariantCombination(
+            attributes: attributes,
+            initialPrice: defaultPrice,
+          ),
+        );
+      }
+    }
+
+    for (final combination in _variantCombinations) {
+      if (!usedKeys.contains(combination.key)) {
+        combination.dispose();
+      }
+    }
+
+    _variantCombinations
+      ..clear()
+      ..addAll(nextCombinations);
+  }
+
+  bool get _hasDuplicateGroupNames {
+    final names = <String>{};
+    for (final group in _variations) {
+      final name = _normalizeCombinationPart(group.nameController.text);
+      if (name.isEmpty) continue;
+      if (names.contains(name)) return true;
+      names.add(name);
+    }
+    return false;
   }
 
   void _next() {
@@ -311,7 +445,10 @@ class _SellWizardState extends State<_SellWizard> {
       (_variations.isEmpty
           ? _priceController.text.trim().isNotEmpty &&
                 (int.tryParse(_stockController.text.trim()) ?? 0) >= 1
-          : _variations.every((group) => group.isValid));
+          : _variations.every((group) => group.isValid) &&
+                !_hasDuplicateGroupNames &&
+                _variantCombinations.isNotEmpty &&
+                _variantCombinations.every((combo) => combo.isValid));
 
   bool get _canProceedStep3 =>
       (_faceToFace || _delivery) &&
@@ -545,14 +682,13 @@ class _SellWizardState extends State<_SellWizard> {
         // Calculate min price and total stock from variants
         double minPrice = double.infinity;
         int sumStock = 0;
-        for (var group in _variations) {
-          for (var opt in group.options) {
-            final p = double.tryParse(opt.priceController.text.trim());
-            if (p != null && p < minPrice) minPrice = p;
+        for (final combination in _variantCombinations) {
+          final p = double.tryParse(combination.priceController.text.trim());
+          if (p != null && p < minPrice) minPrice = p;
 
-            final q = int.tryParse(opt.quantityController.text.trim()) ?? 0;
-            sumStock += q;
-          }
+          final q =
+              int.tryParse(combination.quantityController.text.trim()) ?? 0;
+          sumStock += q;
         }
 
         if (minPrice != double.infinity) basePrice = minPrice;
@@ -580,21 +716,25 @@ class _SellWizardState extends State<_SellWizard> {
 
       // 8b. Create Variants from Groups
       final List<Map<String, dynamic>> variantRows = [];
-      for (var group in _variations) {
-        final attrName = group.nameController.text.trim();
-        for (var opt in group.options) {
-          variantRows.add({
-            'product_id': productId,
-            'quantity': int.tryParse(opt.quantityController.text.trim()) ?? 0,
-            'price': double.tryParse(opt.priceController.text.trim()) ?? 0,
-            'attributes': [
-              {
-                'attribute_name': attrName,
-                'attribute_value': opt.valueController.text.trim(),
-              },
-            ],
-          });
-        }
+      for (final combination in _variantCombinations) {
+        variantRows.add({
+          'product_id': productId,
+          'sku': combination.skuController.text.trim().isEmpty
+              ? null
+              : combination.skuController.text.trim(),
+          'quantity':
+              int.tryParse(combination.quantityController.text.trim()) ?? 0,
+          'price':
+              double.tryParse(combination.priceController.text.trim()) ?? 0,
+          'attributes': combination.attributes.entries
+              .map(
+                (entry) => {
+                  'attribute_name': entry.key,
+                  'attribute_value': entry.value,
+                },
+              )
+              .toList(),
+        });
       }
 
       if (variantRows.isNotEmpty) {
@@ -705,13 +845,15 @@ class _SellWizardState extends State<_SellWizard> {
                     descriptionController: _descriptionController,
                     priceController: _priceController,
                     variations: _variations,
+                    variantCombinations: _variantCombinations,
                     selectedCondition: _selectedCondition,
                     onConditionSelected: (c) =>
                         setState(() => _selectedCondition = c),
                     onAddVariant: _addVariant,
                     onRemoveVariant: _removeVariant,
                     onAddOption: _addOption,
-                    onVariantChanged: () => setState(() {}),
+                    onVariantChanged: _onVariantDimensionsChanged,
+                    onCombinationChanged: () => setState(() {}),
                     stockController: _stockController,
                   ),
                   _Step3TradeMethod(
@@ -742,6 +884,7 @@ class _SellWizardState extends State<_SellWizard> {
                     price: _priceController.text,
                     stock: _stockController.text,
                     variations: _variations,
+                    variantCombinations: _variantCombinations,
                     faceToFace: _faceToFace,
                     delivery: _delivery,
                     location: _locationController.text,
@@ -775,7 +918,8 @@ class _SellWizardState extends State<_SellWizard> {
                         }
                       });
                     },
-                    onUpdateVariations: () => setState(() {}),
+                    onUpdateVariations: _onVariantDimensionsChanged,
+                    onUpdateVariantCombinations: () => setState(() {}),
                     onUpdateCategory: (cat, sub) {
                       setState(() {
                         _selectedCategory = cat;
@@ -1459,6 +1603,7 @@ class _Step2Details extends StatelessWidget {
   final TextEditingController priceController;
   final TextEditingController stockController;
   final List<_VariationGroup> variations;
+  final List<_VariantCombination> variantCombinations;
 
   final String? selectedCondition;
   final void Function(String) onConditionSelected;
@@ -1467,18 +1612,21 @@ class _Step2Details extends StatelessWidget {
   final void Function(int) onAddOption;
 
   final VoidCallback onVariantChanged;
+  final VoidCallback onCombinationChanged;
 
   const _Step2Details({
     required this.nameController,
     required this.descriptionController,
     required this.priceController,
     required this.variations,
+    required this.variantCombinations,
     required this.selectedCondition,
     required this.onConditionSelected,
     required this.onAddVariant,
     required this.onRemoveVariant,
     required this.onAddOption,
     required this.onVariantChanged,
+    required this.onCombinationChanged,
     required this.stockController,
   });
 
@@ -1489,6 +1637,20 @@ class _Step2Details extends StatelessWidget {
     'Good',
     'Fair',
   ];
+
+  bool get _hasDuplicateGroupNames {
+    final names = <String>{};
+    for (final group in variations) {
+      final name = group.nameController.text.trim().toLowerCase().replaceAll(
+        RegExp(r'\s+'),
+        ' ',
+      );
+      if (name.isEmpty) continue;
+      if (names.contains(name)) return true;
+      names.add(name);
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1604,7 +1766,7 @@ class _Step2Details extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Add variation types like Size or Color, and then add attributes for each.',
+            'Define variation types like Color and Size. Price and stock are set on each generated combination.',
             style: TextStyle(
               fontSize: 12,
               color: colors.onSurface.withOpacity(0.55),
@@ -1645,6 +1807,25 @@ class _Step2Details extends StatelessWidget {
                 ),
               ),
             ),
+          if (_hasDuplicateGroupNames)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Variation type names must be unique.',
+                style: TextStyle(
+                  color: colors.error,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          if (variations.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            _GeneratedVariantList(
+              combinations: variantCombinations,
+              onChanged: onCombinationChanged,
+            ),
+          ],
           if (variations.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -1806,6 +1987,7 @@ class _Step4Review extends StatelessWidget {
   final String price;
   final String stock;
   final List<_VariationGroup> variations;
+  final List<_VariantCombination> variantCombinations;
   final bool faceToFace;
   final bool delivery;
   final String location;
@@ -1816,6 +1998,7 @@ class _Step4Review extends StatelessWidget {
   final void Function(int) onRemoveImage;
   final void Function(String field, String value) onUpdateField;
   final VoidCallback onUpdateVariations;
+  final VoidCallback onUpdateVariantCombinations;
   final void Function(String cat, String sub) onUpdateCategory;
   final void Function(bool f2f, bool del, String loc, String? delMethod)
   onUpdateTradeMethod;
@@ -1834,6 +2017,7 @@ class _Step4Review extends StatelessWidget {
     required this.price,
     required this.stock,
     required this.variations,
+    required this.variantCombinations,
     required this.faceToFace,
     required this.delivery,
     required this.location,
@@ -1844,6 +2028,7 @@ class _Step4Review extends StatelessWidget {
     required this.onRemoveImage,
     required this.onUpdateField,
     required this.onUpdateVariations,
+    required this.onUpdateVariantCombinations,
     required this.onUpdateCategory,
     required this.onUpdateTradeMethod,
     required this.dbCategories,
@@ -2158,8 +2343,8 @@ class _Step4Review extends StatelessWidget {
                 ],
                 if (variations.isNotEmpty)
                   _VariantReviewList(
-                    variations: variations,
-                    onUpdate: onUpdateVariations,
+                    combinations: variantCombinations,
+                    onUpdate: onUpdateVariantCombinations,
                   ),
                 _ReviewSection(
                   title: 'Trade Method',
@@ -2857,7 +3042,9 @@ class _VariationGroupEditor extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(
-                'Please add at least one valid attribute.',
+                group.hasDuplicateValues
+                    ? 'Option values must be unique within this variation type.'
+                    : 'Please add at least one valid attribute.',
                 style: TextStyle(
                   color: colors.error,
                   fontSize: 12,
@@ -2920,41 +3107,6 @@ class _VariationOptionCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _StyledField(
-                  controller: option.quantityController,
-                  label: 'Stock',
-                  hint: '0',
-                  icon: Icons.inventory_2_outlined,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => onChanged(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StyledField(
-                  controller: option.priceController,
-                  label: 'Price',
-                  hint: '0.00',
-                  icon: Icons.sell_outlined,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d*\.?\d{0,2}'),
-                    ),
-                  ],
-                  prefixText: 'RM ',
-                  onChanged: (_) => onChanged(),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -2972,7 +3124,22 @@ class _VariationGroup {
   bool get isValid =>
       nameController.text.trim().isNotEmpty &&
       options.isNotEmpty &&
-      options.every((o) => o.isValid);
+      options.every((o) => o.isValid) &&
+      !hasDuplicateValues;
+
+  bool get hasDuplicateValues {
+    final values = <String>{};
+    for (final option in options) {
+      final value = option.valueController.text.trim().toLowerCase().replaceAll(
+        RegExp(r'\s+'),
+        ' ',
+      );
+      if (value.isEmpty) continue;
+      if (values.contains(value)) return true;
+      values.add(value);
+    }
+    return false;
+  }
 
   void dispose() {
     nameController.dispose();
@@ -2984,20 +3151,49 @@ class _VariationGroup {
 
 class _VariationOption {
   final TextEditingController valueController;
+
+  _VariationOption() : valueController = TextEditingController();
+
+  bool get isValid => valueController.text.trim().isNotEmpty;
+
+  void dispose() {
+    valueController.dispose();
+  }
+}
+
+class _VariantCombination {
+  Map<String, String> attributes;
   final TextEditingController priceController;
   final TextEditingController quantityController;
+  final TextEditingController skuController;
 
-  _VariationOption({double? initialPrice})
-    : valueController = TextEditingController(),
-      priceController = TextEditingController(
+  _VariantCombination({required this.attributes, double? initialPrice})
+    : priceController = TextEditingController(
         text: initialPrice?.toStringAsFixed(2) ?? '',
       ),
-      quantityController = TextEditingController(text: '1');
+      quantityController = TextEditingController(text: '1'),
+      skuController = TextEditingController();
+
+  String get key {
+    final entries =
+        attributes.entries
+            .map(
+              (entry) =>
+                  '${entry.key.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ')}:${entry.value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ')}',
+            )
+            .toList()
+          ..sort();
+    return entries.join('|');
+  }
+
+  String get label => attributes.entries
+      .map((entry) => '${entry.key}: ${entry.value}')
+      .join(' | ');
 
   bool get isValid {
     final quantity = int.tryParse(quantityController.text.trim());
     final price = double.tryParse(priceController.text.trim());
-    return valueController.text.trim().isNotEmpty &&
+    return attributes.isNotEmpty &&
         quantity != null &&
         quantity >= 1 &&
         price != null &&
@@ -3005,9 +3201,228 @@ class _VariationOption {
   }
 
   void dispose() {
-    valueController.dispose();
     priceController.dispose();
     quantityController.dispose();
+    skuController.dispose();
+  }
+}
+
+class _GeneratedVariantList extends StatefulWidget {
+  final List<_VariantCombination> combinations;
+  final VoidCallback onChanged;
+
+  const _GeneratedVariantList({
+    required this.combinations,
+    required this.onChanged,
+  });
+
+  @override
+  State<_GeneratedVariantList> createState() => _GeneratedVariantListState();
+}
+
+class _GeneratedVariantListState extends State<_GeneratedVariantList> {
+  final _bulkPriceController = TextEditingController();
+  final _bulkStockController = TextEditingController();
+
+  @override
+  void dispose() {
+    _bulkPriceController.dispose();
+    _bulkStockController.dispose();
+    super.dispose();
+  }
+
+  void _applyToAll() {
+    final price = _bulkPriceController.text.trim();
+    final stock = _bulkStockController.text.trim();
+
+    for (final combination in widget.combinations) {
+      if (price.isNotEmpty) {
+        combination.priceController.text = price;
+      }
+      if (stock.isNotEmpty) {
+        combination.quantityController.text = stock;
+      }
+    }
+
+    widget.onChanged();
+    FocusScope.of(context).unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('Generated Variants'),
+        const SizedBox(height: 8),
+        Text(
+          'Each row is one sellable SKU combination.',
+          style: TextStyle(
+            fontSize: 12,
+            color: colors.onSurface.withOpacity(0.55),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (widget.combinations.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: colors.outline.withOpacity(0.12)),
+            ),
+            child: Text(
+              'Complete every variation type and option value to generate combinations.',
+              style: TextStyle(
+                fontSize: 13,
+                color: colors.onSurface.withOpacity(0.65),
+              ),
+            ),
+          )
+        else ...[
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: colors.primary.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: colors.primary.withOpacity(0.14)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Apply to all variants',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StyledField(
+                        controller: _bulkPriceController,
+                        label: 'Price',
+                        hint: '0.00',
+                        icon: Icons.sell_outlined,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}'),
+                          ),
+                        ],
+                        prefixText: 'RM ',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _StyledField(
+                        controller: _bulkStockController,
+                        label: 'Stock',
+                        hint: '0',
+                        icon: Icons.inventory_2_outlined,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _applyToAll,
+                  icon: const Icon(Icons.done_all_rounded, size: 18),
+                  label: const Text(
+                    'Apply to All',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(46),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...widget.combinations.map(
+            (combination) => Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: colors.outline.withOpacity(0.12)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    combination.label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StyledField(
+                          controller: combination.priceController,
+                          label: 'Price',
+                          hint: '0.00',
+                          icon: Icons.sell_outlined,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d{0,2}'),
+                            ),
+                          ],
+                          prefixText: 'RM ',
+                          onChanged: (_) => widget.onChanged(),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StyledField(
+                          controller: combination.quantityController,
+                          label: 'Stock',
+                          hint: '0',
+                          icon: Icons.inventory_2_outlined,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: (_) => widget.onChanged(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _StyledField(
+                    controller: combination.skuController,
+                    label: 'SKU (optional)',
+                    hint: 'e.g. SHIRT-RED-L',
+                    icon: Icons.qr_code_2_rounded,
+                    onChanged: (_) => widget.onChanged(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 
@@ -3079,10 +3494,13 @@ class _StyledField extends StatelessWidget {
 }
 
 class _VariantReviewList extends StatelessWidget {
-  final List<_VariationGroup> variations;
+  final List<_VariantCombination> combinations;
   final VoidCallback onUpdate;
 
-  const _VariantReviewList({required this.variations, required this.onUpdate});
+  const _VariantReviewList({
+    required this.combinations,
+    required this.onUpdate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3101,7 +3519,7 @@ class _VariantReviewList extends StatelessWidget {
             ),
           ),
         ),
-        ...variations.map((group) {
+        ...combinations.map((combination) {
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
@@ -3116,56 +3534,49 @@ class _VariantReviewList extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      group.nameController.text.toUpperCase(),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        letterSpacing: 1.2,
-                        color: colors.primary,
+                    Expanded(
+                      child: Text(
+                        combination.label,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          color: colors.primary,
+                        ),
                       ),
+                    ),
+                    IconButton(
+                      onPressed: () =>
+                          _showVariantEditModal(context, combination),
+                      icon: const Icon(Icons.edit_rounded, size: 16),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ],
                 ),
                 const Divider(height: 20),
-                ...group.options.map((opt) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            opt.valueController.text,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'RM ${combination.priceController.text}',
+                        style: TextStyle(
+                          color: colors.primary,
+                          fontWeight: FontWeight.bold,
                         ),
-                        Expanded(
-                          child: Text(
-                            'RM ${opt.priceController.text}',
-                            style: TextStyle(
-                              color: colors.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${opt.quantityController.text} qty',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: () => _showVariantEditModal(context, opt),
-                          icon: const Icon(Icons.edit_rounded, size: 16),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ],
+                      ),
                     ),
-                  );
-                }),
+                    Text(
+                      '${combination.quantityController.text} qty',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    ),
+                  ],
+                ),
+                if (combination.skuController.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'SKU: ${combination.skuController.text.trim()}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                ],
               ],
             ),
           );
@@ -3174,15 +3585,18 @@ class _VariantReviewList extends StatelessWidget {
     );
   }
 
-  void _showVariantEditModal(BuildContext context, _VariationOption opt) {
-    final valueController = TextEditingController(
-      text: opt.valueController.text,
-    );
+  void _showVariantEditModal(
+    BuildContext context,
+    _VariantCombination combination,
+  ) {
     final priceController = TextEditingController(
-      text: opt.priceController.text,
+      text: combination.priceController.text,
     );
     final qtyController = TextEditingController(
-      text: opt.quantityController.text,
+      text: combination.quantityController.text,
+    );
+    final skuController = TextEditingController(
+      text: combination.skuController.text,
     );
 
     showGeneralDialog(
@@ -3208,10 +3622,11 @@ class _VariantReviewList extends StatelessWidget {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: valueController,
-                    decoration: const InputDecoration(
-                      labelText: 'Variation Value',
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      combination.label,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -3238,6 +3653,13 @@ class _VariantReviewList extends StatelessWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: skuController,
+                    decoration: const InputDecoration(
+                      labelText: 'SKU (optional)',
+                    ),
+                  ),
                 ],
               ),
               actions: [
@@ -3247,9 +3669,9 @@ class _VariantReviewList extends StatelessWidget {
                 ),
                 FilledButton(
                   onPressed: () {
-                    opt.valueController.text = valueController.text;
-                    opt.priceController.text = priceController.text;
-                    opt.quantityController.text = qtyController.text;
+                    combination.priceController.text = priceController.text;
+                    combination.quantityController.text = qtyController.text;
+                    combination.skuController.text = skuController.text;
                     onUpdate();
                     Navigator.pop(ctx);
                   },
