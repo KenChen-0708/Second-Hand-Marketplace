@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
+import '../../shared/utils/image_helper.dart';
 import '../notification/notification_service.dart';
 
 class OrderService {
@@ -105,7 +106,10 @@ class OrderService {
     try {
       final response = await _supabase
           .from('orders')
-          .update({'status': status})
+          .update({
+            'status': status,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
           .eq('id', orderId)
           .select('*, buyer_id')
           .single();
@@ -149,7 +153,9 @@ class OrderService {
       }
 
       final List<OrderModel> orders = uniqueOrders.values
-          .map((order) => OrderModel.fromMap(Map<String, dynamic>.from(order)))
+          .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
+                Map<String, dynamic>.from(order),
+              )))
           .toList();
 
       orders.sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
@@ -158,6 +164,95 @@ class OrderService {
       throw Exception(e.message);
     } catch (e) {
       throw Exception('Failed to fetch orders: $e');
+    }
+  }
+
+  Future<List<OrderModel>> getBuyerOrders(String userId) async {
+    try {
+      final response = await _supabase
+          .from('orders')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
+          .eq('buyer_id', userId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
+                Map<String, dynamic>.from(order as Map),
+              )))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to fetch purchase history: $e');
+    }
+  }
+
+  Future<OrderModel> getOrderById(String orderId) async {
+    try {
+      final response = await _supabase
+          .from('orders')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
+          .eq('id', orderId)
+          .single();
+
+      return OrderModel.fromMap(
+        _resolveOrderImageFields(Map<String, dynamic>.from(response)),
+      );
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to fetch order details: $e');
+    }
+  }
+
+  Future<List<OrderModel>> getSellerOrders(String sellerId) async {
+    try {
+      final response = await _supabase
+          .from('orders')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items!inner(*, products!inner(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
+          .eq('order_items.products.seller_id', sellerId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
+                Map<String, dynamic>.from(order as Map),
+              )))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to fetch seller orders: $e');
+    }
+  }
+
+  Future<void> reportOrderIssue({
+    required String orderId,
+    required String reporterId,
+    required String accusedId,
+    required String reason,
+    required String description,
+  }) async {
+    try {
+      await _supabase.from('disputes').insert({
+        'order_id': orderId,
+        'reporter_id': reporterId,
+        'accused_id': accusedId,
+        'reason': reason,
+        'description': description,
+        'status': 'open',
+      });
+
+      await updateOrderStatus(orderId, 'disputed');
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to report this issue: $e');
     }
   }
 
@@ -171,7 +266,9 @@ class OrderService {
           .order('created_at', ascending: false);
 
       return (response as List)
-          .map((order) => OrderModel.fromMap(Map<String, dynamic>.from(order)))
+          .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
+                Map<String, dynamic>.from(order),
+              )))
           .toList();
     } on PostgrestException catch (e) {
       throw Exception(e.message);
@@ -183,5 +280,43 @@ class OrderService {
   String _generateOrderNumber() {
     final now = DateTime.now().millisecondsSinceEpoch;
     return 'ORD-$now';
+  }
+
+  Map<String, dynamic> _resolveOrderImageFields(Map<String, dynamic> order) {
+    final rawItems = order['order_items'];
+    if (rawItems is! List) {
+      return order;
+    }
+
+    return {
+      ...order,
+      'order_items': rawItems.map((rawItem) {
+        final item = Map<String, dynamic>.from(rawItem as Map);
+        final rawProduct = item['products'];
+        if (rawProduct is! Map) {
+          return item;
+        }
+
+        final product = Map<String, dynamic>.from(rawProduct);
+        final resolvedImages = ImageHelper.resolveProductImageUrls(
+          product['image_urls'],
+        );
+        final resolvedImageUrl =
+            ImageHelper.resolveProductImageUrl(
+              product['image_url']?.toString(),
+              fallbackToDefault: false,
+            ) ??
+            (resolvedImages.isNotEmpty ? resolvedImages.first : null);
+
+        return {
+          ...item,
+          'products': {
+            ...product,
+            'image_url': resolvedImageUrl,
+            'image_urls': resolvedImages,
+          },
+        };
+      }).toList(),
+    };
   }
 }

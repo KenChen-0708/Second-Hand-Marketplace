@@ -370,6 +370,17 @@ final _router = GoRouter(
                   builder: (context, state) => const MyListingsPage(),
                 ),
                 GoRoute(
+                  path: 'listings/detail',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) {
+                    final args = state.extra;
+                    if (args is ListingDetailArguments) {
+                      return ListingDetailPage(args: args);
+                    }
+                    return const MyListingsPage();
+                  },
+                ),
+                GoRoute(
                   path: 'dashboard',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const SellerDashboardPage(),

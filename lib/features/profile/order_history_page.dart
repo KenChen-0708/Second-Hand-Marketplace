@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
+import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 
 class OrderHistoryPage extends StatefulWidget {
@@ -12,8 +13,7 @@ class OrderHistoryPage extends StatefulWidget {
   State<OrderHistoryPage> createState() => _OrderHistoryPageState();
 }
 
-class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerProviderStateMixin {
-  late TabController _roleTabController;
+class _OrderHistoryPageState extends State<OrderHistoryPage> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedStatus = 'All';
 
@@ -29,12 +29,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _roleTabController = TabController(length: 3, vsync: this);
-    _roleTabController.addListener(() {
-      if (!_roleTabController.indexIsChanging) {
-        setState(() {});
-      }
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshOrders();
     });
@@ -42,7 +36,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
 
   @override
   void dispose() {
-    _roleTabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -51,7 +44,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
     final userState = context.read<UserState>();
     final orderState = context.read<OrderState>();
     if (userState.currentUser != null) {
-      await orderState.fetchUserOrders(userState.currentUser!.id);
+      await orderState.fetchBuyerOrders(userState.currentUser!.id);
     }
   }
 
@@ -60,15 +53,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
     final currentUserId = userState.currentUser?.id ?? '';
 
     return orders.where((order) {
-      // Role Filter
-      bool matchesRole = true;
-      if (_roleTabController.index == 1) {
-        matchesRole = order.isBuyer(currentUserId);
-      } else if (_roleTabController.index == 2) {
-        matchesRole = order.isSeller(currentUserId);
-      }
-
-      if (!matchesRole) return false;
+      // Role Filter - Only show buying orders
+      if (!order.isBuyer(currentUserId)) return false;
 
       // Status Filter
       bool matchesStatus = true;
@@ -76,12 +62,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
       if (_selectedStatus == 'Ongoing') {
         matchesStatus = ['pending', 'paid', 'pending_handover'].contains(status);
       } else if (_selectedStatus == 'Awaiting Action') {
-        // Simple logic for "Awaiting Action"
-        if (order.isBuyer(currentUserId)) {
-          matchesStatus = status == 'pending_handover'; // Buyer needs to confirm receipt
-        } else {
-          matchesStatus = status == 'paid'; // Seller needs to prepare item
-        }
+        matchesStatus = status == 'pending_handover'; // Buyer needs to confirm receipt
       } else if (_selectedStatus != 'All') {
         matchesStatus = status == _selectedStatus.toLowerCase();
       }
@@ -93,7 +74,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
       final matchesSearch = query.isEmpty ||
           order.orderNumber.toLowerCase().contains(query) ||
           (order.primarySellerName?.toLowerCase().contains(query) ?? false) ||
-          (order.buyer?.name.toLowerCase().contains(query) ?? false) ||
           (order.handoverLocation?.toLowerCase().contains(query) ?? false) ||
           order.orderItems.any(
             (item) => item.product?.title.toLowerCase().contains(query) ?? false,
@@ -112,7 +92,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text(
-          'Orders',
+          'Purchase History',
           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24),
         ),
         backgroundColor: Colors.white,
@@ -121,18 +101,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => context.pop(),
-        ),
-        bottom: TabBar(
-          controller: _roleTabController,
-          indicatorColor: Theme.of(context).colorScheme.primary,
-          indicatorSize: TabBarIndicatorSize.label,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
-          tabs: const [
-            Tab(text: 'All'),
-            Tab(text: 'Buying'),
-            Tab(text: 'Selling'),
-          ],
         ),
       ),
       body: Column(
@@ -179,7 +147,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
             controller: _searchController,
             onChanged: (value) => setState(() {}),
             decoration: InputDecoration(
-              hintText: 'Search title, user, location...',
+              hintText: 'Search title, seller, location...',
               prefixIcon: const Icon(Icons.search_rounded, size: 20),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
@@ -255,7 +223,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
           ),
           const SizedBox(height: 24),
           const Text(
-            'No orders yet',
+            'No purchases yet',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
           ),
           const SizedBox(height: 8),
@@ -279,19 +247,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
   }
 
   Widget _buildOrderCard(BuildContext context, OrderModel order) {
-    final userState = context.read<UserState>();
-    final currentUserId = userState.currentUser?.id ?? '';
-    final isBuyer = order.isBuyer(currentUserId);
-    
     final dateFormat = DateFormat('MMM dd, yyyy');
     final firstProduct = order.orderItems.isNotEmpty
         ? order.orderItems.first.product
         : null;
     
-    final otherPartyName = isBuyer 
-        ? (order.primarySellerName ?? 'Unknown Seller')
-        : (order.buyer?.name ?? 'Unknown Buyer');
-    
+    final otherPartyName = order.primarySellerName ?? 'Unknown Seller';
     final statusInfo = _getStatusDisplayInfo(order.status);
 
     return Container(
@@ -312,7 +273,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => context.push('/profile/order-status', extra: order),
+            onTap: () async {
+              await context.push('/profile/order-status', extra: order);
+              if (context.mounted) {
+                await _refreshOrders();
+              }
+            },
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -320,10 +286,25 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
                 children: [
                   Row(
                     children: [
-                      _buildRoleBadge(isBuyer),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo[50],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'BUYING',
+                          style: TextStyle(
+                            color: Colors.indigo[700],
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Text(
-                        isBuyer ? 'Bought from ' : 'Sold to ',
+                        'Bought from ',
                         style: TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
                       Flexible(
@@ -352,17 +333,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
                         tag: 'order_img_${order.id}',
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            firstProduct?.imageUrl ?? 'https://via.placeholder.com/80',
+                          child: ImageHelper.productImage(
+                            firstProduct?.imageUrl,
                             width: 70,
                             height: 70,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 70,
-                              height: 70,
-                              color: Colors.grey[200],
-                              child: const Icon(Icons.image_not_supported, color: Colors.grey),
-                            ),
                           ),
                         ),
                       ),
@@ -450,22 +425,15 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
     );
   }
 
-  Widget _buildRoleBadge(bool isBuyer) {
+  Widget _buildNoPhotoPlaceholder() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      width: 70,
+      height: 70,
       decoration: BoxDecoration(
-        color: isBuyer ? Colors.indigo[50] : Colors.teal[50],
-        borderRadius: BorderRadius.circular(6),
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        isBuyer ? 'BUYING' : 'SELLING',
-        style: TextStyle(
-          color: isBuyer ? Colors.indigo[700] : Colors.teal[700],
-          fontSize: 9,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.5,
-        ),
-      ),
+      child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[400], size: 24),
     );
   }
 

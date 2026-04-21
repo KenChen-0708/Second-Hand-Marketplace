@@ -3,22 +3,40 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
+import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
+import '../../services/chat/chat_service.dart';
 
-class OrderStatusPage extends StatelessWidget {
+class OrderStatusPage extends StatefulWidget {
   final Object? order;
   const OrderStatusPage({super.key, this.order});
 
   @override
+  State<OrderStatusPage> createState() => _OrderStatusPageState();
+}
+
+class _OrderStatusPageState extends State<OrderStatusPage> {
+  OrderModel? _currentOrder;
+  bool _isReloading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.order is OrderModel) {
+      _currentOrder = widget.order as OrderModel;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (order == null || order is! OrderModel) {
+    if (_currentOrder == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Order Details')),
         body: const Center(child: Text('Order not found')),
       );
     }
 
-    final currentOrder = order as OrderModel;
+    final currentOrder = _currentOrder!;
     final userState = context.read<UserState>();
     final currentUserId = userState.currentUser?.id ?? '';
     final isBuyer = currentOrder.isBuyer(currentUserId);
@@ -43,62 +61,100 @@ class OrderStatusPage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline_rounded),
-            onPressed: () => _showHelpSheet(context),
+            onPressed: () => _showHelpSheet(context, currentOrder, isBuyer),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildStatusHeader(context, statusInfo),
-            _buildContextualAlert(context, currentOrder, isBuyer),
-            _buildSection(
-              title: 'Order Tracking',
-              child: _buildTimeline(currentOrder, statusInfo),
-            ),
-            _buildSection(
-              title: 'Purchase Summary',
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _reloadOrder,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 children: [
-                  ...currentOrder.orderItems.map((item) => _buildProductItem(context, item)),
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
-                  _buildSummaryRow('Subtotal', '\$${currentOrder.totalPrice.toStringAsFixed(2)}'),
-                  _buildSummaryRow('Escrow Protection', 'Included', isGreen: true),
-                  const SizedBox(height: 8),
-                  _buildSummaryRow('Total', '\$${currentOrder.totalPrice.toStringAsFixed(2)}', isTotal: true),
+                  _buildStatusHeader(context, statusInfo),
+                  _buildContextualAlert(context, currentOrder, isBuyer),
+                  _buildSection(
+                    title: 'Order Tracking',
+                    child: _buildTimeline(currentOrder, statusInfo),
+                  ),
+                  _buildSection(
+                    title: 'Purchase Summary',
+                    child: Column(
+                      children: [
+                        if (currentOrder.orderItems.isEmpty)
+                          Text(
+                            'No items were found for this order.',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                          )
+                        else
+                          ...currentOrder.orderItems.map((item) => _buildProductItem(context, item)),
+                        const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
+                        _buildSummaryRow('Subtotal', '\$${(currentOrder.totalPrice).toStringAsFixed(2)}'),
+                        _buildSummaryRow('Escrow Protection', 'Included', isGreen: true),
+                        const SizedBox(height: 8),
+                        _buildSummaryRow('Total', '\$${(currentOrder.totalPrice).toStringAsFixed(2)}', isTotal: true),
+                      ],
+                    ),
+                  ),
+                  _buildSection(
+                    title: 'Handover Details',
+                    child: Column(
+                      children: [
+                        _buildInfoField('Location', currentOrder.handoverLocation ?? 'TBD', icon: Icons.location_on_rounded, color: Colors.blue),
+                        const SizedBox(height: 16),
+                        _buildInfoField('Agreed Time', currentOrder.handoverDate != null ? dateFormat.format(currentOrder.handoverDate!) : 'To be scheduled', icon: Icons.calendar_today_rounded, color: Colors.indigo),
+                        if (currentOrder.notes?.isNotEmpty ?? false) ...[
+                          const SizedBox(height: 16),
+                          _buildInfoField('Special Instructions', currentOrder.notes!, icon: Icons.info_outline_rounded, color: Colors.amber),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildRoleAwareActions(context, currentOrder, isBuyer),
+                  const SizedBox(height: 48),
                 ],
               ),
             ),
-            _buildSection(
-              title: 'Handover Details',
-              child: Column(
-                children: [
-                  _buildInfoField('Location', currentOrder.handoverLocation ?? 'TBD', icon: Icons.location_on_rounded, color: Colors.blue),
-                  const SizedBox(height: 16),
-                  _buildInfoField('Agreed Time', currentOrder.handoverDate != null ? dateFormat.format(currentOrder.handoverDate!) : 'To be scheduled', icon: Icons.calendar_today_rounded, color: Colors.indigo),
-                  if (currentOrder.notes?.isNotEmpty ?? false) ...[
-                    const SizedBox(height: 16),
-                    _buildInfoField('Special Instructions', currentOrder.notes!, icon: Icons.info_outline_rounded, color: Colors.amber),
-                  ],
-                ],
-              ),
+          ),
+          if (_isReloading)
+            Container(
+              color: Colors.black.withValues(alpha: 0.06),
+              child: const Center(child: CircularProgressIndicator()),
             ),
-            _buildSection(
-              title: 'Parties Involved',
-              child: Row(
-                children: [
-                  Expanded(child: _buildUserInfo(isBuyer ? 'Seller' : 'Buyer', isBuyer ? (currentOrder.primarySellerName ?? 'N/A') : (currentOrder.buyer?.name ?? 'N/A'), Icons.storefront_rounded)),
-                  Container(width: 1, height: 40, color: Colors.grey[200]),
-                  Expanded(child: _buildUserInfo('Role', isBuyer ? 'You are Buyer' : 'You are Seller', isBuyer ? Icons.shopping_bag_outlined : Icons.sell_outlined, isRole: true)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            _buildRoleAwareActions(context, currentOrder, isBuyer),
-            const SizedBox(height: 48),
-          ],
-        ),
+        ],
       ),
+    );
+  }
+
+  Future<void> _reloadOrder() async {
+    final orderId = _currentOrder?.id;
+    if (orderId == null) {
+      return;
+    }
+
+    setState(() => _isReloading = true);
+    final updatedOrder = await context.read<OrderState>().fetchOrderById(orderId);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (updatedOrder != null) {
+        _currentOrder = updatedOrder;
+      }
+      _isReloading = false;
+    });
+  }
+
+  Future<void> _reloadAfterAction(String successMessage) async {
+    await _reloadOrder();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(successMessage)),
     );
   }
 
@@ -202,12 +258,16 @@ class OrderStatusPage extends StatelessWidget {
       child: Column(
         children: [
           if (status == 'pending_handover') ...[
-            if (isBuyer) _buildPrimaryAction('Confirm Received', Icons.check_circle_rounded, Colors.green, () => _showConfirmReceipt(context))
-            else _buildPrimaryAction('Handover Done', Icons.handshake_rounded, Colors.indigo, () => _showHandoverConfirmation(context)),
+            if (isBuyer) _buildPrimaryAction('Confirm Received', Icons.check_circle_rounded, Colors.green, () => _showConfirmReceipt(context, order))
+            else _buildPrimaryAction('Handover Done', Icons.handshake_rounded, Colors.indigo, () => _showHandoverConfirmation(context, order)),
+            const SizedBox(height: 12),
+          ],
+          if (status == 'pending' && !isBuyer) ...[
+            _buildPrimaryAction('Confirm Order', Icons.check_circle_rounded, Colors.green, () => _updateStatus(context, order, 'paid')),
             const SizedBox(height: 12),
           ],
           if (status == 'paid' && !isBuyer) ...[
-            _buildPrimaryAction('Mark Ready for Handover', Icons.check_circle_rounded, Colors.green, () {}),
+            _buildPrimaryAction('Mark Ready for Handover', Icons.check_circle_rounded, Colors.green, () => _updateStatus(context, order, 'pending_handover')),
             const SizedBox(height: 12),
           ],
           if (status == 'completed' && isBuyer) ...[
@@ -216,20 +276,12 @@ class OrderStatusPage extends StatelessWidget {
           ],
           Row(
             children: [
-              Expanded(child: _buildSecondaryAction('Chat', Icons.chat_bubble_rounded, Colors.blue, () {})),
+              Expanded(child: _buildSecondaryAction('Chat', Icons.chat_bubble_rounded, Colors.blue, () => _navigateToChat(context, order))),
               const SizedBox(width: 12),
               if (status != 'completed' && status != 'cancelled')
-                Expanded(child: _buildSecondaryAction('Cancel', Icons.cancel_rounded, Colors.grey[700]!, () {}, isDestructive: true))
+                Expanded(child: _buildSecondaryAction('Cancel', Icons.cancel_rounded, Colors.grey[700]!, () => _showCancelConfirmation(context, order), isDestructive: true))
               else
                 Expanded(child: _buildSecondaryAction('Profile', Icons.person_rounded, Colors.blue, () {})),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildSecondaryAction('Report', Icons.report_problem_rounded, Colors.orange[800]!, () {})),
-              const SizedBox(width: 12),
-              Expanded(child: _buildSecondaryAction('Dispute', Icons.gavel_rounded, Colors.red, () {})),
             ],
           ),
         ],
@@ -289,7 +341,15 @@ class OrderStatusPage extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(item.product?.imageUrl ?? 'https://via.placeholder.com/80', width: 80, height: 80, fit: BoxFit.cover)),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: ImageHelper.productImage(
+              item.product?.imageUrl,
+              width: 80,
+              height: 80,
+              fit: BoxFit.cover,
+            ),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -303,26 +363,27 @@ class OrderStatusPage extends StatelessWidget {
               ],
             ),
           ),
-          Text('\$${item.subtotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Flexible(
+            child: Text(
+              '\$${item.subtotal.toStringAsFixed(2)}',
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildUserInfo(String label, String name, IconData icon, {bool isRole = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Icon(icon, size: 18, color: isRole ? Colors.blue : const Color(0xFF10B981)),
-            const SizedBox(width: 8),
-            Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14), overflow: TextOverflow.ellipsis)),
-          ],
-        ),
-      ],
+  Widget _buildNoPhotoPlaceholder() {
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[400], size: 32),
     );
   }
 
@@ -371,9 +432,10 @@ class OrderStatusPage extends StatelessWidget {
     }
   }
 
-  void _showHelpSheet(BuildContext context) {
+  void _showHelpSheet(BuildContext context, OrderModel order, bool isBuyer) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => Padding(
         padding: const EdgeInsets.all(24),
@@ -385,7 +447,13 @@ class OrderStatusPage extends StatelessWidget {
             const SizedBox(height: 16),
             _buildHelpItem(Icons.security_rounded, 'Payment Protection', 'Your funds are held safely until you confirm receipt.'),
             _buildHelpItem(Icons.handshake_rounded, 'Handover Safety', 'Meet in public places. Inspect item before confirming.'),
-            _buildHelpItem(Icons.report_problem_rounded, 'Reporting issues', 'Damaged or wrong item? Use the Report Issue button.'),
+            const Divider(height: 32),
+            _buildHelpItem(Icons.report_problem_rounded, 'Something wrong?', 'If the item is not as described or you have issues with the other party, let us know.'),
+            const SizedBox(height: 12),
+            _buildSecondaryAction('Report Issue', Icons.report_problem_rounded, Colors.orange[800]!, () {
+              Navigator.pop(context);
+              _handleReport(context, order);
+            }),
             const SizedBox(height: 24),
             ElevatedButton(onPressed: () => Navigator.pop(context), style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text('Got it')),
           ],
@@ -408,12 +476,208 @@ class OrderStatusPage extends StatelessWidget {
     );
   }
 
-  void _showConfirmReceipt(BuildContext context) {
-    showDialog(context: context, builder: (context) => AlertDialog(title: const Text('Confirm Receipt?'), content: const Text('Only confirm if you have received and inspected the item. This will release the payment to the seller.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not yet')), ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Confirm'))]));
+  Future<void> _navigateToChat(BuildContext context, OrderModel order) async {
+    final userState = context.read<UserState>();
+    final currentUserId = userState.currentUser?.id ?? '';
+    final isBuyer = order.isBuyer(currentUserId);
+
+    if (order.orderItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This order has no product to chat about.')),
+      );
+      return;
+    }
+
+    final productId = order.orderItems.first.productId;
+    final otherUserId = isBuyer ? order.primarySellerId : order.buyerId;
+
+    if (otherUserId == null) return;
+
+    try {
+      final chatService = ChatService();
+      final bundle = await chatService.getOrCreateConversation(
+        productId: productId,
+        buyerId: isBuyer ? currentUserId : order.buyerId,
+        sellerId: isBuyer ? otherUserId : currentUserId,
+        currentUserId: currentUserId,
+      );
+
+      if (context.mounted) {
+        context.push('/chat/${bundle.conversation.id}');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error opening chat: $e')));
+      }
+    }
   }
 
-  void _showHandoverConfirmation(BuildContext context) {
-    showDialog(context: context, builder: (context) => AlertDialog(title: const Text('Handover Done?'), content: const Text('Confirm that you have handed the item to the buyer.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Confirm'))]));
+  void _showCancelConfirmation(BuildContext context, OrderModel order) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Order?', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to cancel this order? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Go Back')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _cancelOrder(context, order);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _cancelOrder(BuildContext context, OrderModel order) async {
+    try {
+      await context.read<OrderState>().updateOrderStatus(order.id, 'cancelled');
+
+      if (context.mounted) {
+        await _reloadAfterAction('Order cancelled successfully');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to cancel order: $e')));
+      }
+    }
+  }
+
+  Future<void> _updateStatus(
+    BuildContext context,
+    OrderModel order,
+    String status,
+  ) async {
+    try {
+      await context.read<OrderState>().updateOrderStatus(order.id, status);
+      if (context.mounted) {
+        await _reloadAfterAction(
+          'Order updated to ${status.replaceAll('_', ' ')}',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update order: $e')),
+        );
+      }
+    }
+  }
+
+  void _handleReport(BuildContext context, OrderModel order) {
+    final reasonController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final userState = context.read<UserState>();
+    final currentUserId = userState.currentUser?.id ?? '';
+    final isBuyer = order.isBuyer(currentUserId);
+    final accusedId = isBuyer ? order.primarySellerId : order.buyerId;
+
+    if (currentUserId.isEmpty || accusedId == null || accusedId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to report this order right now.')),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Report Issue',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Reason',
+                hintText: 'Item not as described',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: descriptionController,
+              minLines: 3,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Details',
+                hintText: 'Tell support what happened',
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final reason = reasonController.text.trim();
+                final description = descriptionController.text.trim();
+                if (reason.isEmpty || description.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please fill in both fields.')),
+                  );
+                  return;
+                }
+
+                try {
+                  await context.read<OrderState>().reportOrderIssue(
+                        orderId: order.id,
+                        reporterId: currentUserId,
+                        accusedId: accusedId,
+                        reason: reason,
+                        description: description,
+                      );
+                  if (context.mounted) {
+                    Navigator.pop(sheetContext);
+                    await _reloadAfterAction('Report submitted to support.');
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to submit report: $e')),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.report_problem_rounded),
+              label: const Text('Submit Report'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                backgroundColor: Colors.orange[800],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(() {
+      reasonController.dispose();
+      descriptionController.dispose();
+    });
+  }
+
+  void _showConfirmReceipt(BuildContext context, OrderModel order) {
+    showDialog(context: context, builder: (context) => AlertDialog(title: const Text('Confirm Receipt?'), content: const Text('Only confirm if you have received and inspected the item. This will release the payment to the seller.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not yet')), ElevatedButton(onPressed: () { Navigator.pop(context); _updateStatus(context, order, 'completed'); }, child: const Text('Confirm'))]));
+  }
+
+  void _showHandoverConfirmation(BuildContext context, OrderModel order) {
+    showDialog(context: context, builder: (context) => AlertDialog(title: const Text('Handover Done?'), content: const Text('Confirm that you have handed the item to the buyer.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), ElevatedButton(onPressed: () { Navigator.pop(context); _updateStatus(context, order, 'completed'); }, child: const Text('Confirm'))]));
   }
 }
 

@@ -115,6 +115,46 @@ class OrderState extends EntityState<OrderModel> {
     }
   }
 
+  Future<void> fetchBuyerOrders(String userId) async {
+    setLoading(true);
+    setError(null);
+    try {
+      final orders = await _orderService.getBuyerOrders(userId);
+      setItems(orders);
+    } catch (e) {
+      setError(e.toString());
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  Future<List<OrderModel>> fetchSellerOrders(String sellerId) async {
+    setLoading(true);
+    setError(null);
+    try {
+      final orders = await _orderService.getSellerOrders(sellerId);
+      setItems(orders);
+      return orders;
+    } catch (e) {
+      setError(e.toString());
+      return const [];
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  Future<OrderModel?> fetchOrderById(String orderId) async {
+    setError(null);
+    try {
+      final order = await _orderService.getOrderById(orderId);
+      upsertItem(order);
+      return order;
+    } catch (e) {
+      setError(e.toString());
+      return null;
+    }
+  }
+
   Future<void> fetchAllOrders() async {
     setLoading(true);
     setError(null);
@@ -135,6 +175,31 @@ class OrderState extends EntityState<OrderModel> {
       if (existingOrder != null) {
         final updatedOrder = existingOrder.copyWith(status: newStatus);
         upsertItem(updatedOrder);
+      }
+    } catch (e) {
+      setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> reportOrderIssue({
+    required String orderId,
+    required String reporterId,
+    required String accusedId,
+    required String reason,
+    required String description,
+  }) async {
+    try {
+      await _orderService.reportOrderIssue(
+        orderId: orderId,
+        reporterId: reporterId,
+        accusedId: accusedId,
+        reason: reason,
+        description: description,
+      );
+      final existingOrder = getById(orderId);
+      if (existingOrder != null) {
+        upsertItem(existingOrder.copyWith(status: 'disputed'));
       }
     } catch (e) {
       setError(e.toString());
