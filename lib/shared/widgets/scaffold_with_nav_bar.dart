@@ -53,40 +53,44 @@ class ScaffoldWithNavBar extends StatelessWidget {
             // Sell (center circle FAB)
             GestureDetector(
               onTap: () => _goBranch(1),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: primaryColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 48, // Reduced from 50 to prevent overflow
+                      height: 48, // Reduced from 50 to prevent overflow
+                      decoration: BoxDecoration(
+                        color: primaryColor,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: primaryColor.withValues(alpha: 0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Icon(Icons.add, color: onPrimaryColor, size: 28), // Slightly smaller icon
                     ),
-                    child: Icon(Icons.add, color: onPrimaryColor, size: 30),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Sell',
-                    style: TextStyle(
-                      color: currentIndex == 1
-                          ? selectedColor
-                          : unselectedColor,
-                      fontWeight: currentIndex == 1
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                      fontSize: 12,
+                    const SizedBox(height: 1), // Reduced from 2
+                    Text(
+                      'Sell',
+                      style: TextStyle(
+                        color: currentIndex == 1
+                            ? selectedColor
+                            : unselectedColor,
+                        fontWeight: currentIndex == 1
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        fontSize: 12,
+                        height: 1.1, // Added height to control text spacing
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             // Profile
@@ -119,57 +123,61 @@ class ScaffoldWithNavBar extends StatelessWidget {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 4.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected ? selectedColor : unselectedColor,
-                  size: 28,
-                ),
-                if (badgeCount > 0)
-                  Positioned(
-                    right: -2,
-                    top: -1,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      constraints: const BoxConstraints(
-                        minWidth: 14,
-                        minHeight: 14,
-                      ),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.2),
-                      ),
-                      child: Text(
-                        badgeCount > 9 ? '9+' : '$badgeCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 7,
-                          fontWeight: FontWeight.bold,
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 2.0), // Reduced vertical padding
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    icon,
+                    color: isSelected ? selectedColor : unselectedColor,
+                    size: 26, // Reduced from 28
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -2,
+                      top: -1,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        constraints: const BoxConstraints(
+                          minWidth: 14,
+                          minHeight: 14,
+                        ),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.2),
+                        ),
+                        child: Text(
+                          badgeCount > 9 ? '9+' : '$badgeCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 7,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? selectedColor : unselectedColor,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                fontSize: 12,
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 1), // Reduced from 2
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? selectedColor : unselectedColor,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  fontSize: 12,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
