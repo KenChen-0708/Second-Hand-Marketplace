@@ -73,7 +73,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
     final currentUser = userState.currentUser;
     
     if (currentUser == null) {
-      SnackbarHelper.showError(context, 'You must be logged in to submit a review.');
+      SnackbarHelper.showError(context, 'Please log in to submit a review.');
       return;
     }
 
@@ -105,7 +105,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Review submitted successfully!'),
+            content: Text('Review submitted.'),
             backgroundColor: Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
           ),
@@ -114,7 +114,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
       }
     } catch (e) {
       if (mounted) {
-        SnackbarHelper.showError(context, 'Failed to submit review: $e');
+        SnackbarHelper.showError(context, 'Unable to submit review. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
