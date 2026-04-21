@@ -101,8 +101,8 @@ class AdminScaffold extends StatelessWidget {
             },
           ),
           _NavItem(
-            icon: Icons.list_alt_rounded,
-            label: 'Listings',
+            icon: Icons.category_rounded,
+            label: 'Categories',
             isSelected: navigationShell.currentIndex == 2,
             onTap: () {
               navigationShell.goBranch(2);
@@ -110,8 +110,8 @@ class AdminScaffold extends StatelessWidget {
             },
           ),
           _NavItem(
-            icon: Icons.receipt_long_rounded,
-            label: 'Orders',
+            icon: Icons.list_alt_rounded,
+            label: 'Listings',
             isSelected: navigationShell.currentIndex == 3,
             onTap: () {
               navigationShell.goBranch(3);
@@ -119,11 +119,20 @@ class AdminScaffold extends StatelessWidget {
             },
           ),
           _NavItem(
-            icon: Icons.campaign_rounded,
-            label: 'Notifications',
+            icon: Icons.receipt_long_rounded,
+            label: 'Orders',
             isSelected: navigationShell.currentIndex == 4,
             onTap: () {
               navigationShell.goBranch(4);
+              if (isMobile) Navigator.pop(context);
+            },
+          ),
+          _NavItem(
+            icon: Icons.campaign_rounded,
+            label: 'Notifications',
+            isSelected: navigationShell.currentIndex == 5,
+            onTap: () {
+              navigationShell.goBranch(5);
               if (isMobile) Navigator.pop(context);
             },
           ),

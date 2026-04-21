@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../state/state.dart';
+import '../../services/notification/notification_service.dart';
 
 class AdminNotificationCenterPage extends StatefulWidget {
   const AdminNotificationCenterPage({super.key});
@@ -10,36 +13,17 @@ class AdminNotificationCenterPage extends StatefulWidget {
 
 class _AdminNotificationCenterPageState
     extends State<AdminNotificationCenterPage> {
-  final List<Map<String, dynamic>> _logs = [
-    {
-      'time': '10:45 AM',
-      'title': 'System Maintenance',
-      'body': 'Platform will be offline for 2 hours tonight for upgrades.',
-      'type': 'Broadcast',
-      'status': 'Delivered',
-      'recipients': 'All Users',
-    },
-    {
-      'time': '09:00 AM',
-      'title': 'Automated Handover Reminder',
-      'body': 'Don\'t forget your scheduled handover at the Library.',
-      'type': 'System',
-      'status': 'Sent (42)',
-      'recipients': 'Active Buyers',
-    },
-    {
-      'time': 'Yesterday',
-      'title': 'Welcome to CampusThrift',
-      'body': 'Welcome to the platform! Start listing your items today.',
-      'type': 'System',
-      'status': 'Sent (15)',
-      'recipients': 'New Users',
-    },
-  ];
-
-  String _selectedFilter = 'All';
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminLogState>().fetchNotificationLogs();
+    });
+  }
 
   @override
   void dispose() {
@@ -149,6 +133,7 @@ class _AdminNotificationCenterPageState
           const SizedBox(height: 24),
           TextField(
             controller: _titleController,
+            enabled: !_isSending,
             decoration: InputDecoration(
               labelText: 'Notification Title',
               hintText: 'e.g. Server Maintenance',
@@ -158,19 +143,12 @@ class _AdminNotificationCenterPageState
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.blue, width: 2),
-              ),
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _bodyController,
+            enabled: !_isSending,
             maxLines: 5,
             decoration: InputDecoration(
               labelText: 'Message Body',
@@ -182,23 +160,17 @@ class _AdminNotificationCenterPageState
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.blue, width: 2),
-              ),
             ),
           ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () => _handleSubmit(context),
-              icon: const Icon(Icons.send_rounded),
-              label: const Text('Send to All Users'),
+              onPressed: _isSending ? null : () => _handleSubmit(context),
+              icon: _isSending
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.send_rounded),
+              label: Text(_isSending ? 'Sending...' : 'Send to All Users'),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 shape: RoundedRectangleBorder(
@@ -207,24 +179,12 @@ class _AdminNotificationCenterPageState
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            'This will send a push notification to all 1,245 registered users immediately.',
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: Colors.black38),
-            textAlign: TextAlign.center,
-          ),
         ],
       ),
     );
   }
 
   Widget _buildLogsSection() {
-    final filteredLogs = _selectedFilter == 'All'
-        ? _logs
-        : _logs.where((log) => log['type'] == _selectedFilter).toList();
-
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -241,181 +201,100 @@ class _AdminNotificationCenterPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                'Activity Log',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              _buildFilterChips(),
-            ],
+          Text(
+            'Activity Log',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          if (filteredLogs.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: Text('No logs found for this category.')),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredLogs.length,
-              separatorBuilder: (context, index) =>
-                  Divider(height: 32, color: Colors.grey.shade100),
-              itemBuilder: (context, index) {
-                final log = filteredLogs[index];
-                final bool isSystem = log['type'] == 'System';
+          Consumer<AdminLogState>(
+            builder: (context, logState, child) {
+              if (logState.isLoading && logState.items.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: isSystem
-                          ? Colors.purple.withValues(alpha: 0.1)
-                          : Colors.blue.withValues(alpha: 0.1),
-                      child: Icon(
-                        isSystem ? Icons.auto_awesome : Icons.campaign_rounded,
-                        color: isSystem ? Colors.purple : Colors.blue,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  log['title']?.toString() ?? 'No Title',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                log['time']?.toString() ?? 'Unknown Time',
-                                style: TextStyle(
-                                  color: Colors.grey.shade400,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            log['body']?.toString() ??
-                                'No message body provided.',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              _buildBadge(
-                                log['status']?.toString() ?? 'Status Unknown',
-                                Colors.green,
-                              ),
-                              _buildBadge(
-                                log['recipients']?.toString() ?? 'All',
-                                Colors.grey,
-                              ),
-                              // Remove Spacer when using Wrap, or use a custom layout
-                              TextButton(
-                                onPressed: () {},
-                                style: TextButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                ),
-                                child: const Text('View Analytics'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              if (logState.items.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: Text('No broadcast logs found.')),
                 );
-              },
-            ),
+              }
+
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: logState.items.length,
+                separatorBuilder: (context, index) =>
+                    Divider(height: 32, color: Colors.grey.shade100),
+                itemBuilder: (context, index) {
+                  final log = logState.items[index];
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                        child: const Icon(
+                          Icons.campaign_rounded,
+                          color: Colors.blue,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Broadcast Notification',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _formatDate(log.createdAt),
+                                  style: TextStyle(
+                                    color: Colors.grey.shade400,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            // Handle details as a map by converting to string or accessing a specific field
+                            Text(
+                              log.details?.toString() ?? 'No details provided.',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChips() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: ['All', 'System', 'Broadcast'].map((filter) {
-          final bool isSelected = _selectedFilter == filter;
-          return Padding(
-            padding: const EdgeInsets.only(left: 8.0),
-            child: FilterChip(
-              label: Text(filter),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  _selectedFilter = filter;
-                });
-              },
-              backgroundColor: Colors.grey.shade50,
-              selectedColor: Colors.blue.withValues(alpha: 0.1),
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.blue : Colors.black54,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 12,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              side: BorderSide(
-                color: isSelected ? Colors.blue : Colors.grey.shade200,
-                width: 1,
-              ),
-              showCheckmark: false,
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'Unknown';
+    return '${date.day}/${date.month} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 
   void _handleSubmit(BuildContext context) {
@@ -450,25 +329,37 @@ class _AdminNotificationCenterPageState
     );
   }
 
-  void _processSend() {
-    setState(() {
-      _logs.insert(0, {
-        'time': 'Just now',
-        'title': _titleController.text,
-        'body': _bodyController.text,
-        'type': 'Broadcast',
-        'status': 'Processing...',
-        'recipients': 'All Users',
-      });
-      _titleController.clear();
-      _bodyController.clear();
-    });
+  Future<void> _processSend() async {
+    setState(() => _isSending = true);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Broadcast queued successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    try {
+      await NotificationService().broadcastToAllUsers(
+        title: _titleController.text,
+        message: _bodyController.text,
+      );
+
+      if (mounted) {
+        _titleController.clear();
+        _bodyController.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Broadcast sent successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        context.read<AdminLogState>().fetchNotificationLogs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 }

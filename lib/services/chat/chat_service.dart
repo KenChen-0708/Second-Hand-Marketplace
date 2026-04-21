@@ -167,6 +167,42 @@ class ChatService {
     }
   }
 
+  /// Admin specific: Fetch chat history for an order dispute monitoring
+  Future<List<ChatMessageModel>> fetchDisputeChatHistory({
+    required String productId,
+    required String buyerId,
+    required String sellerId,
+  }) async {
+    try {
+      // 1. Find the conversation ID
+      final conv = await _supabase
+          .from('chat_conversations')
+          .select('id')
+          .eq('product_id', productId)
+          .eq('buyer_id', buyerId)
+          .eq('seller_id', sellerId)
+          .maybeSingle();
+
+      if (conv == null) return [];
+
+      final conversationId = conv['id'] as String;
+
+      // 2. Fetch all messages for that ID
+      final messagesData = await _supabase
+          .from('chat_messages')
+          .select()
+          .eq('conversation_id', conversationId)
+          .order('created_at');
+
+      return (messagesData as List)
+          .map((m) => ChatMessageModel.fromMap(Map<String, dynamic>.from(m)))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching dispute chat: $e');
+      return [];
+    }
+  }
+
   Future<ChatConversationBundle> getOrCreateConversation({
     required String productId,
     required String buyerId,
