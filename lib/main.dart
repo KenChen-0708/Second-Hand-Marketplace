@@ -489,6 +489,35 @@ class _MyAppState extends State<MyApp> {
     const primaryColor = Color(0xFF10B981);
     const scaffoldBgColor = Color(0xFFF9FAFB);
     const surfaceColor = Colors.white;
+    const surfaceVariantColor = Color(0xFFF3F4F6);
+    const outlineVariantColor = Color(0xFFE5E7EB);
+    const onSurfaceColor = Color(0xFF111827);
+    const onSurfaceVariantColor = Color(0xFF6B7280);
+    const errorColor = Color(0xFFEF4444);
+    const appColorScheme = ColorScheme.light(
+      primary: primaryColor,
+      onPrimary: Colors.white,
+      primaryContainer: Color(0xFFD1FAE5),
+      onPrimaryContainer: Color(0xFF065F46),
+      secondary: primaryColor,
+      onSecondary: Colors.white,
+      secondaryContainer: Color(0xFFD1FAE5),
+      onSecondaryContainer: Color(0xFF065F46),
+      error: errorColor,
+      onError: Colors.white,
+      errorContainer: Color(0xFFFEE2E2),
+      onErrorContainer: Color(0xFF991B1B),
+      surface: surfaceColor,
+      onSurface: onSurfaceColor,
+      onSurfaceVariant: onSurfaceVariantColor,
+      outline: Color(0xFFD1D5DB),
+      outlineVariant: outlineVariantColor,
+      shadow: Color(0x1F000000),
+      scrim: Color(0x52000000),
+      inverseSurface: Color(0xFF1F2937),
+      onInverseSurface: Colors.white,
+      inversePrimary: Color(0xFF34D399),
+    );
 
     return MultiProvider(
       providers: [
@@ -522,15 +551,7 @@ class _MyAppState extends State<MyApp> {
             themeMode: context.watch<ThemeState>().themeMode,
             theme: ThemeData(
               useMaterial3: true,
-              colorScheme:
-                  ColorScheme.fromSeed(
-                    seedColor: primaryColor,
-                    primary: primaryColor,
-                    surface: surfaceColor,
-                    brightness: Brightness.light,
-                    primaryContainer: primaryColor.withValues(alpha: 0.1),
-                    onPrimaryContainer: primaryColor.withValues(alpha: 0.1),
-                  ),
+              colorScheme: appColorScheme,
               scaffoldBackgroundColor: scaffoldBgColor,
               appBarTheme: const AppBarTheme(
                 backgroundColor: surfaceColor,
@@ -578,6 +599,31 @@ class _MyAppState extends State<MyApp> {
                 ),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              ),
+              cardColor: surfaceColor,
+              dividerColor: outlineVariantColor,
+              iconButtonTheme: const IconButtonThemeData(
+                style: ButtonStyle(
+                  backgroundColor: WidgetStatePropertyAll(surfaceVariantColor),
+                  foregroundColor: WidgetStatePropertyAll(onSurfaceColor),
+                ),
+              ),
+              chipTheme: ChipThemeData(
+                backgroundColor: surfaceVariantColor,
+                selectedColor: appColorScheme.primaryContainer,
+                secondarySelectedColor: appColorScheme.primaryContainer,
+                disabledColor: outlineVariantColor,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                side: const BorderSide(color: outlineVariantColor),
+                labelStyle: const TextStyle(color: onSurfaceColor),
+                secondaryLabelStyle: const TextStyle(color: onSurfaceColor),
+                brightness: Brightness.light,
               ),
             ),
           );
