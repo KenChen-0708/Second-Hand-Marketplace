@@ -188,7 +188,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         handoverLocation: _resolvedHandoverLocation,
         notes: _buildCheckoutNotes(),
         additionalFee: _deliveryFee,
-        status: 'paid',
+        status: 'pending',
         paymentStatus: 'paid',
       );
 
