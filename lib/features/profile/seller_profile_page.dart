@@ -29,6 +29,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
   UserModel? _sellerUser;
   SellerProfileModel? _sellerProfile;
+  SellerStats? _sellerStats;
   List<ProductModel> _activeListings = [];
   List<ReviewModel> _reviews = [];
 
@@ -60,6 +61,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           status: 'active',
         ),
         _sellerService.fetchSellerReviews(widget.sellerId),
+        _sellerService.getSellerStats(widget.sellerId),
       ]);
 
       if (mounted) {
@@ -68,6 +70,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           _sellerProfile = results[1] as SellerProfileModel?;
           _activeListings = results[2] as List<ProductModel>;
           _reviews = results[3] as List<ReviewModel>;
+          _sellerStats = results[4] as SellerStats;
           _isLoading = false;
         });
       }
@@ -306,7 +309,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
-              child: _buildProfileHeader(context, _sellerUser!, _sellerProfile),
+              child: _buildProfileHeader(context, _sellerUser!, _sellerProfile, _sellerStats),
             ),
             SliverPersistentHeader(
               pinned: true,
@@ -344,18 +347,20 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     BuildContext context,
     UserModel seller,
     SellerProfileModel? profile,
+    SellerStats? stats,
   ) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final String avatarUrl = ImageHelper.resolveProfileImageUrl(seller.avatarUrl, name: seller.name);
 
     // Use live calculation if profile data is missing or zero
-    final double rating = profile != null && profile.averageRating > 0 
+    final double rating = stats?.averageRating ?? (profile != null && profile.averageRating > 0 
         ? profile.averageRating 
-        : _calculatedRating;
-    final int reviewCount = profile != null && profile.totalReviews > 0 
+        : _calculatedRating);
+    final int reviewCount = stats?.totalReviews ?? (profile != null && profile.totalReviews > 0 
         ? profile.totalReviews 
-        : _reviews.length;
+        : _reviews.length);
+    final int soldCount = stats?.itemsSold ?? profile?.totalSales ?? 0;
 
     return Container(
       decoration: BoxDecoration(
@@ -482,7 +487,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                 ),
                 _buildStatItem(
                   context,
-                  profile?.totalSales.toString() ?? '0',
+                  soldCount.toString(),
                   'Sold',
                 ),
                 _buildStatItem(
