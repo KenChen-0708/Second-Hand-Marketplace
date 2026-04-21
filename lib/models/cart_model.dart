@@ -23,7 +23,7 @@ class CartModel implements AppModel {
 
   double get unitPrice => product.priceForVariant(selectedVariant);
   double get totalPrice => unitPrice * quantity;
-  String? get variantLabel => selectedVariant?.attributeSummary;
+  String? get variantLabel => selectedVariant?.optionSummary;
 
   CartModel copyWith({
     String? id,

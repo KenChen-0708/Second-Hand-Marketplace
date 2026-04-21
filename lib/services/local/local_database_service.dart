@@ -617,6 +617,29 @@ class LocalDatabaseService {
     await batch.commit(noResult: true);
   }
 
+  Future<void> upsertConversationBundle(
+    String currentUserId,
+    Map<String, dynamic> bundle,
+  ) async {
+    final db = await database;
+    await db.insert(
+      'chat_conversations',
+      {
+        'id': bundle['conversation_id'],
+        'current_user_id': currentUserId,
+        'product_id': bundle['product_id'],
+        'other_user_id': bundle['other_user_id'],
+        'other_user_name': bundle['other_user_name'],
+        'conversation_data': bundle['conversation_data'],
+        'product_data': bundle['product_data'],
+        'other_user_data': bundle['other_user_data'],
+        'last_message_at': bundle['last_message_at'],
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   Future<Map<String, dynamic>?> getCachedConversationRow(String conversationId) async {
     final db = await database;
     final rows = await db.query(

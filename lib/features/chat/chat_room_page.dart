@@ -232,11 +232,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final messages = bundle.messages;
     
     // Resolve profile image with initials fallback for the header
-    final String avatarUrl = ImageHelper.resolveProfileImageUrl(
-      bundle.otherUser.avatarUrl, 
-      name: bundle.otherUser.name
-    );
-
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
@@ -251,9 +246,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           onTap: () => context.push('/product/${product.id}'),
           child: Row(
             children: [
-              CircleAvatar(
+              ImageHelper.avatar(
+                bundle.otherUser.avatarUrl,
+                name: bundle.otherUser.name,
                 radius: 18,
-                backgroundImage: NetworkImage(avatarUrl),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -281,12 +277,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           ),
                           child: ImageHelper.productImage(
                             product.imageUrl,
+                            width: 14,
+                            height: 14,
                             fit: BoxFit.cover,
                           ),
                         ),
                         Expanded(
                           child: Text(
-                            '${product.title} · RM ${product.price.toStringAsFixed(0)}',
+                            '${product.title} - RM ${product.price.toStringAsFixed(0)}',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11,
@@ -349,7 +347,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           return _SharedProductBubble(
                             product: sharedProduct.product,
                             isMe: isMe,
-                            otherAvatarUrl: avatarUrl,
+                            otherUserAvatarPath: bundle.otherUser.avatarUrl,
+                            otherUserName: bundle.otherUser.name,
                           );
                         }
 
@@ -441,12 +440,6 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
-    final avatarUrl = ImageHelper.resolveProfileImageUrl(
-      otherUser.avatarUrl, 
-      name: otherUser.name
-    );
-
     return Padding(
       padding: EdgeInsets.only(
         top: 2,
@@ -461,9 +454,10 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
-            CircleAvatar(
+            ImageHelper.avatar(
+              otherUser.avatarUrl,
+              name: otherUser.name,
               radius: 14,
-              backgroundImage: NetworkImage(avatarUrl),
             ),
             const SizedBox(width: 6),
           ],
@@ -500,18 +494,11 @@ class _MessageBubble extends StatelessWidget {
                             children: [
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(14),
-                                child: Image.network(
-                                  message.imageUrl!,
+                                child: ImageHelper.networkImage(
+                                  message.imageUrl,
                                   width: 220,
                                   height: 220,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: 220,
-                                    height: 220,
-                                    color: colorScheme.surfaceContainerHighest,
-                                    alignment: Alignment.center,
-                                    child: const Icon(Icons.image_outlined),
-                                  ),
                                 ),
                               ),
                               if (message.messageText.trim().isNotEmpty) ...[
@@ -563,12 +550,14 @@ class _SharedProductBubble extends StatelessWidget {
   const _SharedProductBubble({
     required this.product,
     required this.isMe,
-    required this.otherAvatarUrl,
+    required this.otherUserAvatarPath,
+    required this.otherUserName,
   });
 
   final ProductModel product;
   final bool isMe;
-  final String otherAvatarUrl;
+  final String? otherUserAvatarPath;
+  final String? otherUserName;
 
   @override
   Widget build(BuildContext context) {
@@ -588,9 +577,10 @@ class _SharedProductBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
-            CircleAvatar(
+            ImageHelper.avatar(
+              otherUserAvatarPath,
+              name: otherUserName,
               radius: 14,
-              backgroundImage: NetworkImage(otherAvatarUrl),
             ),
             const SizedBox(width: 6),
           ],
