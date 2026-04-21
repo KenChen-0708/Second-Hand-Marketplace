@@ -56,6 +56,7 @@ class OrderService {
             (item) => <String, dynamic>{
               'order_id': order.id,
               'product_id': item.productId,
+              'variant_id': item.variantId,
               'quantity': item.quantity,
               'unit_price': item.unitPrice,
               'subtotal': item.subtotal,
@@ -127,13 +128,17 @@ class OrderService {
     try {
       final buyerResponse = await _supabase
           .from('orders')
-          .select('*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*)))')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
           .eq('buyer_id', userId)
           .order('created_at', ascending: false);
 
       final sellerResponse = await _supabase
           .from('orders')
-          .select('*, buyer:users!orders_buyer_id_fkey(*), order_items!inner(*, products!inner(*, seller:users(*)))')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items!inner(*, products!inner(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
           .eq('order_items.products.seller_id', userId)
           .order('created_at', ascending: false);
 
@@ -160,7 +165,9 @@ class OrderService {
     try {
       final response = await _supabase
           .from('orders')
-          .select('*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*)))')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
           .order('created_at', ascending: false);
 
       return (response as List)

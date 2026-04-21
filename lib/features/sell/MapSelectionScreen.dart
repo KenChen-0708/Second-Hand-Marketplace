@@ -1,569 +1,551 @@
-import 'dart:convert';
 import 'dart:async';
-import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Interactive Map Selection Screen (OpenStreetMap Version)
-// ─────────────────────────────────────────────────────────────────────────────
+// Note: Using the same API key as in google_maps_picker.dart for consistency
+const String _googlePlacesApiKey = 'AIzaSyADZFFqWrhF2UyOL6If2cYdbRBunjRnq9c';
+const LatLng _defaultKualaLumpur = LatLng(3.1390, 101.6869);
+
 class MapSelectionScreen extends StatefulWidget {
-  final double initialLat;
-  final double initialLng;
-
   const MapSelectionScreen({
     super.key,
     required this.initialLat,
     required this.initialLng,
   });
 
+  final double initialLat;
+  final double initialLng;
+
   @override
   State<MapSelectionScreen> createState() => _MapSelectionScreenState();
 }
 
 class _MapSelectionScreenState extends State<MapSelectionScreen> {
-  late MapController _mapController;
-  late LatLng _currentCenter;
-  String _currentAddress = "Loading address...";
-  bool _isDragging = false;
-
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocus = FocusNode();
-  List<dynamic> _suggestions = [];
-  Timer? _debounce;
+  final FocusNode _searchFocusNode = FocusNode();
+  final Completer<GoogleMapController> _mapController = Completer();
 
-  // Live Location State
-  LatLng? _myLocation;
-  StreamSubscription<Position>? _positionStream;
+  late LatLng _center;
+  String _selectedAddress = 'Loading address...';
+  bool _isLoading = true;
+  bool _isMapMoving = false;
+  bool _isReverseGeocoding = false;
+  bool _hasLocationAccess = false;
+  Timer? _searchDebounce;
+  Timer? _reverseGeocodeDebounce;
+  List<_PlaceSuggestion> _suggestions = const [];
 
   @override
   void initState() {
     super.initState();
-    _mapController = MapController();
-    _currentCenter = LatLng(widget.initialLat, widget.initialLng);
-    _fetchAddress(_currentCenter);
-    _initLocationTracking(); // Start tracking live location
+    _center = LatLng(widget.initialLat, widget.initialLng);
+    _initialize();
   }
 
   @override
   void dispose() {
-    _positionStream?.cancel(); // Clean up the GPS stream
-    _debounce?.cancel();
+    _searchDebounce?.cancel();
+    _reverseGeocodeDebounce?.cancel();
     _searchController.dispose();
-    _searchFocus.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
-  // ── Track Live GPS for the Blue Dot ──
-  Future<void> _initLocationTracking() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+  Future<void> _initialize() async {
+    _hasLocationAccess = await _ensureLocationAccess();
+    
+    // Perform initial reverse geocoding for the starting position
+    await _reverseGeocode(_center);
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
-    if (permission == LocationPermission.deniedForever) return;
-
-    // Listen to GPS updates continuously
-    _positionStream =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-          ),
-        ).listen((Position position) {
-          if (mounted) {
-            setState(() {
-              _myLocation = LatLng(position.latitude, position.longitude);
-            });
-          }
-        });
   }
 
-  // ── 1. OSM Reverse Geocoding (Pin Drop -> Address) ──
-  Future<void> _fetchAddress(LatLng pos) async {
+  Future<bool> _ensureLocationAccess({bool requestIfNeeded = false}) async {
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        pos.latitude,
-        pos.longitude,
-      );
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks[0];
-        if (mounted) {
-          setState(() {
-            _currentAddress = [
-              place.street,
-              place.subLocality,
-              place.locality,
-            ].where((e) => e != null && e.isNotEmpty).join(', ');
-          });
-        }
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return false;
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _currentAddress = "Unknown location";
-        });
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied && requestIfNeeded) {
+        permission = await Geolocator.requestPermission();
       }
+
+      return permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
+    } catch (_) {
+      return false;
     }
   }
 
   Future<void> _goToCurrentLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location services are disabled.')),
+          const SnackBar(content: Text('Please enable location services in your settings.')),
         );
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permissions are denied')),
-          );
-        return;
       }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permissions are permanently denied.'),
-          ),
-        );
       return;
     }
+
+    final hasLocationAccess = await _ensureLocationAccess(requestIfNeeded: true);
+    if (mounted) {
+      setState(() => _hasLocationAccess = hasLocationAccess);
+    }
+
+    if (!hasLocationAccess) return;
 
     try {
-      Position position = await Geolocator.getCurrentPosition(
+      final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-      LatLng currentLoc = LatLng(position.latitude, position.longitude);
-      _mapController.move(currentLoc, 17.0);
-      _currentCenter = currentLoc;
-      _fetchAddress(currentLoc);
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to get current location')),
-        );
-    }
-  }
-
-  // ── 2. OSM Forward Geocoding (Keyboard Enter -> Location) ──
-  Future<void> _searchLocation(String query) async {
-    if (query.isEmpty) return;
-    _searchFocus.unfocus();
-
-    try {
-      List<Location> locations = await locationFromAddress(query);
-      if (locations.isNotEmpty) {
-        Location loc = locations.first;
-        LatLng newLoc = LatLng(loc.latitude, loc.longitude);
-        _mapController.move(newLoc, 17.0);
-        _currentCenter = newLoc;
-
-        setState(() => _suggestions = []);
-        _fetchAddress(newLoc);
-      }
-    } catch (e) {
+      final target = LatLng(position.latitude, position.longitude);
+      _center = target;
+      await _animateCamera(target, zoom: 17);
+      await _reverseGeocode(target);
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Location not found')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to get current location')),
+        );
       }
     }
   }
 
-  // ── 3. OSM Autocomplete Suggestions (Nominatim API) ──
-  Future<void> _fetchSuggestions(String query) async {
-    if (query.isEmpty) {
-      if (mounted) setState(() => _suggestions = []);
+  Future<void> _animateCamera(LatLng target, {double zoom = 17}) async {
+    if (!_mapController.isCompleted) return;
+    final controller = await _mapController.future;
+    await controller.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: target, zoom: zoom),
+      ),
+    );
+  }
+
+  Future<void> _reverseGeocode(LatLng position) async {
+    if (!mounted) return;
+
+    setState(() => _isReverseGeocoding = true);
+    try {
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (placemarks.isEmpty) throw Exception('No address found');
+
+      final place = placemarks.first;
+      final address = [
+        place.name,
+        place.street,
+        place.subLocality,
+        place.locality,
+        place.administrativeArea,
+        place.postalCode,
+        place.country,
+      ].where((part) => part != null && part.trim().isNotEmpty).join(', ');
+
+      if (mounted) {
+        setState(() {
+          _selectedAddress = address.isEmpty
+              ? '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}'
+              : address;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _selectedAddress = '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isReverseGeocoding = false);
+      }
+    }
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      if (mounted) setState(() => _suggestions = const []);
       return;
     }
 
+    final uri = Uri.https(
+      'maps.googleapis.com',
+      '/maps/api/place/autocomplete/json',
+      {
+        'input': trimmed,
+        'key': _googlePlacesApiKey,
+        'components': 'country:my', // Restricted to Malaysia as per project context
+      },
+    );
+
     try {
-      final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=my',
-      );
+      final response = await http.get(uri);
+      final body = json.decode(response.body) as Map<String, dynamic>;
+      final predictions = (body['predictions'] as List? ?? const [])
+          .map((item) => _PlaceSuggestion.fromMap(Map<String, dynamic>.from(item as Map)))
+          .toList();
 
-      final response = await http.get(
-        url,
-        headers: {
-          'User-Agent': 'com.myuniversity.sellapp', // Keep your unique ID here
-        },
-      );
+      if (mounted) {
+        setState(() => _suggestions = predictions);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _suggestions = const []);
+    }
+  }
 
-      if (response.statusCode == 200 && mounted) {
-        final List data = json.decode(response.body);
+  Future<void> _selectSuggestion(_PlaceSuggestion suggestion) async {
+    final uri = Uri.https(
+      'maps.googleapis.com',
+      '/maps/api/place/details/json',
+      {
+        'place_id': suggestion.placeId,
+        'fields': 'geometry,name,formatted_address',
+        'key': _googlePlacesApiKey,
+      },
+    );
+
+    try {
+      final response = await http.get(uri);
+      final body = json.decode(response.body) as Map<String, dynamic>;
+      final result = Map<String, dynamic>.from((body['result'] as Map?) ?? <String, dynamic>{});
+      final geometry = Map<String, dynamic>.from((result['geometry'] as Map?) ?? <String, dynamic>{});
+      final location = Map<String, dynamic>.from((geometry['location'] as Map?) ?? <String, dynamic>{});
+
+      final lat = (location['lat'] as num?)?.toDouble();
+      final lng = (location['lng'] as num?)?.toDouble();
+      if (lat == null || lng == null) return;
+
+      final target = LatLng(lat, lng);
+      _searchFocusNode.unfocus();
+      _searchController.text = suggestion.mainText;
+
+      if (mounted) {
         setState(() {
-          _suggestions = data;
+          _center = target;
+          _selectedAddress = (result['formatted_address']?.toString().trim().isNotEmpty ?? false)
+              ? result['formatted_address'].toString()
+              : suggestion.description;
+          _suggestions = const [];
         });
       }
-    } catch (e) {
-      // Ignored for autocomplete typing
+
+      await _animateCamera(target);
+      await _reverseGeocode(target);
+    } catch (_) {}
+  }
+
+  void _onCameraMove(CameraPosition position) {
+    _center = position.target;
+    if (!_isMapMoving && mounted) {
+      setState(() => _isMapMoving = true);
     }
+  }
+
+  void _onCameraIdle() {
+    _reverseGeocodeDebounce?.cancel();
+    _reverseGeocodeDebounce = Timer(const Duration(milliseconds: 250), () async {
+      if (!mounted) return;
+      setState(() => _isMapMoving = false);
+      await _reverseGeocode(_center);
+    });
+  }
+
+  void _confirmSelection() {
+    Navigator.pop(context, _selectedAddress);
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Background Map
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _currentCenter,
-              initialZoom: 17.0,
-              onPositionChanged: (position, hasGesture) {
-                if (hasGesture) {
-                  _searchFocus.unfocus();
-                  if (_suggestions.isNotEmpty) {
-                    setState(() => _suggestions = []);
-                  }
-                }
-                if (hasGesture && !_isDragging) {
-                  setState(() => _isDragging = true);
-                }
-                if (position.center != null) {
-                  _currentCenter = position.center!;
-                }
-              },
-              onMapEvent: (event) {
-                if (event is MapEventMoveEnd) {
-                  setState(() => _isDragging = false);
-                  _fetchAddress(_currentCenter);
-                }
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName:
-                    'com.myuniversity.sellapp', // Keep your unique ID here
-              ),
-
-              // ── Live GPS Blue Dot Marker ──
-              if (_myLocation != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _myLocation!,
-                      width: 24.0,
-                      height: 24.0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
+              children: [
+                GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _center,
+                    zoom: 16,
+                  ),
+                  onMapCreated: (controller) {
+                    if (!_mapController.isCompleted) {
+                      _mapController.complete(controller);
+                    }
+                  },
+                  onCameraMove: _onCameraMove,
+                  onCameraIdle: _onCameraIdle,
+                  myLocationEnabled: _hasLocationAccess,
+                  myLocationButtonEnabled: false,
+                  zoomControlsEnabled: false,
+                  mapToolbarEnabled: false,
+                ),
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Material(
+                              color: Colors.white,
+                              shape: const CircleBorder(),
+                              elevation: 4,
+                              child: IconButton(
+                                icon: const Icon(Icons.arrow_back_rounded),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Material(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(28),
+                                elevation: 4,
+                                child: TextField(
+                                  controller: _searchController,
+                                  focusNode: _searchFocusNode,
+                                  textInputAction: TextInputAction.search,
+                                  onChanged: (value) {
+                                    _searchDebounce?.cancel();
+                                    _searchDebounce = Timer(
+                                      const Duration(milliseconds: 350),
+                                      () => _searchPlaces(value),
+                                    );
+                                    if (mounted) setState(() {});
+                                  },
+                                  onSubmitted: _searchPlaces,
+                                  decoration: InputDecoration(
+                                    hintText: 'Search location...',
+                                    border: InputBorder.none,
+                                    prefixIcon: const Icon(Icons.search_rounded),
+                                    suffixIcon: _searchController.text.trim().isEmpty
+                                        ? null
+                                        : IconButton(
+                                            icon: const Icon(Icons.close_rounded),
+                                            onPressed: () {
+                                              _searchController.clear();
+                                              _searchFocusNode.unfocus();
+                                              setState(() => _suggestions = const []);
+                                            },
+                                          ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                      ),
+                        if (_suggestions.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8, left: 52),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x22000000),
+                                  blurRadius: 16,
+                                  offset: Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            constraints: const BoxConstraints(maxHeight: 260),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              itemCount: _suggestions.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final suggestion = _suggestions[index];
+                                return ListTile(
+                                  leading: const Icon(Icons.location_on_outlined),
+                                  title: Text(
+                                    suggestion.mainText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    suggestion.secondaryText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: () => _selectSuggestion(suggestion),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-            ],
-          ),
-
-          // Top Bar (Back Button + Search + Suggestions)
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      FloatingActionButton.small(
-                        heroTag: 'backBtn',
-                        backgroundColor: Colors.white,
-                        onPressed: () => Navigator.pop(context),
+                IgnorePointer(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 48),
+                      child: AnimatedSlide(
+                        duration: const Duration(milliseconds: 180),
+                        offset: _isMapMoving ? const Offset(0, -0.08) : Offset.zero,
                         child: const Icon(
-                          Icons.arrow_back_rounded,
-                          color: Colors.black87,
+                          Icons.location_pin,
+                          size: 52,
+                          color: Color(0xFFEF4444),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(30),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 16,
+                  bottom: 220,
+                  child: SafeArea(
+                    child: Material(
+                      color: Colors.white,
+                      shape: const CircleBorder(),
+                      elevation: 4,
+                      child: IconButton(
+                        icon: const Icon(Icons.my_location_rounded),
+                        onPressed: _goToCurrentLocation,
+                      ),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: SafeArea(
+                    top: false,
+                    child: Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x22000000),
+                            blurRadius: 20,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.place_rounded,
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _isMapMoving || _isReverseGeocoding
+                                          ? 'Adjusting location...'
+                                          : 'Meeting Point',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _selectedAddress,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                          child: TextField(
-                            controller: _searchController,
-                            focusNode: _searchFocus,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: _searchLocation,
-                            onChanged: (value) {
-                              setState(
-                                () {},
-                              ); // Immediately update UI to show/hide the Clear button
-
-                              if (_debounce?.isActive ?? false)
-                                _debounce!.cancel();
-                              _debounce = Timer(
-                                const Duration(milliseconds: 500),
-                                () {
-                                  _fetchSuggestions(value);
-                                },
-                              );
-                            },
-                            decoration: InputDecoration(
-                              hintText: 'Search location...',
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 14,
-                              ),
-                              prefixIcon: const Icon(
-                                Icons.search,
-                                color: Colors.grey,
-                              ),
-
-                              // ── Dynamic Clear / Cross Button ──
-                              suffixIcon: _searchController.text.isNotEmpty
-                                  ? IconButton(
-                                      icon: const Icon(
-                                        Icons.clear_rounded,
-                                        color: Colors.grey,
-                                      ),
-                                      onPressed: () {
-                                        _searchController.clear();
-                                        _searchFocus.unfocus();
-                                        setState(() {
-                                          _suggestions = [];
-                                        });
-                                      },
-                                    )
-                                  : null,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // OSM Suggestions Dropdown
-                  if (_suggestions.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0, left: 56),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          padding: EdgeInsets.zero,
-                          itemCount: _suggestions.length,
-                          itemBuilder: (context, index) {
-                            final suggestion = _suggestions[index];
-                            final displayName =
-                                suggestion['display_name'] ??
-                                'Unknown location';
-
-                            return ListTile(
-                              leading: const Icon(
-                                Icons.location_on,
-                                color: Colors.grey,
-                              ),
-                              title: Text(
-                                displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () {
-                                _searchFocus.unfocus();
-                                _searchController.text = displayName.split(
-                                  ',',
-                                )[0]; // Set short name
-
-                                final double lat = double.parse(
-                                  suggestion['lat'],
-                                );
-                                final double lon = double.parse(
-                                  suggestion['lon'],
-                                );
-                                final newCenter = LatLng(lat, lon);
-
-                                setState(() {
-                                  _suggestions = [];
-                                  _currentAddress = displayName;
-                                });
-
-                                _mapController.move(newCenter, 17.0);
-                                _currentCenter = newCenter;
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          // Fixed Center Pin (Bounces when dragging)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 42),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                transform: Matrix4.translationValues(
-                  0,
-                  _isDragging ? -15 : 0,
-                  0,
-                ),
-                child: const Icon(
-                  Icons.location_on_rounded,
-                  size: 42,
-                  color: Color(0xFFEF4444),
-                ),
-              ),
-            ),
-          ),
-
-          // Bottom Area (FAB + Confirmation Card)
-          Positioned(
-            bottom: 30,
-            left: 20,
-            right: 20,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                FloatingActionButton(
-                  heroTag: 'currentLocBtn',
-                  backgroundColor: Colors.white,
-                  onPressed: _goToCurrentLocation,
-                  child: const Icon(
-                    Icons.my_location_rounded,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: colors.primary.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.place_rounded,
-                              color: colors.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Meeting Point',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey,
-                                  ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 54,
+                            child: FilledButton(
+                              onPressed: _isMapMoving ? null : _confirmSelection,
+                              style: FilledButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _isDragging
-                                      ? 'Moving map...'
-                                      : _currentAddress,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                              ),
+                              child: const Text(
+                                'Confirm Location',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-                      FilledButton(
-                        onPressed: _isDragging
-                            ? null
-                            : () => Navigator.pop(context, _currentAddress),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(54),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Confirm Location',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
+    );
+  }
+}
+
+class _PlaceSuggestion {
+  const _PlaceSuggestion({
+    required this.placeId,
+    required this.description,
+    required this.mainText,
+    required this.secondaryText,
+  });
+
+  final String placeId;
+  final String description;
+  final String mainText;
+  final String secondaryText;
+
+  factory _PlaceSuggestion.fromMap(Map<String, dynamic> map) {
+    final structured = Map<String, dynamic>.from(
+      (map['structured_formatting'] as Map?) ?? <String, dynamic>{},
+    );
+
+    return _PlaceSuggestion(
+      placeId: map['place_id']?.toString() ?? '',
+      description: map['description']?.toString() ?? '',
+      mainText: structured['main_text']?.toString() ?? map['description']?.toString() ?? '',
+      secondaryText: structured['secondary_text']?.toString() ?? '',
     );
   }
 }

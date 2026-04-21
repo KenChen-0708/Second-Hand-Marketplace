@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
 
+import '../../services/local/connectivity_service.dart';
+
 class ImageHelper {
   static const String productImageBucket = 'product_images';
   static const String profileImageBucket = 'profile_images';
@@ -72,32 +74,193 @@ class ImageHelper {
         .toList();
   }
 
+  static Widget networkImage(
+    String? imageUrl, {
+    BoxFit fit = BoxFit.cover,
+    double? width,
+    double? height,
+    IconData placeholderIcon = Icons.image_outlined,
+  }) {
+    final resolvedUrl = imageUrl?.trim();
+    if (resolvedUrl == null || resolvedUrl.isEmpty) {
+      return _imagePlaceholder(
+        width: width,
+        height: height,
+        icon: placeholderIcon,
+      );
+    }
+
+    return Image.network(
+      resolvedUrl,
+      fit: fit,
+      width: width,
+      height: height,
+      gaplessPlayback: true,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          return child;
+        }
+
+        return _imagePlaceholder(
+          width: width,
+          height: height,
+          icon: placeholderIcon,
+          isLoading: true,
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return _imagePlaceholder(
+          width: width,
+          height: height,
+          icon: placeholderIcon,
+        );
+      },
+    );
+  }
+
   static Widget productImage(
     String? imageUrl, {
     BoxFit fit = BoxFit.cover,
     double? width,
     double? height,
   }) {
+    final resolvedUrl = resolveProductImageUrl(
+      imageUrl,
+      fallbackToDefault: false,
+    );
+
+    if (resolvedUrl == null) {
+      return networkImage(
+        defaultProductImageUrl,
+        fit: fit,
+        width: width,
+        height: height,
+        placeholderIcon: Icons.image_outlined,
+      );
+    }
+
     return Image.network(
-      productOrDefault(imageUrl),
+      resolvedUrl,
       fit: fit,
       width: width,
       height: height,
+      gaplessPlayback: true,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          return child;
+        }
+
+        return _imagePlaceholder(
+          width: width,
+          height: height,
+          icon: Icons.image_outlined,
+          isLoading: true,
+        );
+      },
       errorBuilder: (context, error, stackTrace) {
-        return Image.network(defaultProductImageUrl, fit: fit, width: width, height: height);
+        return FutureBuilder<bool>(
+          future: ConnectivityService.instance.isOnline(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return _imagePlaceholder(
+                width: width,
+                height: height,
+                icon: Icons.image_outlined,
+                isLoading: true,
+              );
+            }
+
+            if (snapshot.data == true) {
+              return networkImage(
+                defaultProductImageUrl,
+                fit: fit,
+                width: width,
+                height: height,
+                placeholderIcon: Icons.image_outlined,
+              );
+            }
+
+            return _imagePlaceholder(
+              width: width,
+              height: height,
+              icon: Icons.image_outlined,
+            );
+          },
+        );
       },
     );
   }
 
-  static Widget _imagePlaceholder({double? width, double? height}) {
+  static Widget avatar(
+    String? rawPath, {
+    String? name,
+    double radius = 20,
+    Color? backgroundColor,
+  }) {
+    final size = radius * 2;
+    final trimmedPath = rawPath?.trim();
+
+    if (trimmedPath == null || trimmedPath.isEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: backgroundColor ?? const Color(0xFFE2E8F0),
+        child: Icon(
+          Icons.person_outline_rounded,
+          color: const Color(0xFF64748B),
+          size: radius,
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: backgroundColor ?? const Color(0xFFE2E8F0),
+      child: ClipOval(
+        child: networkImage(
+          resolveProfileImageUrl(trimmedPath, name: name),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          placeholderIcon: Icons.person_outline_rounded,
+        ),
+      ),
+    );
+  }
+
+  static Widget _imagePlaceholder({
+    double? width,
+    double? height,
+    IconData icon = Icons.image_outlined,
+    bool isLoading = false,
+  }) {
+    final effectiveWidth = width ?? double.infinity;
+    final effectiveHeight = height ?? double.infinity;
+    final isCompact =
+        (width != null && width <= 36) || (height != null && height <= 36);
+
     return Container(
-      width: width,
-      height: height,
+      width: effectiveWidth,
+      height: effectiveHeight,
       color: const Color(0xFFF3F4F6),
       alignment: Alignment.center,
-      child: const Icon(
-        Icons.image_outlined,
-        color: Color(0xFF9CA3AF),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isLoading)
+            SizedBox(
+              width: isCompact ? 10 : 18,
+              height: isCompact ? 10 : 18,
+              child: CircularProgressIndicator(
+                strokeWidth: isCompact ? 1.4 : 2,
+              ),
+            )
+          else
+            Icon(
+              icon,
+              color: const Color(0xFF9CA3AF),
+              size: isCompact ? 16 : 28,
+            ),
+        ],
       ),
     );
   }

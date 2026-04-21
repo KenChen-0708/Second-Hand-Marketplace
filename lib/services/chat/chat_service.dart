@@ -33,7 +33,7 @@ class ChatService {
 
     try {
       await syncPendingMessages();
-      
+
       if (kDebugMode) {
         print("--- CHAT FETCH DEBUG ---");
         print("Searching for conversations where buyer_id=$userId OR seller_id=$userId");
@@ -52,45 +52,19 @@ class ChatService {
           .or('buyer_id.eq.$userId,seller_id.eq.$userId')
           .order('last_message_at', ascending: false);
 
-      final rawList = conversationsData as List;
-      
-      if (kDebugMode) {
-        print("Supabase returned ${rawList.length} conversation rows.");
-      }
-
-      final bundles = <ChatConversationBundle>[];
-      
-      for (final item in rawList) {
-        try {
-          final map = Map<String, dynamic>.from(item as Map);
-          
-          // CRITICAL FIX: If for some reason the join failed (e.g. buyer/seller info missing),
-          // we still want to show the conversation if possible.
-          if (map['product'] == null) {
-            if (kDebugMode) print("Warning: Conversation ${map['id']} has no associated product.");
-            // We'll skip incomplete rows for now to prevent crashes, 
-            // but in a production app we might show a 'Deleted Product' placeholder.
-            continue; 
-          }
-
-          bundles.add(ChatConversationBundle.fromConversationMap(
-            map,
-            currentUserId: userId,
-          ));
-        } catch (e) {
-          if (kDebugMode) print("Error parsing conversation row: $e");
-        }
-      }
-
-      if (bundles.isEmpty && rawList.isNotEmpty) {
-         if (kDebugMode) print("Warning: Found ${rawList.length} rows but 0 could be parsed into bundles.");
-      }
+      final bundles = (conversationsData as List)
+          .map(
+            (item) => ChatConversationBundle.fromConversationMap(
+              Map<String, dynamic>.from(item as Map),
+              currentUserId: userId,
+            ),
+          )
+          .toList();
 
       if (bundles.isEmpty) {
         return const [];
       }
 
-      // Fetch messages for all found conversations
       final conversationIds = bundles.map((bundle) => bundle.conversation.id).toList();
       final messagesData = await _supabase
           .from('chat_messages')
@@ -151,7 +125,7 @@ class ChatService {
           .from('chat_conversations')
           .select(
             '*, '
-            'product:products(*), '
+            'product:products(*, variations:product_variations(*)), '
             'buyer:users!chat_conversations_buyer_id_fkey(*), '
             'seller:users!chat_conversations_seller_id_fkey(*)',
           )
@@ -312,14 +286,14 @@ class ChatService {
           .select('buyer_id, seller_id')
           .eq('id', conversationId)
           .single();
-      
+
       final recipientId = conv['buyer_id'] == senderId ? conv['seller_id'] : conv['buyer_id'];
 
       await _supabase
           .from('chat_conversations')
           .update({'last_message_at': lastMessageAt})
           .eq('id', conversationId);
-      
+
       // TRIGGER NOTIFICATION FOR RECIPIENT
       await _notificationService.createNotification(
         userId: recipientId,
@@ -603,13 +577,13 @@ class ChatConversationBundle {
     required String currentUserId,
   }) {
     final conversation = ChatConversationModel.fromMap(map);
-    
+
     // Resolve product with safety defaults if data is missing
     final Map<String, dynamic> rawProductMap = Map<String, dynamic>.from(
       (map['product'] as Map?) ?? <String, dynamic>{'id': map['product_id'] ?? '', 'title': 'Deleted Product', 'price': 0.0},
     );
     final productMap = _resolveProductMap(rawProductMap);
-    
+
     // Resolve users with safety defaults
     final buyerMap = Map<String, dynamic>.from(
       (map['buyer'] as Map?) ?? <String, dynamic>{'id': conversation.buyerId, 'name': 'Deleted User'},

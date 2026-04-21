@@ -36,7 +36,11 @@ class CheckoutSessionModel {
   factory CheckoutSessionModel.fromMap(Map<String, dynamic> map) {
     return CheckoutSessionModel(
       items: (map['items'] as List? ?? const [])
-          .map((item) => CartModel.fromMap(Map<String, dynamic>.from(item as Map)))
+          .map(
+            (item) => CartModel.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .toList(),
       clearCartAfterSuccess: map['clear_cart_after_success'] == true,
       isBuyNow: map['is_buy_now'] == true,

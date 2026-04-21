@@ -9,7 +9,7 @@ class LocalDatabaseService {
   static final LocalDatabaseService instance = LocalDatabaseService._();
 
   static const _databaseName = 'marketplace_cache.db';
-  static const _databaseVersion = 2;
+  static const _databaseVersion = 3;
 
   Database? _database;
 
@@ -57,6 +57,15 @@ class LocalDatabaseService {
     await _createWishlistItemsTable(db);
     await _createChatConversationsTable(db);
     await _createChatMessagesTable(db);
+    await _ensureCartVariantColumn(db);
+  }
+
+  Future<void> _ensureCartVariantColumn(Database db) async {
+    final columns = await db.rawQuery('PRAGMA table_info(cart_items)');
+    final hasVariantId = columns.any((column) => column['name'] == 'variant_id');
+    if (!hasVariantId) {
+      await db.execute('ALTER TABLE cart_items ADD COLUMN variant_id TEXT');
+    }
   }
 
   Future<void> _createProductsTable(Database db) async {
@@ -96,6 +105,7 @@ class LocalDatabaseService {
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         product_id TEXT NOT NULL,
+        variant_id TEXT,
         quantity INTEGER NOT NULL,
         added_at TEXT,
         product_data TEXT NOT NULL,
@@ -329,9 +339,10 @@ class LocalDatabaseService {
       batch.insert(
         'cart_items',
         {
-          'id': _cartKey(userId, item.product.id),
+          'id': _cartKey(userId, item.product.id, item.selectedVariant?.id),
           'user_id': userId,
           'product_id': item.product.id,
+          'variant_id': item.selectedVariant?.id,
           'quantity': item.quantity,
           'added_at': item.addedAt?.toIso8601String(),
           'product_data': item.product.toJson(),
@@ -359,6 +370,7 @@ class LocalDatabaseService {
       return CartModel(
         id: row['id'] as String,
         product: ProductModel.fromJson(row['product_data'] as String),
+        selectedVariant: _selectedVariantFromRow(row),
         quantity: row['quantity'] as int,
         addedAt: row['added_at'] == null
             ? null
@@ -370,6 +382,7 @@ class LocalDatabaseService {
   Future<void> upsertCartItem({
     required String userId,
     required ProductModel product,
+    ProductVariationModel? selectedVariant,
     required int quantity,
     DateTime? addedAt,
     String syncStatus = 'pending',
@@ -378,9 +391,10 @@ class LocalDatabaseService {
     await db.insert(
       'cart_items',
       {
-        'id': _cartKey(userId, product.id),
+        'id': _cartKey(userId, product.id, selectedVariant?.id),
         'user_id': userId,
         'product_id': product.id,
+        'variant_id': selectedVariant?.id,
         'quantity': quantity,
         'added_at': (addedAt ?? DateTime.now()).toIso8601String(),
         'product_data': product.toJson(),
@@ -395,6 +409,7 @@ class LocalDatabaseService {
   Future<void> markCartItemDeleted({
     required String userId,
     required String productId,
+    String? variantId,
   }) async {
     final db = await database;
     await db.update(
@@ -405,19 +420,20 @@ class LocalDatabaseService {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       },
       where: 'id = ?',
-      whereArgs: [_cartKey(userId, productId)],
+      whereArgs: [_cartKey(userId, productId, variantId)],
     );
   }
 
   Future<void> deleteCartItemPermanently({
     required String userId,
     required String productId,
+    String? variantId,
   }) async {
     final db = await database;
     await db.delete(
       'cart_items',
       where: 'id = ?',
-      whereArgs: [_cartKey(userId, productId)],
+      whereArgs: [_cartKey(userId, productId, variantId)],
     );
   }
 
@@ -601,6 +617,29 @@ class LocalDatabaseService {
     await batch.commit(noResult: true);
   }
 
+  Future<void> upsertConversationBundle(
+    String currentUserId,
+    Map<String, dynamic> bundle,
+  ) async {
+    final db = await database;
+    await db.insert(
+      'chat_conversations',
+      {
+        'id': bundle['conversation_id'],
+        'current_user_id': currentUserId,
+        'product_id': bundle['product_id'],
+        'other_user_id': bundle['other_user_id'],
+        'other_user_name': bundle['other_user_name'],
+        'conversation_data': bundle['conversation_data'],
+        'product_data': bundle['product_data'],
+        'other_user_data': bundle['other_user_data'],
+        'last_message_at': bundle['last_message_at'],
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   Future<Map<String, dynamic>?> getCachedConversationRow(String conversationId) async {
     final db = await database;
     final rows = await db.query(
@@ -743,10 +782,27 @@ class LocalDatabaseService {
       product.condition,
       product.categoryId ?? '',
       product.sellerName ?? '',
+      ...product.variations.map((variation) => variation.attributeSummary),
     ].join(' ').toLowerCase();
   }
 
-  static String _cartKey(String userId, String productId) => '${userId}_$productId';
+  ProductVariationModel? _selectedVariantFromRow(Map<String, Object?> row) {
+    final variantId = row['variant_id'] as String?;
+    if (variantId == null || variantId.isEmpty) {
+      return null;
+    }
+
+    final product = ProductModel.fromJson(row['product_data'] as String);
+    for (final variation in product.variations) {
+      if (variation.id == variantId) {
+        return variation;
+      }
+    }
+    return null;
+  }
+
+  static String _cartKey(String userId, String productId, [String? variantId]) =>
+      '${userId}_${productId}_${variantId ?? 'default'}';
   static String _wishlistKey(String userId, String productId) =>
       '${userId}_$productId';
 }

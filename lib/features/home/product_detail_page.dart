@@ -37,17 +37,26 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       throw Exception('Product not found.');
     }
 
-    final sellerData = await Supabase.instance.client
-        .from('users')
-        .select()
-        .eq('id', product.sellerId)
-        .maybeSingle();
+    UserModel? seller;
+    try {
+      final sellerData = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('id', product.sellerId)
+          .maybeSingle();
+      seller = sellerData == null
+          ? null
+          : UserModel.fromMap(Map<String, dynamic>.from(sellerData));
+    } catch (_) {
+      seller = null;
+    }
 
-    final seller = sellerData == null
-        ? null
-        : UserModel.fromMap(Map<String, dynamic>.from(sellerData));
-
-    final meetupLocation = await ProductService().fetchMeetupLocation(product.id);
+    Map<String, dynamic>? meetupLocation;
+    try {
+      meetupLocation = await ProductService().fetchMeetupLocation(product.id);
+    } catch (_) {
+      meetupLocation = null;
+    }
 
     return _ProductDetailData(
       product: product,
@@ -124,14 +133,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           .getOrCreateConversationForProduct(
             product: product,
           );
-      
-      if (!context.mounted) return;
-      
-      // We navigate to the chat room. The ChatService sendMessage will
-      // handle the actual push notification trigger when the first message is sent.
+      if (!context.mounted) {
+        return;
+      }
       await context.push('/chat/${bundle.conversation.id}');
     } catch (e) {
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       _showMessage(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) {
@@ -181,6 +190,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     final result = await context.read<CartState>().addToCart(
       product,
+      selectedVariant: selection.selectedVariant,
       quantity: selection.quantity,
     );
     if (!context.mounted) {
@@ -214,8 +224,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       extra: CheckoutSessionModel(
         items: [
           CartModel(
-            id: 'buy_now_${product.id}_${selection.selectedOption ?? 'default'}',
+            id:
+                'buy_now_${product.id}_${selection.selectedVariant?.id ?? 'default'}',
             product: product,
+            selectedVariant: selection.selectedVariant,
             quantity: selection.quantity,
           ),
         ],
@@ -237,6 +249,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
+          final errorText = snapshot.error.toString().replaceFirst(
+            'Exception: ',
+            '',
+          );
+          final isOfflineError = errorText.toLowerCase().contains('offline');
           return Scaffold(
             backgroundColor: Theme.of(context).colorScheme.surface,
             body: SafeArea(
@@ -250,16 +267,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       onPressed: () => context.pop(),
                     ),
                     const Spacer(),
-                    const Icon(Icons.inventory_2_outlined, size: 72),
+                    Icon(
+                      isOfflineError
+                          ? Icons.cloud_off_rounded
+                          : Icons.inventory_2_outlined,
+                      size: 72,
+                    ),
                     const SizedBox(height: 16),
                     Text(
-                      'Unable to load this product',
+                      isOfflineError
+                          ? 'No internet connection'
+                          : 'Unable to load this product',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'This product may no longer be available, or there was a connection problem.',
+                      isOfflineError
+                          ? 'This product is not available offline yet. Reconnect and try again.'
+                          : 'This product may no longer be available, or there was a connection problem.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 24),
@@ -283,8 +309,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final stockQuantity = product.stockQuantity;
         final isSoldOut = product.isSoldOut;
         
-        final sellerAvatar = ImageHelper.resolveProfileImageUrl(seller?.avatarUrl, name: seller?.name);
-
         final favoriteState = context.watch<FavoriteState>();
         final isFavorite = favoriteState.isFavorite(product.id);
         final isOwner =
@@ -518,6 +542,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             ),
                           ),
                           const SizedBox(height: 24),
+                          // --- Added Trade Details Section ---
                           Text(
                             'Trade Details',
                             style: Theme.of(context).textTheme.titleMedium
@@ -605,9 +630,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     context.push('/seller/${product.sellerId}'),
                                 child: Hero(
                                   tag: 'seller_avatar_${product.sellerId}',
-                                  child: CircleAvatar(
+                                  child: ImageHelper.avatar(
+                                    seller?.avatarUrl,
+                                    name: seller?.name,
                                     radius: 24,
-                                    backgroundImage: NetworkImage(sellerAvatar),
                                   ),
                                 ),
                               ),
@@ -791,6 +817,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     '/edit-product',
                                     extra: product,
                                   );
+                                  // The details will automatically update because of ProductState and FutureBuilder reload
                                   _reloadProduct();
                                 },
                                 child: const Text(
@@ -897,10 +924,15 @@ class _ProductDetailData {
 }
 
 class _PurchaseSelection {
-  const _PurchaseSelection({required this.quantity, this.selectedOption});
+  const _PurchaseSelection({
+    required this.quantity,
+    this.selectedOption,
+    this.selectedVariant,
+  });
 
   final int quantity;
   final String? selectedOption;
+  final ProductVariationModel? selectedVariant;
 }
 
 class _PurchaseOptionsSheet extends StatefulWidget {
@@ -919,71 +951,195 @@ class _PurchaseOptionsSheet extends StatefulWidget {
 }
 
 class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
-  late final Map<String, List<ProductVariationModel>> _variationsByType;
-  final Map<String, ProductVariationModel> _selectedVariationsByType = {};
+  ProductVariationModel? _selectedVariant;
   int _quantity = 1;
+  final Map<String, String> _selectedAttributes = {};
 
   @override
   void initState() {
     super.initState();
-    _variationsByType = _groupVariations(widget.product.variations);
-    for (final entry in _variationsByType.entries) {
-      final preferred = entry.value.firstWhere(
+    if (widget.product.variations.isNotEmpty) {
+      _selectedVariant = widget.product.variations.firstWhere(
         (variation) => variation.availableQuantity > 0,
-        orElse: () => entry.value.first,
+        orElse: () => widget.product.variations.first,
       );
-      _selectedVariationsByType[entry.key] = preferred;
+      _selectedAttributes
+        ..clear()
+        ..addAll(_selectedVariant!.normalizedAttributes);
     }
-  }
-
-  Map<String, List<ProductVariationModel>> _groupVariations(
-    List<ProductVariationModel> variations,
-  ) {
-    final grouped = <String, List<ProductVariationModel>>{};
-    for (final variation in variations) {
-      grouped.putIfAbsent(variation.variationType, () => []).add(variation);
-    }
-
-    final sortedKeys = grouped.keys.toList()..sort();
-    return {
-      for (final key in sortedKeys)
-        key: (grouped[key]!..sort(
-          (a, b) => a.variationValue.compareTo(b.variationValue),
-        )),
-    };
   }
 
   int? get _stockLimit {
-    if (_selectedVariationsByType.isNotEmpty) {
-      return _selectedVariationsByType.values
-          .map((variation) => variation.availableQuantity)
-          .reduce((value, element) => value < element ? value : element);
+    if (_selectedVariant != null) {
+      return _selectedVariant!.availableQuantity;
     }
 
     return widget.product.stockQuantity;
   }
 
-  String? get _selectedOption {
-    if (_selectedVariationsByType.isEmpty) {
+  List<String> get _attributeNames {
+    final names = <String>[];
+    for (final variation in widget.product.variations) {
+      for (final name in variation.normalizedAttributes.keys) {
+        if (!names.contains(name)) {
+          names.add(name);
+        }
+      }
+    }
+    return names;
+  }
+
+  List<String> _allValuesForAttribute(String attributeName) {
+    final values = <String>[];
+    for (final variation in widget.product.variations) {
+      final value = variation.normalizedAttributes[attributeName];
+      if (value != null && value.isNotEmpty && !values.contains(value)) {
+        values.add(value);
+      }
+    }
+    return values;
+  }
+
+  bool _matchesOtherSelections(
+    ProductVariationModel variation,
+    String activeAttribute,
+  ) {
+    final attributes = variation.normalizedAttributes;
+    for (final entry in _selectedAttributes.entries) {
+      if (entry.key == activeAttribute) {
+        continue;
+      }
+      if (attributes[entry.key] != entry.value) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  ProductVariationModel? _firstMatchingVariantFor(
+    String attributeName,
+    String attributeValue,
+  ) {
+    final matches = widget.product.variations.where((variation) {
+      final attributes = variation.normalizedAttributes;
+      return attributes[attributeName] == attributeValue &&
+          _matchesOtherSelections(variation, attributeName);
+    }).toList();
+
+    if (matches.isEmpty) {
       return null;
     }
 
-    final entries = _selectedVariationsByType.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-    return entries
-        .map((entry) => '${entry.key}: ${entry.value.variationValue}')
-        .join(', ');
+    return matches.firstWhere(
+      (variation) => variation.availableQuantity > 0,
+      orElse: () => matches.first,
+    );
   }
 
-  String _formatVariationType(String type) {
-    return type
-        .split('_')
-        .map(
-          (word) => word.isEmpty
-              ? word
-              : '${word[0].toUpperCase()}${word.substring(1)}',
-        )
-        .join(' ');
+  void _selectAttributeValue(String attributeName, String attributeValue) {
+    final matchedVariant = _firstMatchingVariantFor(attributeName, attributeValue);
+    if (matchedVariant == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedVariant = matchedVariant;
+      _selectedAttributes
+        ..clear()
+        ..addAll(matchedVariant.normalizedAttributes);
+
+      final updatedLimit = _stockLimit;
+      if (updatedLimit != null && _quantity > updatedLimit) {
+        _quantity = updatedLimit < 1 ? 1 : updatedLimit;
+      }
+    });
+  }
+
+  String? get _selectedOption => _selectedVariant?.optionSummary;
+
+  Widget _buildVariantSelector(
+    BuildContext context,
+    ProductModel product,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Variant',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 12),
+        ..._attributeNames.map((attributeName) {
+          final selectedValue = _selectedAttributes[attributeName];
+          final values = _allValuesForAttribute(attributeName);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attributeName,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: values.map((value) {
+                    final matchedVariant = _firstMatchingVariantFor(
+                      attributeName,
+                      value,
+                    );
+                    final isSelected = selectedValue == value;
+                    final isEnabled =
+                        matchedVariant != null &&
+                        matchedVariant.availableQuantity > 0;
+                    final variationPrice =
+                        matchedVariant == null
+                            ? product.price
+                            : product.priceForVariant(matchedVariant);
+
+                    return ChoiceChip(
+                      label: Text(
+                        variationPrice != product.price
+                            ? '$value  RM ${variationPrice.toStringAsFixed(2)}'
+                            : value,
+                      ),
+                      selected: isSelected,
+                      onSelected: isEnabled
+                          ? (_) => _selectAttributeValue(attributeName, value)
+                          : null,
+                      selectedColor: colorScheme.primary,
+                      disabledColor: colorScheme.surfaceContainerHighest,
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : isEnabled
+                            ? colorScheme.onSurface
+                            : colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      side: BorderSide(
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.outlineVariant,
+                      ),
+                      showCheckmark: false,
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
   }
 
   @override
@@ -992,6 +1148,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
     final product = widget.product;
     final stockLimit = _stockLimit;
     final isSoldOut = product.isSoldOut || (stockLimit != null && stockLimit <= 0);
+    final displayPrice = product.priceForVariant(_selectedVariant);
 
     return SafeArea(
       child: Padding(
@@ -1038,69 +1195,27 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'RM ${product.price.toStringAsFixed(2)}',
+                            'RM ${displayPrice.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
+                          if (_selectedOption != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _selectedOption!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
-                if (_variationsByType.isNotEmpty) ...[
-                  Text(
-                    'Variant',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 12),
-                  ..._variationsByType.entries.map((entry) {
-                    final selectedVariation = _selectedVariationsByType[entry.key];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _formatVariationType(entry.key),
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: entry.value.map((variation) {
-                              final isSelected = selectedVariation?.id == variation.id;
-                              final isEnabled = variation.availableQuantity > 0;
-                              return ChoiceChip(
-                                label: Text(
-                                  '${variation.variationValue} (${variation.availableQuantity})',
-                                ),
-                                selected: isSelected,
-                                onSelected: isEnabled
-                                    ? (_) => setState(() {
-                                        _selectedVariationsByType[entry.key] = variation;
-                                        final updatedLimit = _stockLimit;
-                                        if (updatedLimit != null && _quantity > updatedLimit) {
-                                          _quantity = updatedLimit;
-                                        }
-                                      })
-                                    : null,
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
+                if (product.variations.isNotEmpty) _buildVariantSelector(context, product),
                 const SizedBox(height: 24),
                 Row(
                   children: [
@@ -1162,6 +1277,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                               _PurchaseSelection(
                                 quantity: _quantity,
                                 selectedOption: _selectedOption,
+                                selectedVariant: _selectedVariant,
                               ),
                             ),
                     icon: Icon(widget.actionIcon),

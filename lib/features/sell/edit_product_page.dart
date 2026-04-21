@@ -184,6 +184,12 @@ class _EditProductPageState extends State<EditProductPage> {
         'title': _titleController.text.trim(),
         'description': finalDescription,
         'price': price,
+        'total_stock': widget.product.variations.isEmpty
+            ? (widget.product.totalStock ?? widget.product.availableQuantity ?? 1)
+            : widget.product.variations.fold<int>(
+                0,
+                (sum, variation) => sum + variation.availableQuantity,
+              ),
         'condition': _selectedCondition,
         'trade_preference': tradePreferences,
         'open_to_offers': _openToOffers,
