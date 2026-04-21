@@ -41,7 +41,9 @@ class CartService {
       final productIds = cartItems.map((item) => item.productId).toList();
       final productData = await _supabase
           .from('products')
-          .select('*, variations:product_variations(*)')
+          .select(
+            '*, variations:product_variants(*, attributes:product_variant_attributes(*))',
+          )
           .inFilter('id', productIds);
 
       final productsById = <String, ProductModel>{};
@@ -56,8 +58,12 @@ class CartService {
           .where((item) => productsById.containsKey(item.productId))
           .map(
             (item) => CartModel(
-              id: _localCartId(userId, item.productId),
+              id: _localCartId(userId, item.productId, item.variantId),
               product: productsById[item.productId]!,
+              selectedVariant: _findVariant(
+                productsById[item.productId]!,
+                item.variantId,
+              ),
               quantity: item.quantity,
               addedAt: item.addedAt,
             ),
@@ -82,6 +88,7 @@ class CartService {
   Future<CartActionResult> addToCart({
     required String userId,
     required ProductModel product,
+    ProductVariationModel? selectedVariant,
     int quantity = 1,
   }) async {
     if (userId.isEmpty || product.id.isEmpty || quantity <= 0) {
@@ -90,14 +97,16 @@ class CartService {
     if (product.isSoldOut) {
       throw Exception('This product is sold out.');
     }
-    final stockQuantity = product.stockQuantity;
+    final stockQuantity = selectedVariant?.availableQuantity ?? product.stockQuantity;
     if (stockQuantity != null && quantity > stockQuantity) {
       throw Exception('Only $stockQuantity item(s) are currently available.');
     }
 
     final cachedItems = await _localDatabase.getCachedCartItems(userId);
     final existing = cachedItems.cast<CartModel?>().firstWhere(
-      (item) => item?.product.id == product.id,
+      (item) =>
+          item?.product.id == product.id &&
+          item?.selectedVariant?.id == selectedVariant?.id,
       orElse: () => null,
     );
     final updatedQuantity = (existing?.quantity ?? 0) + quantity;
@@ -106,8 +115,9 @@ class CartService {
     }
 
     final localItem = CartModel(
-      id: _localCartId(userId, product.id),
+      id: _localCartId(userId, product.id, selectedVariant?.id),
       product: product,
+      selectedVariant: selectedVariant,
       quantity: updatedQuantity,
       addedAt: existing?.addedAt ?? DateTime.now(),
     );
@@ -115,6 +125,7 @@ class CartService {
     await _localDatabase.upsertCartItem(
       userId: userId,
       product: product,
+      selectedVariant: selectedVariant,
       quantity: updatedQuantity,
       addedAt: localItem.addedAt,
       syncStatus: 'pending',
@@ -131,14 +142,16 @@ class CartService {
     }
 
     try {
-      await _supabase.from('cart_items').upsert({
-        'user_id': userId,
-        'product_id': product.id,
-        'quantity': updatedQuantity,
-      }, onConflict: 'user_id,product_id');
+      await _upsertRemoteCartItem(
+        userId: userId,
+        productId: product.id,
+        variantId: selectedVariant?.id,
+        quantity: updatedQuantity,
+      );
       await _localDatabase.upsertCartItem(
         userId: userId,
         product: product,
+        selectedVariant: selectedVariant,
         quantity: updatedQuantity,
         addedAt: localItem.addedAt,
         syncStatus: 'synced',
@@ -166,19 +179,24 @@ class CartService {
     required String userId,
     required String productId,
     required ProductModel product,
+    ProductVariationModel? selectedVariant,
     required int quantity,
   }) async {
     if (productId.isEmpty) {
       throw Exception('The selected cart item is invalid.');
     }
 
-    final stockQuantity = product.stockQuantity;
+    final stockQuantity = selectedVariant?.availableQuantity ?? product.stockQuantity;
     if (stockQuantity != null && quantity > stockQuantity) {
       throw Exception('Only $stockQuantity item(s) are currently available.');
     }
 
     if (quantity <= 0) {
-      await removeCartItem(userId: userId, productId: productId);
+      await removeCartItem(
+        userId: userId,
+        productId: productId,
+        variantId: selectedVariant?.id,
+      );
       return null;
     }
 
@@ -186,13 +204,15 @@ class CartService {
     await _localDatabase.upsertCartItem(
       userId: userId,
       product: product,
+      selectedVariant: selectedVariant,
       quantity: quantity,
       syncStatus: 'pending',
     );
 
     final updatedItem = CartModel(
-      id: _localCartId(userId, productId),
+      id: _localCartId(userId, productId, selectedVariant?.id),
       product: product,
+      selectedVariant: selectedVariant,
       quantity: quantity,
       addedAt: DateTime.now(),
     );
@@ -202,14 +222,16 @@ class CartService {
     }
 
     try {
-      await _supabase.from('cart_items').upsert({
-        'user_id': userId,
-        'product_id': productId,
-        'quantity': quantity,
-      }, onConflict: 'user_id,product_id');
+      await _upsertRemoteCartItem(
+        userId: userId,
+        productId: productId,
+        variantId: selectedVariant?.id,
+        quantity: quantity,
+      );
       await _localDatabase.upsertCartItem(
         userId: userId,
         product: product,
+        selectedVariant: selectedVariant,
         quantity: quantity,
         addedAt: updatedItem.addedAt,
         syncStatus: 'synced',
@@ -228,25 +250,31 @@ class CartService {
   Future<void> removeCartItem({
     required String userId,
     required String productId,
+    String? variantId,
   }) async {
     if (productId.isEmpty) {
       throw Exception('The selected cart item is invalid.');
     }
 
-    await _localDatabase.markCartItemDeleted(userId: userId, productId: productId);
+    await _localDatabase.markCartItemDeleted(
+      userId: userId,
+      productId: productId,
+      variantId: variantId,
+    );
     if (!await _connectivityService.isOnline()) {
       return;
     }
 
     try {
-      await _supabase
-          .from('cart_items')
-          .delete()
-          .eq('user_id', userId)
-          .eq('product_id', productId);
+      await _deleteRemoteCartItem(
+        userId: userId,
+        productId: productId,
+        variantId: variantId,
+      );
       await _localDatabase.deleteCartItemPermanently(
         userId: userId,
         productId: productId,
+        variantId: variantId,
       );
     } on PostgrestException catch (e) {
       throw Exception(
@@ -288,28 +316,33 @@ class CartService {
     final pendingRows = await _localDatabase.getPendingCartRows(userId);
     for (final row in pendingRows) {
       final productId = row['product_id'] as String;
+      final variantId = row['variant_id'] as String?;
       if ((row['is_deleted'] as int) == 1 ||
           row['sync_status'] == 'pending_delete') {
-        await _supabase
-            .from('cart_items')
-            .delete()
-            .eq('user_id', userId)
-            .eq('product_id', productId);
+        await _deleteRemoteCartItem(
+          userId: userId,
+          productId: productId,
+          variantId: variantId,
+        );
         await _localDatabase.deleteCartItemPermanently(
           userId: userId,
           productId: productId,
+          variantId: variantId,
         );
         continue;
       }
 
-      await _supabase.from('cart_items').upsert({
-        'user_id': userId,
-        'product_id': productId,
-        'quantity': row['quantity'],
-      }, onConflict: 'user_id,product_id');
+      final product = ProductModel.fromJson(row['product_data'] as String);
+      await _upsertRemoteCartItem(
+        userId: userId,
+        productId: productId,
+        variantId: variantId,
+        quantity: row['quantity'] as int,
+      );
       await _localDatabase.upsertCartItem(
         userId: userId,
-        product: ProductModel.fromJson(row['product_data'] as String),
+        product: product,
+        selectedVariant: _findVariant(product, variantId),
         quantity: row['quantity'] as int,
         addedAt: row['added_at'] == null
             ? null
@@ -319,7 +352,79 @@ class CartService {
     }
   }
 
-  String _localCartId(String userId, String productId) => '${userId}_$productId';
+  String _localCartId(String userId, String productId, [String? variantId]) =>
+      '${userId}_${productId}_${variantId ?? 'default'}';
+
+  ProductVariationModel? _findVariant(ProductModel product, String? variantId) {
+    if (variantId == null || variantId.isEmpty) {
+      return null;
+    }
+
+    for (final variation in product.variations) {
+      if (variation.id == variantId) {
+        return variation;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _upsertRemoteCartItem({
+    required String userId,
+    required String productId,
+    required int quantity,
+    String? variantId,
+  }) async {
+    if (variantId == null || variantId.isEmpty) {
+      final existing = await _supabase
+          .from('cart_items')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('product_id', productId)
+          .isFilter('variant_id', null)
+          .maybeSingle();
+
+      if (existing != null) {
+        await _supabase
+            .from('cart_items')
+            .update({'quantity': quantity})
+            .eq('id', existing['id']);
+        return;
+      }
+
+      await _supabase.from('cart_items').insert({
+        'user_id': userId,
+        'product_id': productId,
+        'quantity': quantity,
+      });
+      return;
+    }
+
+    await _supabase.from('cart_items').upsert({
+      'user_id': userId,
+      'product_id': productId,
+      'variant_id': variantId,
+      'quantity': quantity,
+    }, onConflict: 'user_id,product_id,variant_id');
+  }
+
+  Future<void> _deleteRemoteCartItem({
+    required String userId,
+    required String productId,
+    String? variantId,
+  }) async {
+    final query = _supabase
+        .from('cart_items')
+        .delete()
+        .eq('user_id', userId)
+        .eq('product_id', productId);
+
+    if (variantId == null || variantId.isEmpty) {
+      await query.isFilter('variant_id', null);
+      return;
+    }
+
+    await query.eq('variant_id', variantId);
+  }
 
   Map<String, dynamic> _resolveProductMap(Map<String, dynamic> productMap) {
     final resolvedImages = ImageHelper.resolveProductImageUrls(

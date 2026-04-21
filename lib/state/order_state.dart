@@ -52,10 +52,12 @@ class OrderState extends EntityState<OrderModel> {
               (item) => OrderItemModel(
                 id: item.id,
                 productId: item.product.id,
+                variantId: item.selectedVariant?.id,
                 quantity: item.quantity,
-                unitPrice: item.product.price,
+                unitPrice: item.unitPrice,
                 subtotal: item.totalPrice,
-                product: item.product, // 🔥 FIXED: Pass the product object
+                product: item.product,
+                variant: item.selectedVariant,
               ),
             )
             .toList(),

@@ -181,6 +181,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     final result = await context.read<CartState>().addToCart(
       product,
+      selectedVariant: selection.selectedVariant,
       quantity: selection.quantity,
     );
     if (!context.mounted) {
@@ -214,8 +215,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       extra: CheckoutSessionModel(
         items: [
           CartModel(
-            id: 'buy_now_${product.id}_${selection.selectedOption ?? 'default'}',
+            id:
+                'buy_now_${product.id}_${selection.selectedVariant?.id ?? 'default'}',
             product: product,
+            selectedVariant: selection.selectedVariant,
             quantity: selection.quantity,
           ),
         ],
@@ -900,10 +903,15 @@ class _ProductDetailData {
 }
 
 class _PurchaseSelection {
-  const _PurchaseSelection({required this.quantity, this.selectedOption});
+  const _PurchaseSelection({
+    required this.quantity,
+    this.selectedOption,
+    this.selectedVariant,
+  });
 
   final int quantity;
   final String? selectedOption;
+  final ProductVariationModel? selectedVariant;
 }
 
 class _PurchaseOptionsSheet extends StatefulWidget {
@@ -922,72 +930,29 @@ class _PurchaseOptionsSheet extends StatefulWidget {
 }
 
 class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
-  late final Map<String, List<ProductVariationModel>> _variationsByType;
-  final Map<String, ProductVariationModel> _selectedVariationsByType = {};
+  ProductVariationModel? _selectedVariant;
   int _quantity = 1;
 
   @override
   void initState() {
     super.initState();
-    _variationsByType = _groupVariations(widget.product.variations);
-    for (final entry in _variationsByType.entries) {
-      final preferred = entry.value.firstWhere(
+    if (widget.product.variations.isNotEmpty) {
+      _selectedVariant = widget.product.variations.firstWhere(
         (variation) => variation.availableQuantity > 0,
-        orElse: () => entry.value.first,
+        orElse: () => widget.product.variations.first,
       );
-      _selectedVariationsByType[entry.key] = preferred;
     }
-  }
-
-  Map<String, List<ProductVariationModel>> _groupVariations(
-    List<ProductVariationModel> variations,
-  ) {
-    final grouped = <String, List<ProductVariationModel>>{};
-    for (final variation in variations) {
-      grouped.putIfAbsent(variation.variationType, () => []).add(variation);
-    }
-
-    final sortedKeys = grouped.keys.toList()..sort();
-    return {
-      for (final key in sortedKeys)
-        key: (grouped[key]!..sort(
-          (a, b) => a.variationValue.compareTo(b.variationValue),
-        )),
-    };
   }
 
   int? get _stockLimit {
-    if (_selectedVariationsByType.isNotEmpty) {
-      return _selectedVariationsByType.values
-          .map((variation) => variation.availableQuantity)
-          .reduce((value, element) => value < element ? value : element);
+    if (_selectedVariant != null) {
+      return _selectedVariant!.availableQuantity;
     }
 
     return widget.product.stockQuantity;
   }
 
-  String? get _selectedOption {
-    if (_selectedVariationsByType.isEmpty) {
-      return null;
-    }
-
-    final entries = _selectedVariationsByType.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-    return entries
-        .map((entry) => '${entry.key}: ${entry.value.variationValue}')
-        .join(', ');
-  }
-
-  String _formatVariationType(String type) {
-    return type
-        .split('_')
-        .map(
-          (word) => word.isEmpty
-              ? word
-              : '${word[0].toUpperCase()}${word.substring(1)}',
-        )
-        .join(' ');
-  }
+  String? get _selectedOption => _selectedVariant?.attributeSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -995,6 +960,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
     final product = widget.product;
     final stockLimit = _stockLimit;
     final isSoldOut = product.isSoldOut || (stockLimit != null && stockLimit <= 0);
+    final displayPrice = product.priceForVariant(_selectedVariant);
 
     return SafeArea(
       child: Padding(
@@ -1041,20 +1007,27 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'RM ${product.price.toStringAsFixed(2)}',
+                            'RM ${displayPrice.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
+                          if (_selectedOption != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _selectedOption!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
-                if (_variationsByType.isNotEmpty) ...[
+                if (product.variations.isNotEmpty) ...[
                   Text(
                     'Variant',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1062,47 +1035,31 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                         ),
                   ),
                   const SizedBox(height: 12),
-                  ..._variationsByType.entries.map((entry) {
-                    final selectedVariation = _selectedVariationsByType[entry.key];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _formatVariationType(entry.key),
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: entry.value.map((variation) {
-                              final isSelected = selectedVariation?.id == variation.id;
-                              final isEnabled = variation.availableQuantity > 0;
-                              return ChoiceChip(
-                                label: Text(
-                                  '${variation.variationValue} (${variation.availableQuantity})',
-                                ),
-                                selected: isSelected,
-                                onSelected: isEnabled
-                                    ? (_) => setState(() {
-                                        _selectedVariationsByType[entry.key] = variation;
-                                        final updatedLimit = _stockLimit;
-                                        if (updatedLimit != null && _quantity > updatedLimit) {
-                                          _quantity = updatedLimit;
-                                        }
-                                      })
-                                    : null,
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: product.variations.map((variation) {
+                      final isSelected = _selectedVariant?.id == variation.id;
+                      final isEnabled = variation.availableQuantity > 0;
+                      final variationPrice = product.priceForVariant(variation);
+                      return ChoiceChip(
+                        label: Text(
+                          '${variation.attributeSummary} (${variation.availableQuantity})'
+                          '${variationPrice != product.price ? ' - RM ${variationPrice.toStringAsFixed(2)}' : ''}',
+                        ),
+                        selected: isSelected,
+                        onSelected: isEnabled
+                            ? (_) => setState(() {
+                                _selectedVariant = variation;
+                                final updatedLimit = _stockLimit;
+                                if (updatedLimit != null && _quantity > updatedLimit) {
+                                  _quantity = updatedLimit;
+                                }
+                              })
+                            : null,
+                      );
+                    }).toList(),
+                  ),
                 ],
                 const SizedBox(height: 24),
                 Row(
@@ -1165,6 +1122,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                               _PurchaseSelection(
                                 quantity: _quantity,
                                 selectedOption: _selectedOption,
+                                selectedVariant: _selectedVariant,
                               ),
                             ),
                     icon: Icon(widget.actionIcon),

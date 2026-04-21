@@ -124,6 +124,7 @@ class CartState extends ChangeNotifier {
 
   Future<CartActionResult> addToCart(
     ProductModel product, {
+    ProductVariationModel? selectedVariant,
     int quantity = 1,
   }) async {
     if (product.id.isEmpty || quantity <= 0) {
@@ -152,6 +153,7 @@ class CartState extends ChangeNotifier {
       final result = await _cartService.addToCart(
         userId: userId,
         product: product,
+        selectedVariant: selectedVariant,
         quantity: quantity,
       );
 
@@ -176,8 +178,8 @@ class CartState extends ChangeNotifier {
     }
   }
 
-  Future<void> removeFromCart(String productId) async {
-    final index = _items.indexWhere((item) => item.product.id == productId);
+  Future<void> removeFromCart(CartModel item) async {
+    final index = _items.indexWhere((existing) => existing.id == item.id);
     if (index == -1) {
       return;
     }
@@ -192,7 +194,11 @@ class CartState extends ChangeNotifier {
     _setError(null);
 
     try {
-      await _cartService.removeCartItem(userId: userId, productId: productId);
+      await _cartService.removeCartItem(
+        userId: userId,
+        productId: item.product.id,
+        variantId: item.selectedVariant?.id,
+      );
       _items.removeAt(index);
       notifyListeners();
     } catch (e) {
@@ -202,8 +208,8 @@ class CartState extends ChangeNotifier {
     }
   }
 
-  Future<void> updateQuantity(String productId, int quantity) async {
-    final index = _items.indexWhere((item) => item.product.id == productId);
+  Future<void> updateQuantity(CartModel item, int quantity) async {
+    final index = _items.indexWhere((existing) => existing.id == item.id);
     if (index == -1) {
       return;
     }
@@ -214,15 +220,15 @@ class CartState extends ChangeNotifier {
       return;
     }
 
-    final cartItem = _items[index];
     _setLoading(true);
     _setError(null);
 
     try {
       final updatedItem = await _cartService.updateCartItemQuantity(
         userId: userId,
-        productId: cartItem.product.id,
-        product: cartItem.product,
+        productId: item.product.id,
+        product: item.product,
+        selectedVariant: item.selectedVariant,
         quantity: quantity,
       );
 
@@ -240,22 +246,22 @@ class CartState extends ChangeNotifier {
     }
   }
 
-  Future<void> increaseQuantity(String productId) async {
-    final index = _items.indexWhere((item) => item.product.id == productId);
+  Future<void> increaseQuantity(CartModel item) async {
+    final index = _items.indexWhere((existing) => existing.id == item.id);
     if (index == -1) {
       return;
     }
 
-    await updateQuantity(productId, _items[index].quantity + 1);
+    await updateQuantity(item, _items[index].quantity + 1);
   }
 
-  Future<void> decreaseQuantity(String productId) async {
-    final index = _items.indexWhere((item) => item.product.id == productId);
+  Future<void> decreaseQuantity(CartModel item) async {
+    final index = _items.indexWhere((existing) => existing.id == item.id);
     if (index == -1) {
       return;
     }
 
-    await updateQuantity(productId, _items[index].quantity - 1);
+    await updateQuantity(item, _items[index].quantity - 1);
   }
 
   Future<void> clearCart() async {
@@ -287,9 +293,12 @@ class CartState extends ChangeNotifier {
           (item) => OrderItemModel(
             id: item.id,
             productId: item.product.id,
+            variantId: item.selectedVariant?.id,
             quantity: item.quantity,
-            unitPrice: item.product.price,
+            unitPrice: item.unitPrice,
             subtotal: item.totalPrice,
+            product: item.product,
+            variant: item.selectedVariant,
           ),
         )
         .toList();
