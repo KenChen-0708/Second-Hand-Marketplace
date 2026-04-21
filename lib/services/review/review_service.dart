@@ -57,4 +57,21 @@ class ReviewService {
       return [];
     }
   }
+
+  Future<List<ReviewModel>> fetchProductReviews(String productId) async {
+    try {
+      final response = await _supabase
+          .from('reviews')
+          .select('*, reviewer:users!reviews_reviewer_id_fkey(*)')
+          .eq('product_id', productId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((r) => ReviewModel.fromMap(Map<String, dynamic>.from(r)))
+          .toList();
+    } catch (e) {
+      print('Error fetching product reviews: $e');
+      return [];
+    }
+  }
 }

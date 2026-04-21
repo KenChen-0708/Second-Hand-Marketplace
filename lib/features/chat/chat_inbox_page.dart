@@ -106,11 +106,6 @@ class _ChatInboxPageState extends State<ChatInboxPage> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.bug_report_outlined, size: 20),
-            onPressed: () => _showDebugInfo(context, userId),
-            tooltip: 'Debug Chat Info',
-          ),
           if (!_isLoading)
             IconButton(
               icon: const Icon(Icons.refresh_rounded),
@@ -221,15 +216,6 @@ class _ChatInboxPageState extends State<ChatInboxPage> {
                   'No conversations found',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'If you have messages but they don\'t show up,\nplease check the debug icon top right.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
-                ),
               ],
             ),
           ),
@@ -238,30 +224,6 @@ class _ChatInboxPageState extends State<ChatInboxPage> {
     );
   }
 
-  void _showDebugInfo(BuildContext context, String userId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Chat Debug Info'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Current User ID: $userId'),
-            const SizedBox(height: 8),
-            const Text('Database check:'),
-            const Text('• Must match buyer_id or seller_id'),
-            const Text('• Format should be like "U0001"'),
-            const SizedBox(height: 16),
-            const Text('Check the terminal logs for "!!! PROFILE ID MISMATCH" messages.'),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-        ],
-      ),
-    );
-  }
 }
 
 class _ConversationTile extends StatelessWidget {
@@ -280,11 +242,6 @@ class _ConversationTile extends StatelessWidget {
     final unreadCount = bundle.unreadCountFor(currentUserId);
     final hasUnread = unreadCount > 0;
     
-    final String avatarUrl = ImageHelper.resolveProfileImageUrl(
-      bundle.otherUser.avatarUrl, 
-      name: bundle.otherUser.name
-    );
-
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => context.push('/chat/${bundle.conversation.id}'),
@@ -292,7 +249,7 @@ class _ConversationTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         child: Row(
           children: [
-            _buildAvatar(colorScheme, avatarUrl, bundle.product.imageUrl),
+            _buildAvatar(colorScheme, bundle.product.imageUrl),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -312,15 +269,16 @@ class _ConversationTile extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar(ColorScheme colorScheme, String avatarUrl, String? productImageUrl) {
+  Widget _buildAvatar(ColorScheme colorScheme, String? productImageUrl) {
     return SizedBox(
       width: 60,
       height: 60,
       child: Stack(
         children: [
-          CircleAvatar(
+          ImageHelper.avatar(
+            bundle.otherUser.avatarUrl,
+            name: bundle.otherUser.name,
             radius: 28,
-            backgroundImage: NetworkImage(avatarUrl),
             backgroundColor: colorScheme.surfaceContainerHighest,
           ),
           Positioned(
@@ -334,7 +292,12 @@ class _ConversationTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: colorScheme.surface, width: 1.5),
               ),
-              child: ImageHelper.productImage(productImageUrl, fit: BoxFit.cover),
+              child: ImageHelper.productImage(
+                productImageUrl,
+                width: 24,
+                height: 24,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
         ],

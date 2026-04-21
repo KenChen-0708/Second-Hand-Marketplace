@@ -313,6 +313,35 @@ class ProductService {
     }
   }
 
+  Future<Map<String, Map<String, dynamic>>> fetchMeetupLocations(
+    List<String> productIds,
+  ) async {
+    final uniqueProductIds = productIds.toSet().where((id) => id.isNotEmpty).toList();
+    if (uniqueProductIds.isEmpty) {
+      return const {};
+    }
+
+    try {
+      final data = await _supabase
+          .from('product_meetup_locations')
+          .select()
+          .inFilter('product_id', uniqueProductIds);
+
+      final locations = <String, Map<String, dynamic>>{};
+      for (final row in (data as List)) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final productId = map['product_id']?.toString();
+        if (productId == null || productId.isEmpty || locations.containsKey(productId)) {
+          continue;
+        }
+        locations[productId] = map;
+      }
+      return locations;
+    } catch (e) {
+      throw Exception('Failed to fetch meetup locations: $e');
+    }
+  }
+
   Future<void> updateMeetupLocation(String productId, Map<String, dynamic> locationData) async {
     try {
       // First check if a location exists for this product

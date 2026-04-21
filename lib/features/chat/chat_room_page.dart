@@ -112,7 +112,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       }
       SnackbarHelper.showTopMessage(
         context,
-        e.toString().replaceFirst('Exception: ', ''),
+        'Unable to send message. Please try again.',
       );
     } finally {
       if (mounted) {
@@ -130,7 +130,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     if (!mounted) {
       return;
     }
-    SnackbarHelper.showSuccess(context, 'Message copied to clipboard.');
+    SnackbarHelper.showSuccess(context, 'Message copied.');
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -228,7 +228,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
 
     final bundle = _bundle!;
-    final product = bundle.product;
     final messages = bundle.messages;
     
     // Resolve profile image with initials fallback for the header
@@ -242,64 +241,25 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        title: GestureDetector(
-          onTap: () => context.push('/product/${product.id}'),
-          child: Row(
-            children: [
-              ImageHelper.avatar(
-                bundle.otherUser.avatarUrl,
-                name: bundle.otherUser.name,
-                radius: 18,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      bundle.otherUser.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Container(
-                          width: 14,
-                          height: 14,
-                          margin: const EdgeInsets.only(right: 4),
-                          clipBehavior: Clip.antiAlias,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: ImageHelper.productImage(
-                            product.imageUrl,
-                            width: 14,
-                            height: 14,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            '${product.title} - RM ${product.price.toStringAsFixed(0)}',
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+        title: Row(
+          children: [
+            ImageHelper.avatar(
+              bundle.otherUser.avatarUrl,
+              name: bundle.otherUser.name,
+              radius: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                bundle.otherUser.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       body: Column(

@@ -16,6 +16,7 @@ class WishlistPage extends StatefulWidget {
 
 class _WishlistPageState extends State<WishlistPage> {
   late Future<List<WishlistItemModel>> _wishlistFuture;
+  final Set<String> _pendingWishlistProductIds = <String>{};
 
   @override
   void initState() {
@@ -38,6 +39,14 @@ class _WishlistPageState extends State<WishlistPage> {
   }
 
   Future<void> _toggleWishlist(ProductModel product) async {
+    if (_pendingWishlistProductIds.contains(product.id)) {
+      return;
+    }
+
+    setState(() {
+      _pendingWishlistProductIds.add(product.id);
+    });
+
     try {
       final message = await context.read<FavoriteState>().toggleFavorite(
         product.id,
@@ -52,6 +61,12 @@ class _WishlistPageState extends State<WishlistPage> {
         return;
       }
       _showMessage(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _pendingWishlistProductIds.remove(product.id);
+        });
+      }
     }
   }
 
@@ -157,6 +172,9 @@ class _WishlistPageState extends State<WishlistPage> {
               itemBuilder: (context, index) {
                 final item = wishlistItems[index];
                 final product = item.product;
+                final isWishlistActionPending = _pendingWishlistProductIds.contains(
+                  product.id,
+                );
                 return InkWell(
                   borderRadius: BorderRadius.circular(20),
                   onTap: () => _openProductDetails(product),
@@ -220,12 +238,22 @@ class _WishlistPageState extends State<WishlistPage> {
                         ),
                         IconButton(
                           tooltip: 'Remove from wishlist',
-                          onPressed: () => _toggleWishlist(product),
-                          icon: const Icon(
-                            Icons.favorite_rounded,
-                            color: Colors.redAccent,
+                          onPressed: isWishlistActionPending
+                              ? null
+                              : () => _toggleWishlist(product),
+                          icon: isWishlistActionPending
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.favorite_rounded,
+                                  color: Colors.redAccent,
+                                ),
                           ),
-                        ),
                       ],
                     ),
                   ),

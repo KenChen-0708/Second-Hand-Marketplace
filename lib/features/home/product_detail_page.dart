@@ -9,6 +9,8 @@ import '../../shared/utils/product_display_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
 import '../../services/product/product_service.dart';
+import '../../services/review/review_service.dart';
+import '../../services/local/connectivity_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -22,6 +24,7 @@ class ProductDetailPage extends StatefulWidget {
 class _ProductDetailPageState extends State<ProductDetailPage> {
   late Future<_ProductDetailData> _productDetailFuture;
   bool _isOpeningSellerChat = false;
+  bool _isTogglingWishlist = false;
 
   @override
   void initState() {
@@ -58,10 +61,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       meetupLocation = null;
     }
 
+    List<ReviewModel> reviews;
+    try {
+      reviews = await ReviewService().fetchProductReviews(product.id);
+    } catch (_) {
+      reviews = const [];
+    }
+
     return _ProductDetailData(
       product: product,
       seller: seller,
       meetupLocation: meetupLocation,
+      reviews: reviews,
     );
   }
 
@@ -208,6 +219,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return;
     }
 
+    if (!await ConnectivityService.instance.isOnline()) {
+      if (!context.mounted) {
+        return;
+      }
+      _showMessage(
+        context,
+        'You\'re offline. Reconnect to continue with checkout.',
+      );
+      return;
+    }
+
     final selection = await _showPurchaseOptionsSheet(
       context,
       product,
@@ -234,6 +256,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         isBuyNow: true,
       ),
     );
+  }
+
+  Future<void> _toggleWishlist(
+    BuildContext context,
+    ProductModel product,
+  ) async {
+    if (_isTogglingWishlist) {
+      return;
+    }
+
+    if (!await _promptLoginIfNeeded(context)) {
+      return;
+    }
+
+    setState(() => _isTogglingWishlist = true);
+    try {
+      final message = await context.read<FavoriteState>().toggleFavorite(
+        product.id,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      _showMessage(context, message);
+    } catch (e) {
+      if (!context.mounted) {
+        return;
+      }
+      _showMessage(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isTogglingWishlist = false);
+      }
+    }
   }
 
   @override
@@ -308,6 +366,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final sellerName = seller?.name ?? 'Seller';
         final stockQuantity = product.stockQuantity;
         final isSoldOut = product.isSoldOut;
+        final averageRating = detail.reviews.isEmpty
+            ? 0.0
+            : detail.reviews
+                    .fold<int>(0, (sum, review) => sum + review.rating) /
+                detail.reviews.length;
         
         final favoriteState = context.watch<FavoriteState>();
         final isFavorite = favoriteState.isFavorite(product.id);
@@ -352,42 +415,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            onPressed: favoriteState.isLoading
+                            onPressed: favoriteState.isLoading || _isTogglingWishlist
                                 ? null
-                                : () async {
-                                    if (!await _promptLoginIfNeeded(context)) {
-                                      return;
-                                    }
-
-                                    try {
-                                      final message = await context
-                                          .read<FavoriteState>()
-                                          .toggleFavorite(product.id);
-                                      if (!context.mounted) {
-                                        return;
-                                      }
-                                      _showMessage(context, message);
-                                    } catch (e) {
-                                      if (!context.mounted) {
-                                        return;
-                                      }
-                                      _showMessage(
-                                        context,
-                                        e.toString().replaceFirst(
-                                          'Exception: ',
-                                          '',
-                                        ),
-                                      );
-                                    }
-                                  },
-                            icon: Icon(
-                              isFavorite
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              color: isFavorite
-                                  ? Colors.redAccent
-                                  : Theme.of(context).colorScheme.onSurface,
-                            ),
+                                : () => _toggleWishlist(context, product),
+                            icon: _isTogglingWishlist
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    isFavorite
+                                        ? Icons.favorite_rounded
+                                        : Icons.favorite_border_rounded,
+                                    color: isFavorite
+                                        ? Colors.redAccent
+                                        : Theme.of(context).colorScheme.onSurface,
+                                  ),
                           ),
                         ),
                       ),
@@ -493,38 +539,40 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               fontSize: 28,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSoldOut
-                                  ? Theme.of(context).colorScheme.errorContainer
-                                  : Theme.of(context)
-                                      .colorScheme
-                                      .secondaryContainer,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Text(
-                              isSoldOut
-                                  ? 'Sold Out'
-                                  : stockQuantity != null
-                                  ? '$stockQuantity available'
-                                  : 'Available',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
+                          if (isSoldOut || !product.hasVariants) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
                                 color: isSoldOut
-                                    ? Theme.of(context)
-                                        .colorScheme
-                                        .onErrorContainer
+                                    ? Theme.of(context).colorScheme.errorContainer
                                     : Theme.of(context)
                                         .colorScheme
-                                        .onSecondaryContainer,
+                                        .secondaryContainer,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                isSoldOut
+                                    ? 'Sold Out'
+                                    : stockQuantity != null
+                                    ? '$stockQuantity available'
+                                    : 'Available',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: isSoldOut
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .onErrorContainer
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSecondaryContainer,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                           const SizedBox(height: 24),
                           Text(
                             'Description',
@@ -695,6 +743,130 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'Reviews',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 12),
+                          if (detail.reviews.isEmpty)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Text(
+                                'No reviews for this product yet.',
+                              ),
+                            )
+                          else ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.star_rounded,
+                                    color: Colors.amber[700],
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    averageRating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '(${detail.reviews.length} review${detail.reviews.length == 1 ? '' : 's'})',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            ...detail.reviews.take(3).map(
+                              (review) => Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            review.reviewer?.name ?? 'Buyer',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: List.generate(
+                                            5,
+                                            (index) => Icon(
+                                              index < review.rating
+                                                  ? Icons.star_rounded
+                                                  : Icons.star_border_rounded,
+                                              size: 16,
+                                              color: Colors.amber[700],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if ((review.title ?? '').trim().isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        review.title!.trim(),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                    if ((review.comment ?? '').trim().isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        review.comment!.trim(),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 100),
                         ],
                       ),
@@ -916,11 +1088,13 @@ class _ProductDetailData {
     required this.product,
     required this.seller,
     this.meetupLocation,
+    this.reviews = const [],
   });
 
   final ProductModel product;
   final UserModel? seller;
   final Map<String, dynamic>? meetupLocation;
+  final List<ReviewModel> reviews;
 }
 
 class _PurchaseSelection {

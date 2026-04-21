@@ -29,11 +29,17 @@ class StripeService {
 
   Future<StripePaymentResult> payWithCard({
     required double amount,
-    String currency = 'usd',
+    String currency = 'myr',
   }) async {
     if (!isSupportedPlatform) {
       throw Exception(
         'Card payment is only available on Android and iOS devices.',
+      );
+    }
+
+    if (amount <= 0) {
+      throw Exception(
+        'Card payment requires a total amount greater than RM 0.00.',
       );
     }
 
@@ -107,6 +113,9 @@ class StripeService {
     required String currency,
   }) async {
     final amountInSmallestUnit = (amount * 100).round();
+    if (amountInSmallestUnit <= 0) {
+      throw Exception('Stripe payment amount must be greater than 0.');
+    }
     final response = await http.post(
       Uri.parse('https://api.stripe.com/v1/payment_intents'),
       headers: {
