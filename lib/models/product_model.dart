@@ -16,6 +16,7 @@ class ProductModel implements AppModel {
   final String? imageUrl;
   final List<String>? images;
   final List<String> tradePreference;
+  final int? totalStock;
   final int? availableQuantity;
   final List<ProductVariationModel> variations;
   final bool openToOffers;
@@ -38,6 +39,7 @@ class ProductModel implements AppModel {
     this.images,
     this.status = 'active',
     this.tradePreference = const ['face_to_face'],
+    this.totalStock,
     this.availableQuantity,
     this.variations = const [],
     this.openToOffers = false,
@@ -60,6 +62,7 @@ class ProductModel implements AppModel {
     List<String>? images,
     String? status,
     List<String>? tradePreference,
+    int? totalStock,
     int? availableQuantity,
     List<ProductVariationModel>? variations,
     bool? openToOffers,
@@ -81,6 +84,7 @@ class ProductModel implements AppModel {
       images: images ?? this.images,
       status: status ?? this.status,
       tradePreference: tradePreference ?? this.tradePreference,
+      totalStock: totalStock ?? this.totalStock,
       availableQuantity: availableQuantity ?? this.availableQuantity,
       variations: variations ?? this.variations,
       openToOffers: openToOffers ?? this.openToOffers,
@@ -104,6 +108,7 @@ class ProductModel implements AppModel {
         JsonUtils.asDouble(map['base_price']) ??
         0;
     final parsedAvailableQuantity =
+        JsonUtils.asInt(map['total_stock']) ??
         JsonUtils.asInt(map['available_quantity']) ??
         JsonUtils.asInt(map['quantity']) ??
         (parsedVariations.isNotEmpty
@@ -136,6 +141,7 @@ class ProductModel implements AppModel {
           (JsonUtils.asString(map['trade_preference']) != null
               ? [JsonUtils.asString(map['trade_preference'])!]
               : const ['face_to_face']),
+      totalStock: JsonUtils.asInt(map['total_stock']) ?? parsedAvailableQuantity,
       availableQuantity: parsedAvailableQuantity,
       variations: parsedVariations,
       openToOffers: map['open_to_offers'] == true,
@@ -161,6 +167,7 @@ class ProductModel implements AppModel {
       'image_urls': images,
       'status': status,
       'trade_preference': tradePreference,
+      'total_stock': totalStock ?? availableQuantity,
       'available_quantity': availableQuantity,
       'variations': variations.map((variation) => variation.toMap()).toList(),
       'open_to_offers': openToOffers,
@@ -192,7 +199,7 @@ class ProductModel implements AppModel {
         (sum, variation) => sum + variation.availableQuantity,
       );
     }
-    return availableQuantity;
+    return totalStock ?? availableQuantity;
   }
 
   bool get isSoldOut {

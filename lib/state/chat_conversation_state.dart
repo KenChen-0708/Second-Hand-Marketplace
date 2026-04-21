@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 import '../models/models.dart';
 import '../services/auth/auth_service.dart';
@@ -184,6 +185,15 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       return b.conversation.id.compareTo(a.conversation.id);
     });
     upsertItem(bundle.conversation);
+    final currentUserId = _lastUserId;
+    if (currentUserId != null && currentUserId.isNotEmpty) {
+      unawaited(
+        _chatService.cacheConversationBundle(
+          currentUserId: currentUserId,
+          bundle: bundle,
+        ),
+      );
+    }
   }
 
   @override

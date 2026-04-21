@@ -514,6 +514,13 @@ class _SellWizardState extends State<_SellWizard> {
         'title': _nameController.text.trim(),
         'description': finalDescription,
         'price': double.parse(_priceController.text.trim()),
+        'total_stock': _variations.isEmpty
+            ? 1
+            : _variations.fold<int>(
+                0,
+                (sum, variation) =>
+                    sum + (int.tryParse(variation.quantityController.text.trim()) ?? 0),
+              ),
         'category_id': categoryId,
         'seller_id': sellerId,
         'condition': dbCondition,

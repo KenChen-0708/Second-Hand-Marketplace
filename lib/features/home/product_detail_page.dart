@@ -37,17 +37,26 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       throw Exception('Product not found.');
     }
 
-    final sellerData = await Supabase.instance.client
-        .from('users')
-        .select()
-        .eq('id', product.sellerId)
-        .maybeSingle();
+    UserModel? seller;
+    try {
+      final sellerData = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('id', product.sellerId)
+          .maybeSingle();
+      seller = sellerData == null
+          ? null
+          : UserModel.fromMap(Map<String, dynamic>.from(sellerData));
+    } catch (_) {
+      seller = null;
+    }
 
-    final seller = sellerData == null
-        ? null
-        : UserModel.fromMap(Map<String, dynamic>.from(sellerData));
-
-    final meetupLocation = await ProductService().fetchMeetupLocation(product.id);
+    Map<String, dynamic>? meetupLocation;
+    try {
+      meetupLocation = await ProductService().fetchMeetupLocation(product.id);
+    } catch (_) {
+      meetupLocation = null;
+    }
 
     return _ProductDetailData(
       product: product,
@@ -240,6 +249,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
+          final errorText = snapshot.error.toString().replaceFirst(
+            'Exception: ',
+            '',
+          );
+          final isOfflineError = errorText.toLowerCase().contains('offline');
           return Scaffold(
             backgroundColor: Theme.of(context).colorScheme.surface,
             body: SafeArea(
@@ -253,16 +267,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       onPressed: () => context.pop(),
                     ),
                     const Spacer(),
-                    const Icon(Icons.inventory_2_outlined, size: 72),
+                    Icon(
+                      isOfflineError
+                          ? Icons.cloud_off_rounded
+                          : Icons.inventory_2_outlined,
+                      size: 72,
+                    ),
                     const SizedBox(height: 16),
                     Text(
-                      'Unable to load this product',
+                      isOfflineError
+                          ? 'No internet connection'
+                          : 'Unable to load this product',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'This product may no longer be available, or there was a connection problem.',
+                      isOfflineError
+                          ? 'This product is not available offline yet. Reconnect and try again.'
+                          : 'This product may no longer be available, or there was a connection problem.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 24),
@@ -930,6 +953,7 @@ class _PurchaseOptionsSheet extends StatefulWidget {
 class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
   ProductVariationModel? _selectedVariant;
   int _quantity = 1;
+  final Map<String, String> _selectedAttributes = {};
 
   @override
   void initState() {
@@ -939,6 +963,9 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
         (variation) => variation.availableQuantity > 0,
         orElse: () => widget.product.variations.first,
       );
+      _selectedAttributes
+        ..clear()
+        ..addAll(_selectedVariant!.normalizedAttributes);
     }
   }
 
@@ -950,7 +977,170 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
     return widget.product.stockQuantity;
   }
 
-  String? get _selectedOption => _selectedVariant?.attributeSummary;
+  List<String> get _attributeNames {
+    final names = <String>[];
+    for (final variation in widget.product.variations) {
+      for (final name in variation.normalizedAttributes.keys) {
+        if (!names.contains(name)) {
+          names.add(name);
+        }
+      }
+    }
+    return names;
+  }
+
+  List<String> _allValuesForAttribute(String attributeName) {
+    final values = <String>[];
+    for (final variation in widget.product.variations) {
+      final value = variation.normalizedAttributes[attributeName];
+      if (value != null && value.isNotEmpty && !values.contains(value)) {
+        values.add(value);
+      }
+    }
+    return values;
+  }
+
+  bool _matchesOtherSelections(
+    ProductVariationModel variation,
+    String activeAttribute,
+  ) {
+    final attributes = variation.normalizedAttributes;
+    for (final entry in _selectedAttributes.entries) {
+      if (entry.key == activeAttribute) {
+        continue;
+      }
+      if (attributes[entry.key] != entry.value) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  ProductVariationModel? _firstMatchingVariantFor(
+    String attributeName,
+    String attributeValue,
+  ) {
+    final matches = widget.product.variations.where((variation) {
+      final attributes = variation.normalizedAttributes;
+      return attributes[attributeName] == attributeValue &&
+          _matchesOtherSelections(variation, attributeName);
+    }).toList();
+
+    if (matches.isEmpty) {
+      return null;
+    }
+
+    return matches.firstWhere(
+      (variation) => variation.availableQuantity > 0,
+      orElse: () => matches.first,
+    );
+  }
+
+  void _selectAttributeValue(String attributeName, String attributeValue) {
+    final matchedVariant = _firstMatchingVariantFor(attributeName, attributeValue);
+    if (matchedVariant == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedVariant = matchedVariant;
+      _selectedAttributes
+        ..clear()
+        ..addAll(matchedVariant.normalizedAttributes);
+
+      final updatedLimit = _stockLimit;
+      if (updatedLimit != null && _quantity > updatedLimit) {
+        _quantity = updatedLimit < 1 ? 1 : updatedLimit;
+      }
+    });
+  }
+
+  String? get _selectedOption => _selectedVariant?.optionSummary;
+
+  Widget _buildVariantSelector(
+    BuildContext context,
+    ProductModel product,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Variant',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 12),
+        ..._attributeNames.map((attributeName) {
+          final selectedValue = _selectedAttributes[attributeName];
+          final values = _allValuesForAttribute(attributeName);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attributeName,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: values.map((value) {
+                    final matchedVariant = _firstMatchingVariantFor(
+                      attributeName,
+                      value,
+                    );
+                    final isSelected = selectedValue == value;
+                    final isEnabled =
+                        matchedVariant != null &&
+                        matchedVariant.availableQuantity > 0;
+                    final variationPrice =
+                        matchedVariant == null
+                            ? product.price
+                            : product.priceForVariant(matchedVariant);
+
+                    return ChoiceChip(
+                      label: Text(
+                        variationPrice != product.price
+                            ? '$value  RM ${variationPrice.toStringAsFixed(2)}'
+                            : value,
+                      ),
+                      selected: isSelected,
+                      onSelected: isEnabled
+                          ? (_) => _selectAttributeValue(attributeName, value)
+                          : null,
+                      selectedColor: colorScheme.primary,
+                      disabledColor: colorScheme.surfaceContainerHighest,
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : isEnabled
+                            ? colorScheme.onSurface
+                            : colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      side: BorderSide(
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.outlineVariant,
+                      ),
+                      showCheckmark: false,
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1025,40 +1215,7 @@ class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                if (product.variations.isNotEmpty) ...[
-                  Text(
-                    'Variant',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: product.variations.map((variation) {
-                      final isSelected = _selectedVariant?.id == variation.id;
-                      final isEnabled = variation.availableQuantity > 0;
-                      final variationPrice = product.priceForVariant(variation);
-                      return ChoiceChip(
-                        label: Text(
-                          '${variation.attributeSummary} (${variation.availableQuantity})'
-                          '${variationPrice != product.price ? ' - RM ${variationPrice.toStringAsFixed(2)}' : ''}',
-                        ),
-                        selected: isSelected,
-                        onSelected: isEnabled
-                            ? (_) => setState(() {
-                                _selectedVariant = variation;
-                                final updatedLimit = _stockLimit;
-                                if (updatedLimit != null && _quantity > updatedLimit) {
-                                  _quantity = updatedLimit;
-                                }
-                              })
-                            : null,
-                      );
-                    }).toList(),
-                  ),
-                ],
+                if (product.variations.isNotEmpty) _buildVariantSelector(context, product),
                 const SizedBox(height: 24),
                 Row(
                   children: [

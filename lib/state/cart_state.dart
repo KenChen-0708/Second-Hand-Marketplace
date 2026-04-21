@@ -287,6 +287,12 @@ class CartState extends ChangeNotifier {
     }
   }
 
+  Future<void> removeMultipleFromCart(List<CartModel> items) async {
+    for (final item in items) {
+      await removeFromCart(item);
+    }
+  }
+
   List<OrderItemModel> toOrderItems() {
     return _items
         .map(

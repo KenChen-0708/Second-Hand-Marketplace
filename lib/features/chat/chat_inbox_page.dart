@@ -245,6 +245,8 @@ class _ConversationTile extends StatelessWidget {
                       ),
                       child: ImageHelper.productImage(
                         bundle.product.imageUrl,
+                        width: 24,
+                        height: 24,
                         fit: BoxFit.cover,
                       ),
                     ),

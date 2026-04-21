@@ -128,6 +128,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
         );
       }
 
+      if (widget.session != null &&
+          widget.session!.items.isNotEmpty &&
+          widget.session!.clearCartAfterSuccess != true &&
+          widget.session!.isBuyNow != true) {
+        await cartState.removeMultipleFromCart(widget.session!.items);
+      }
+
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -417,6 +424,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
       _selectedHandoverOption == _meetUpOption
           ? 'Current Meet-up Location'
           : 'Current Delivery Address';
+
+  List<_HandoverOptionData> get _handoverOptionItems {
+    final options = <_HandoverOptionData>[];
+    if (_meetUpAvailable) {
+      options.add(
+        const _HandoverOptionData(
+          label: 'Meet Up',
+          value: _meetUpOption,
+          icon: Icons.handshake_outlined,
+        ),
+      );
+    }
+    if (_deliveryAvailable) {
+      options.add(
+        const _HandoverOptionData(
+          label: 'Delivery',
+          value: _deliveryOption,
+          icon: Icons.local_shipping_outlined,
+        ),
+      );
+    }
+    return options;
+  }
 
   String? _buildCheckoutNotes() {
     final buyerMessage = _messageController.text.trim();
@@ -892,20 +922,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
           Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: [
-              _buildDeliveryOptionChip(
-                label: 'Meet Up',
-                value: _meetUpOption,
-                icon: Icons.handshake_outlined,
-                enabled: _meetUpAvailable,
-              ),
-              _buildDeliveryOptionChip(
-                label: 'Delivery',
-                value: _deliveryOption,
-                icon: Icons.local_shipping_outlined,
-                enabled: _deliveryAvailable,
-              ),
-            ],
+            children: _handoverOptionItems
+                .map(
+                  (option) => _buildDeliveryOptionChip(
+                    label: option.label,
+                    value: option.value,
+                    icon: option.icon,
+                  ),
+                )
+                .toList(),
           ),
           if (_incompatibleHandoverMessage != null)
             Padding(
@@ -1023,11 +1048,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
               elevation: 0,
             ),
-            child: Text(
+              child: Text(
               !_hasCompatibleHandoverOption
                   ? 'Separate Items to Checkout'
                   : _hasProvidedLocation
-                  ? 'Pay ${CurrencyHelper.formatRM(_grandTotal)}'
+                  ? 'Place Order'
                   : 'Add Location to Continue',
               style: const TextStyle(
                 fontSize: 18,
@@ -1040,4 +1065,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
     );
   }
+}
+
+class _HandoverOptionData {
+  const _HandoverOptionData({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
 }

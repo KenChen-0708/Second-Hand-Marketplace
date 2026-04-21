@@ -235,6 +235,8 @@ class ImageHelper {
   }) {
     final effectiveWidth = width ?? double.infinity;
     final effectiveHeight = height ?? double.infinity;
+    final isCompact =
+        (width != null && width <= 36) || (height != null && height <= 36);
 
     return Container(
       width: effectiveWidth,
@@ -245,16 +247,18 @@ class ImageHelper {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isLoading)
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            SizedBox(
+              width: isCompact ? 10 : 18,
+              height: isCompact ? 10 : 18,
+              child: CircularProgressIndicator(
+                strokeWidth: isCompact ? 1.4 : 2,
+              ),
             )
           else
             Icon(
               icon,
               color: const Color(0xFF9CA3AF),
-              size: 28,
+              size: isCompact ? 16 : 28,
             ),
         ],
       ),

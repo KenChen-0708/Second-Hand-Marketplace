@@ -371,19 +371,46 @@ class ChatService {
 
     final pendingRows = await _localDatabase.getPendingChatMessageRows();
     for (final row in pendingRows) {
-      final localMessage = ChatMessageModel.fromJson(row['data'] as String);
-      final remoteMessage = await sendMessage(
-        conversationId: localMessage.conversationId,
-        senderId: localMessage.senderId,
-        messageText: localMessage.messageText,
-        isImage: localMessage.isImage,
-        imageUrl: localMessage.imageUrl,
-      );
-      await _localDatabase.markMessageSynced(
-        localMessageId: localMessage.id,
-        remoteMessage: remoteMessage,
-      );
+      try {
+        final localMessage = ChatMessageModel.fromJson(row['data'] as String);
+        final remoteMessage = await sendMessage(
+          conversationId: localMessage.conversationId,
+          senderId: localMessage.senderId,
+          messageText: localMessage.messageText,
+          isImage: localMessage.isImage,
+          imageUrl: localMessage.imageUrl,
+        );
+        await _localDatabase.markMessageSynced(
+          localMessageId: localMessage.id,
+          remoteMessage: remoteMessage,
+        );
+      } catch (_) {
+        // Keep the message pending so it can retry on the next reconnect.
+      }
     }
+  }
+
+  Future<void> cacheConversationBundle({
+    required String currentUserId,
+    required ChatConversationBundle bundle,
+  }) async {
+    await _localDatabase.upsertConversationBundle(
+      currentUserId,
+      {
+        'conversation_id': bundle.conversation.id,
+        'product_id': bundle.product.id,
+        'other_user_id': bundle.otherUser.id,
+        'other_user_name': bundle.otherUser.name,
+        'conversation_data': jsonEncode(bundle.conversation.toMap()),
+        'product_data': bundle.product.toJson(),
+        'other_user_data': bundle.otherUser.toJson(),
+        'last_message_at': bundle.conversation.lastMessageAt?.toIso8601String(),
+      },
+    );
+    await _localDatabase.replaceConversationMessages(
+      bundle.conversation.id,
+      bundle.messages,
+    );
   }
 
   Future<void> _cacheBundles(
