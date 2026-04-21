@@ -286,9 +286,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final stockQuantity = product.stockQuantity;
         final isSoldOut = product.isSoldOut;
         
-        // Dynamic Avatar Resolution
-        final sellerAvatar = ImageHelper.resolveProfileImageUrl(seller?.avatarUrl, name: seller?.name);
-
         final favoriteState = context.watch<FavoriteState>();
         final isFavorite = favoriteState.isFavorite(product.id);
         final isOwner =
@@ -610,9 +607,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     context.push('/seller/${product.sellerId}'),
                                 child: Hero(
                                   tag: 'seller_avatar_${product.sellerId}',
-                                  child: CircleAvatar(
+                                  child: ImageHelper.avatar(
+                                    seller?.avatarUrl,
+                                    name: seller?.name,
                                     radius: 24,
-                                    backgroundImage: NetworkImage(sellerAvatar),
                                   ),
                                 ),
                               ),

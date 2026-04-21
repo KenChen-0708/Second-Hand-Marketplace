@@ -214,12 +214,6 @@ class _ConversationTile extends StatelessWidget {
     final unreadCount = bundle.unreadCountFor(currentUserId);
     final hasUnread = unreadCount > 0;
     
-    // Resolve profile image with initials fallback
-    final String avatarUrl = ImageHelper.resolveProfileImageUrl(
-      bundle.otherUser.avatarUrl, 
-      name: bundle.otherUser.name
-    );
-
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => context.push('/chat/${bundle.conversation.id}'),
@@ -232,9 +226,10 @@ class _ConversationTile extends StatelessWidget {
               height: 60,
               child: Stack(
                 children: [
-                  CircleAvatar(
+                  ImageHelper.avatar(
+                    bundle.otherUser.avatarUrl,
+                    name: bundle.otherUser.name,
                     radius: 28,
-                    backgroundImage: NetworkImage(avatarUrl),
                     backgroundColor: colorScheme.surfaceContainerHighest,
                   ),
                   Positioned(
