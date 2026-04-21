@@ -14,7 +14,6 @@ class ReviewModel implements AppModel {
   final String? title;
   final String? comment;
   final DateTime? createdAt;
-  final DateTime? updatedAt;
   
   // Joined fields
   final UserModel? reviewer;
@@ -29,7 +28,6 @@ class ReviewModel implements AppModel {
     this.title,
     this.comment,
     this.createdAt,
-    this.updatedAt,
     this.reviewer,
   });
 
@@ -43,7 +41,6 @@ class ReviewModel implements AppModel {
     String? title,
     String? comment,
     DateTime? createdAt,
-    DateTime? updatedAt,
     UserModel? reviewer,
   }) {
     return ReviewModel(
@@ -56,7 +53,6 @@ class ReviewModel implements AppModel {
       title: title ?? this.title,
       comment: comment ?? this.comment,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
       reviewer: reviewer ?? this.reviewer,
     );
   }
@@ -72,7 +68,6 @@ class ReviewModel implements AppModel {
       title: JsonUtils.asString(map['title']),
       comment: JsonUtils.asString(map['comment']),
       createdAt: JsonUtils.asDateTime(map['created_at']),
-      updatedAt: JsonUtils.asDateTime(map['updated_at']),
       reviewer: map['reviewer'] != null 
           ? UserModel.fromMap(map['reviewer'] as Map<String, dynamic>)
           : null,
@@ -80,8 +75,7 @@ class ReviewModel implements AppModel {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
+    final map = <String, dynamic>{
       'order_id': orderId,
       'reviewer_id': reviewerId,
       'reviewee_id': revieweeId,
@@ -90,9 +84,14 @@ class ReviewModel implements AppModel {
       'title': title,
       'comment': comment,
       'created_at': createdAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
-      if (reviewer != null) 'reviewer': reviewer!.toMap(),
     };
+    if (id.isNotEmpty) {
+      map['id'] = id;
+    }
+    if (reviewer != null) {
+      map['reviewer'] = reviewer!.toMap();
+    }
+    return map;
   }
 
   factory ReviewModel.fromJson(String source) =>

@@ -14,9 +14,29 @@ class ReviewService {
       // The seller's average rating is typically updated via a Database Trigger in Supabase
       // to ensure consistency.
     } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        throw Exception('You have already reviewed this order.');
+      }
       throw Exception(e.message);
     } catch (e) {
       throw Exception('Failed to submit review: $e');
+    }
+  }
+
+  Future<ReviewModel?> fetchReviewForOrder(String orderId, String reviewerId) async {
+    try {
+      final response = await _supabase
+          .from('reviews')
+          .select()
+          .eq('order_id', orderId)
+          .eq('reviewer_id', reviewerId)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return ReviewModel.fromMap(Map<String, dynamic>.from(response));
+    } catch (e) {
+      print('Error fetching review for order: $e');
+      return null;
     }
   }
 

@@ -409,8 +409,17 @@ final _router = GoRouter(
                 GoRoute(
                   path: 'seller-review',
                   parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) =>
-                      SellerReviewPage(product: state.extra as ProductModel?),
+                  builder: (context, state) {
+                    if (state.extra is Map<String, dynamic>) {
+                      final extra = state.extra as Map<String, dynamic>;
+                      return SellerReviewPage(
+                        product: extra['product'] as ProductModel?,
+                        orderId: extra['orderId'] as String?,
+                      );
+                    }
+                    return SellerReviewPage(
+                        product: state.extra as ProductModel?);
+                  },
                 ),
               ],
             ),
@@ -537,7 +546,7 @@ class _MyAppState extends State<MyApp> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: primaryColor, width: 2),
+                  borderSide: const Color(0xFF10B981) == primaryColor ? const BorderSide(color: Color(0xFF10B981), width: 2) : const BorderSide(color: primaryColor, width: 2),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 20,

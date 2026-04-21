@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
@@ -89,9 +88,10 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
             : '$finalComment\n\nHighlights: $tagsString';
       }
 
+      // We pass an empty string for ID so that generate_prefixed_id handles it in Supabase
       final review = ReviewModel(
-        id: const Uuid().v4(),
-        orderId: widget.orderId ?? 'ORD-${DateTime.now().millisecondsSinceEpoch}', // Fallback if no order passed
+        id: '', 
+        orderId: widget.orderId ?? '',
         reviewerId: currentUser.id,
         revieweeId: widget.product!.sellerId,
         productId: widget.product!.id,
