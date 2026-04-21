@@ -69,11 +69,15 @@ class NotificationService {
     String? relatedProductId,
   }) async {
     try {
+      // Ensure type is valid for the DB constraint
+      final validTypes = ['order', 'message', 'system', 'item_sold', 'item_bought'];
+      final String? finalType = validTypes.contains(type) ? type : 'system';
+
       await _supabase.from('notifications').insert({
         'user_id': userId,
         'title': title,
         'message': message,
-        'notification_type': type,
+        'notification_type': finalType,
         'related_order_id': relatedOrderId,
         'related_product_id': relatedProductId,
         'is_read': false,
@@ -85,9 +89,9 @@ class NotificationService {
 
   /// Broadcast a notification to all users (Admin)
   Future<void> broadcastToAllUsers({
+    required String adminId,
     required String title,
     required String message,
-    String type = 'broadcast',
   }) async {
     try {
       // 1. Fetch all user IDs
@@ -96,22 +100,27 @@ class NotificationService {
 
       if (users.isEmpty) return;
 
-      // 2. Prepare bulk insert
+      // 2. Prepare bulk insert with 'system' type to satisfy DB constraint
       final notifications = users.map((user) => {
         'user_id': user['id'],
         'title': title,
         'message': message,
-        'notification_type': type,
+        'notification_type': 'system', 
         'is_read': false,
       }).toList();
 
-      // 3. Insert in batches if necessary
-      await _supabase.from('notifications').insert(notifications);
+      // 3. Insert in batches of 100 to avoid request size limits
+      for (var i = 0; i < notifications.length; i += 100) {
+        final end = (i + 100 < notifications.length) ? i + 100 : notifications.length;
+        final batch = notifications.sublist(i, end);
+        await _supabase.from('notifications').insert(batch);
+      }
 
       // 4. Log the admin action
       await _supabase.from('admin_logs').insert({
+        'admin_id': adminId,
         'action': 'broadcast_notification',
-        'details': 'Sent "$title" to ${users.length} users.', // Saved as string
+        'details': {'title': title, 'user_count': users.length},
       });
 
     } catch (e) {

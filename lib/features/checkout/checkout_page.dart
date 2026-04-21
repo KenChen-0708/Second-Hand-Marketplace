@@ -367,7 +367,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerHighest,
+      backgroundColor: colorScheme.surface,
       body: Stack(
         children: [
           SafeArea(

@@ -341,12 +341,12 @@ class _CartPageState extends State<CartPage> {
                         Expanded(
                           child: ListView.separated(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
+                              horizontal: 10,
+                              vertical: 6,
                             ),
                             itemCount: cartState.items.length,
                             separatorBuilder: (_, __) =>
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final cartItem = cartState.items[index];
                               return _buildCartItem(
@@ -366,10 +366,10 @@ class _CartPageState extends State<CartPage> {
               // Modern Checkout Summary
               Container(
                 padding: const EdgeInsets.only(
-                  top: 14,
-                  left: 20,
-                  right: 20,
-                  bottom: 18,
+                  top: 10,
+                  left: 16,
+                  right: 16,
+                  bottom: 12,
                 ),
                 decoration: BoxDecoration(
                   color: colorScheme.surface,
@@ -388,8 +388,8 @@ class _CartPageState extends State<CartPage> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 18,
+                        horizontal: 14,
+                        vertical: 12,
                       ),
                       decoration: BoxDecoration(
                         color: colorScheme.surfaceContainerLowest,
@@ -404,7 +404,7 @@ class _CartPageState extends State<CartPage> {
                                 'Items',
                                 style: TextStyle(
                                   color: colorScheme.onSurfaceVariant,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -412,18 +412,18 @@ class _CartPageState extends State<CartPage> {
                                 '$selectedQuantity ${selectedQuantity == 1 ? 'item' : 'items'}',
                                 style: TextStyle(
                                   color: colorScheme.onSurface,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           Divider(
                             height: 1,
                             color: colorScheme.outlineVariant.withOpacity(0.3),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -431,7 +431,7 @@ class _CartPageState extends State<CartPage> {
                                 'Total',
                                 style: TextStyle(
                                   color: colorScheme.onSurface,
-                                  fontSize: 17,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -439,7 +439,7 @@ class _CartPageState extends State<CartPage> {
                                 CurrencyHelper.formatRM(selectedSubtotal),
                                 style: TextStyle(
                                   color: colorScheme.primary,
-                                  fontSize: 22,
+                                  fontSize: 20,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
@@ -448,11 +448,11 @@ class _CartPageState extends State<CartPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     // Checkout button
                     SizedBox(
                       width: double.infinity,
-                      height: 46,
+                      height: 42,
                       child: FilledButton(
                         onPressed: selectedItems.isEmpty
                             ? null
@@ -486,7 +486,7 @@ class _CartPageState extends State<CartPage> {
                                   ? 'Select items to checkout'
                                   : 'Proceed to Checkout',
                               style: TextStyle(
-                                fontSize: 15,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -0.2,
                               ),
@@ -519,13 +519,12 @@ class _CartPageState extends State<CartPage> {
     );
     final variantText = cartItem.selectedVariant?.attributeSummary ?? 'Generic';
     final canIncrease =
-        !cartState.isLoading &&
         !isQuantityActionPending &&
         (availableQuantity == null ||
             (availableQuantity > 0 && cartItem.quantity < availableQuantity));
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
@@ -541,7 +540,7 @@ class _CartPageState extends State<CartPage> {
         children: [
           // Main content row
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -559,8 +558,8 @@ class _CartPageState extends State<CartPage> {
                 const SizedBox(width: 10),
                 // Product image
                 Container(
-                  width: 72,
-                  height: 72,
+                  width: 84,
+                  height: 84,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     color: colorScheme.surfaceContainerHighest,
@@ -571,14 +570,14 @@ class _CartPageState extends State<CartPage> {
                       onTap: () => context.push('/product/${product.id}'),
                       child: ImageHelper.productImage(
                         product.imageUrl,
-                        width: 72,
-                        height: 72,
+                        width: 84,
+                        height: 84,
                         fit: BoxFit.cover,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 // Product details
                 Expanded(
                   child: Column(
@@ -628,9 +627,7 @@ class _CartPageState extends State<CartPage> {
                             if (product.variations.isNotEmpty) ...[
                               const SizedBox(width: 6),
                               InkWell(
-                                onTap:
-                                    cartState.isLoading ||
-                                        isQuantityActionPending
+                                onTap: isQuantityActionPending
                                     ? null
                                     : () => _editCartItemSelection(
                                         context,
@@ -676,12 +673,12 @@ class _CartPageState extends State<CartPage> {
           ),
           // Quantity controls and delete
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
                 // Delete button
                 IconButton(
-                  onPressed: cartState.isLoading
+                  onPressed: isQuantityActionPending
                       ? null
                       : () => _runCartAction(
                           context,
@@ -724,8 +721,7 @@ class _CartPageState extends State<CartPage> {
                         width: 40,
                         height: 40,
                         child: IconButton(
-                          onPressed:
-                              cartState.isLoading || isQuantityActionPending
+                          onPressed: isQuantityActionPending
                               ? null
                               : () => _runCartAction(
                                   context,
@@ -736,7 +732,7 @@ class _CartPageState extends State<CartPage> {
                             Icons.remove_rounded,
                             size: 18,
                             color:
-                                cartState.isLoading || isQuantityActionPending
+                                isQuantityActionPending
                                 ? colorScheme.onSurfaceVariant.withOpacity(0.5)
                                 : colorScheme.onSurface,
                           ),
@@ -766,8 +762,7 @@ class _CartPageState extends State<CartPage> {
                         ),
                         child: _CartQuantityField(
                           value: cartItem.quantity,
-                          enabled:
-                              !cartState.isLoading && !isQuantityActionPending,
+                          enabled: !isQuantityActionPending,
                           maxQuantity: availableQuantity,
                           onCommitted: (value) =>
                               _updateCartItemQuantity(context, cartItem, value),
@@ -1044,8 +1039,17 @@ class _CartQuantityFieldState extends State<_CartQuantityField> {
   }
 
   void _commit() {
-    final parsedValue = int.tryParse(_controller.text.trim()) ?? widget.value;
-    var nextValue = parsedValue < 1 ? 1 : parsedValue;
+    final rawValue = _controller.text.trim();
+    final parsedValue = int.tryParse(rawValue);
+    if (parsedValue == null) {
+      _controller.value = TextEditingValue(
+        text: '${widget.value}',
+        selection: TextSelection.collapsed(offset: '${widget.value}'.length),
+      );
+      return;
+    }
+
+    var nextValue = parsedValue < 0 ? 0 : parsedValue;
     final maxQuantity = widget.maxQuantity;
     if (maxQuantity != null && maxQuantity > 0 && nextValue > maxQuantity) {
       nextValue = maxQuantity;
