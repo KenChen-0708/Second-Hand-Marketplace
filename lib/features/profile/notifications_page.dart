@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../state/state.dart';
 import '../../models/app_notification_model.dart';
@@ -25,6 +26,41 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final user = context.read<UserState>().currentUser;
     if (user != null) {
       await context.read<AppNotificationState>().fetchNotifications(user);
+    }
+  }
+
+  void _handleNotificationTap(AppNotificationModel note) async {
+    final notificationState = context.read<AppNotificationState>();
+    final orderState = context.read<OrderState>();
+    final user = context.read<UserState>().currentUser;
+
+    if (!note.isRead) {
+      notificationState.markAsRead(note.id);
+    }
+
+    // Navigation logic based on notification type and related IDs
+    if (note.relatedOrderId != null && note.relatedOrderId!.isNotEmpty) {
+      if (note.notificationType == 'message') {
+        // If it's a message, relatedOrderId stores the conversation ID
+        if (mounted) context.push('/chat/${note.relatedOrderId}');
+      } else {
+        // It's likely an order notification
+        // Ensure we have orders loaded to find this one
+        if (orderState.getById(note.relatedOrderId!) == null && user != null) {
+          await orderState.fetchUserOrders(user.id);
+        }
+
+        final order = orderState.getById(note.relatedOrderId!);
+        if (order != null) {
+          if (mounted) context.push('/profile/order-status', extra: order);
+        } else {
+          if (mounted) context.push('/profile/orders');
+        }
+      }
+    } else if (note.relatedProductId != null && note.relatedProductId!.isNotEmpty) {
+      context.push('/product/${note.relatedProductId}');
+    } else if (note.notificationType == 'message') {
+      context.push('/messages');
     }
   }
 
@@ -76,11 +112,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       final note = notifications[index];
                       return _NotificationCard(
                         notification: note,
-                        onTap: () {
-                          if (!note.isRead) {
-                            notificationState.markAsRead(note.id);
-                          }
-                        },
+                        onTap: () => _handleNotificationTap(note),
                         onDelete: () {
                           notificationState.deleteNotification(note.id);
                         },

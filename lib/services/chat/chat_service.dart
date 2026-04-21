@@ -300,6 +300,7 @@ class ChatService {
         title: 'New Message',
         message: isImage ? 'Sent a photo' : messageText,
         type: 'message',
+        relatedOrderId: conversationId, // Using relatedOrderId to store conversationId for messages
       );
 
       await _localDatabase.upsertChatMessage(message, syncStatus: 'synced');

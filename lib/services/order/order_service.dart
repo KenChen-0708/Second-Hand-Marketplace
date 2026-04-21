@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
+import '../../shared/utils/image_helper.dart';
 import '../notification/notification_service.dart';
 
 class OrderService {
@@ -65,7 +66,6 @@ class OrderService {
           .toList();
 
       await _supabase.from('order_items').insert(orderItemPayload);
-      await _reduceStockQuantities(orderItems);
 
       // 🔥 NOTIFICATION TRIGGERS
       // 1. Notify Buyer
@@ -106,7 +106,10 @@ class OrderService {
     try {
       final response = await _supabase
           .from('orders')
-          .update({'status': status})
+          .update({
+            'status': status,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
           .eq('id', orderId)
           .select('*, buyer_id')
           .single();
@@ -150,7 +153,9 @@ class OrderService {
       }
 
       final List<OrderModel> orders = uniqueOrders.values
-          .map((order) => OrderModel.fromMap(Map<String, dynamic>.from(order)))
+          .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
+                Map<String, dynamic>.from(order),
+              )))
           .toList();
 
       orders.sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
@@ -159,6 +164,95 @@ class OrderService {
       throw Exception(e.message);
     } catch (e) {
       throw Exception('Failed to fetch orders: $e');
+    }
+  }
+
+  Future<List<OrderModel>> getBuyerOrders(String userId) async {
+    try {
+      final response = await _supabase
+          .from('orders')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
+          .eq('buyer_id', userId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
+                Map<String, dynamic>.from(order as Map),
+              )))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to fetch purchase history: $e');
+    }
+  }
+
+  Future<OrderModel> getOrderById(String orderId) async {
+    try {
+      final response = await _supabase
+          .from('orders')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items(*, products(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
+          .eq('id', orderId)
+          .single();
+
+      return OrderModel.fromMap(
+        _resolveOrderImageFields(Map<String, dynamic>.from(response)),
+      );
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to fetch order details: $e');
+    }
+  }
+
+  Future<List<OrderModel>> getSellerOrders(String sellerId) async {
+    try {
+      final response = await _supabase
+          .from('orders')
+          .select(
+            '*, buyer:users!orders_buyer_id_fkey(*), order_items!inner(*, products!inner(*, seller:users(*), variations:product_variants(*, attributes:product_variant_attributes(*))), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
+          .eq('order_items.products.seller_id', sellerId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
+                Map<String, dynamic>.from(order as Map),
+              )))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to fetch seller orders: $e');
+    }
+  }
+
+  Future<void> reportOrderIssue({
+    required String orderId,
+    required String reporterId,
+    required String accusedId,
+    required String reason,
+    required String description,
+  }) async {
+    try {
+      await _supabase.from('disputes').insert({
+        'order_id': orderId,
+        'reporter_id': reporterId,
+        'accused_id': accusedId,
+        'reason': reason,
+        'description': description,
+        'status': 'open',
+      });
+
+      await updateOrderStatus(orderId, 'disputed');
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to report this issue: $e');
     }
   }
 
@@ -172,7 +266,9 @@ class OrderService {
           .order('created_at', ascending: false);
 
       return (response as List)
-          .map((order) => OrderModel.fromMap(Map<String, dynamic>.from(order)))
+          .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
+                Map<String, dynamic>.from(order),
+              )))
           .toList();
     } on PostgrestException catch (e) {
       throw Exception(e.message);
@@ -186,63 +282,41 @@ class OrderService {
     return 'ORD-$now';
   }
 
-  Future<void> _reduceStockQuantities(List<OrderItemModel> orderItems) async {
-    final productQuantityReductions = <String, int>{};
+  Map<String, dynamic> _resolveOrderImageFields(Map<String, dynamic> order) {
+    final rawItems = order['order_items'];
+    if (rawItems is! List) {
+      return order;
+    }
 
-    for (final item in orderItems) {
-      if (item.variantId != null && item.variantId!.isNotEmpty) {
-        final variantData = await _supabase
-            .from('product_variants')
-            .select('quantity, product_id')
-            .eq('id', item.variantId!)
-            .single();
-
-        final currentQuantity = (variantData['quantity'] as num?)?.toInt() ?? 0;
-        final nextQuantity = currentQuantity - item.quantity;
-        if (nextQuantity < 0) {
-          throw Exception(
-            'Not enough stock is available for one of the selected variants.',
-          );
+    return {
+      ...order,
+      'order_items': rawItems.map((rawItem) {
+        final item = Map<String, dynamic>.from(rawItem as Map);
+        final rawProduct = item['products'];
+        if (rawProduct is! Map) {
+          return item;
         }
 
-        await _supabase
-            .from('product_variants')
-            .update({'quantity': nextQuantity})
-            .eq('id', item.variantId!);
-
-        final productId = variantData['product_id']?.toString() ?? item.productId;
-        productQuantityReductions[productId] =
-            (productQuantityReductions[productId] ?? 0) + item.quantity;
-      } else {
-        productQuantityReductions[item.productId] =
-            (productQuantityReductions[item.productId] ?? 0) + item.quantity;
-      }
-    }
-
-    for (final entry in productQuantityReductions.entries) {
-      final productData = await _supabase
-          .from('products')
-          .select('total_stock, status')
-          .eq('id', entry.key)
-          .single();
-
-      final currentStock = (productData['total_stock'] as num?)?.toInt() ?? 0;
-      final nextStock = currentStock - entry.value;
-      if (nextStock < 0) {
-        throw Exception(
-          'Not enough stock is available for one of the selected products.',
+        final product = Map<String, dynamic>.from(rawProduct);
+        final resolvedImages = ImageHelper.resolveProductImageUrls(
+          product['image_urls'],
         );
-      }
+        final resolvedImageUrl =
+            ImageHelper.resolveProductImageUrl(
+              product['image_url']?.toString(),
+              fallbackToDefault: false,
+            ) ??
+            (resolvedImages.isNotEmpty ? resolvedImages.first : null);
 
-      final currentStatus = productData['status']?.toString() ?? 'active';
-      final nextStatus = nextStock == 0 ? 'sold' : currentStatus;
-      await _supabase
-          .from('products')
-          .update({
-            'total_stock': nextStock,
-            'status': nextStatus,
-          })
-          .eq('id', entry.key);
-    }
+        return {
+          ...item,
+          'products': {
+            ...product,
+            'image_url': resolvedImageUrl,
+            'image_urls': resolvedImages,
+          },
+        };
+      }).toList(),
+    };
   }
 }
