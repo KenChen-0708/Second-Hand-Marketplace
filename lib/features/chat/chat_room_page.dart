@@ -277,12 +277,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           ),
                           child: ImageHelper.productImage(
                             product.imageUrl,
+                            width: 14,
+                            height: 14,
                             fit: BoxFit.cover,
                           ),
                         ),
                         Expanded(
                           child: Text(
-                            '${product.title} · RM ${product.price.toStringAsFixed(0)}',
+                            '${product.title} - RM ${product.price.toStringAsFixed(0)}',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11,

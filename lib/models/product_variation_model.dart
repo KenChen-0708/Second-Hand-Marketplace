@@ -57,6 +57,20 @@ class ProductVariationModel implements AppModel {
 
   String get label => '$variationType: $variationValue';
 
+  Map<String, String> get normalizedAttributes {
+    if (attributes.isNotEmpty) {
+      final entries = attributes.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key));
+      return {for (final entry in entries) entry.key: entry.value};
+    }
+
+    if (variationType.isNotEmpty && variationValue.isNotEmpty) {
+      return {variationType: variationValue};
+    }
+
+    return const {};
+  }
+
   factory ProductVariationModel.fromMap(Map<String, dynamic> map) {
     final rawAttributes = map['attributes'] as List? ?? const [];
     final attributes = <String, String>{};
@@ -125,12 +139,21 @@ class ProductVariationModel implements AppModel {
   double effectivePrice(double basePrice) => price ?? (basePrice + priceAdjustment);
 
   String get attributeSummary {
-    if (attributes.isEmpty) {
+    final normalized = normalizedAttributes;
+    if (normalized.isEmpty) {
       return label;
     }
 
-    final entries = attributes.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
+    final entries = normalized.entries.toList();
     return entries.map((entry) => '${entry.key}: ${entry.value}').join(', ');
+  }
+
+  String get optionSummary {
+    final normalized = normalizedAttributes;
+    if (normalized.isEmpty) {
+      return variationValue.isNotEmpty ? variationValue : label;
+    }
+
+    return normalized.values.join(' / ');
   }
 }

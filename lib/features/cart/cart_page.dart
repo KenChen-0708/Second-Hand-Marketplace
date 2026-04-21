@@ -7,8 +7,15 @@ import '../../state/state.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../shared/utils/snackbar_helper.dart';
 
-class CartPage extends StatelessWidget {
+class CartPage extends StatefulWidget {
   const CartPage({super.key});
+
+  @override
+  State<CartPage> createState() => _CartPageState();
+}
+
+class _CartPageState extends State<CartPage> {
+  final Set<String> _selectedItemIds = <String>{};
 
   Future<void> _runCartAction(
     BuildContext context,
@@ -24,10 +31,101 @@ class CartPage extends StatelessWidget {
     SnackbarHelper.showTopMessage(context, cartState.error!);
   }
 
+  void _syncSelection(List<CartModel> items) {
+    final validIds = items.map((item) => item.id).toSet();
+    _selectedItemIds.removeWhere((id) => !validIds.contains(id));
+  }
+
+  void _toggleSelection(String itemId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedItemIds.add(itemId);
+      } else {
+        _selectedItemIds.remove(itemId);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<CartModel> items, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedItemIds
+          ..clear()
+          ..addAll(items.map((item) => item.id));
+      } else {
+        _selectedItemIds.clear();
+      }
+    });
+  }
+
+  bool _sharesCommonHandoverOption(List<CartModel> items) {
+    if (items.isEmpty) {
+      return false;
+    }
+
+    Set<String>? commonOptions;
+    for (final item in items) {
+      final itemOptions = <String>{};
+      if (item.product.tradePreference.contains('face_to_face')) {
+        itemOptions.add('meet_up');
+      }
+      if (item.product.tradePreference.any(
+        (preference) =>
+            preference == 'delivery_official' ||
+            preference == 'delivery_self',
+      )) {
+        itemOptions.add('delivery');
+      }
+
+      commonOptions = commonOptions == null
+          ? itemOptions
+          : commonOptions.intersection(itemOptions);
+    }
+
+    return commonOptions != null && commonOptions.isNotEmpty;
+  }
+
+  void _handleCheckoutSelected(List<CartModel> selectedItems) {
+    if (selectedItems.isEmpty) {
+      SnackbarHelper.showInfo(context, 'Select at least one item to checkout.');
+      return;
+    }
+
+    if (!_sharesCommonHandoverOption(selectedItems)) {
+      SnackbarHelper.showWarning(
+        context,
+        'Selected items do not share the same handover option. Please checkout them separately.',
+      );
+      return;
+    }
+
+    context.push(
+      '/checkout',
+      extra: CheckoutSessionModel(
+        items: selectedItems,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final cartState = context.watch<CartState>();
+    _syncSelection(cartState.items);
+    final selectedItems = cartState.items
+        .where((item) => _selectedItemIds.contains(item.id))
+        .toList();
+    final selectedQuantity = selectedItems.fold<int>(
+      0,
+      (sum, item) => sum + item.quantity,
+    );
+    final selectedSubtotal = selectedItems.fold<double>(
+      0,
+      (sum, item) => sum + item.totalPrice,
+    );
+    final isAllSelected =
+        cartState.items.isNotEmpty &&
+        _selectedItemIds.length == cartState.items.length;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -60,14 +158,27 @@ class CartPage extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const Spacer(),
-                  if (cartState.isNotEmpty)
+                  if (selectedItems.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '${selectedItems.length} selected',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ] else
+                    const Spacer(),
+                  if (selectedItems.isNotEmpty)
                     TextButton(
                       onPressed: cartState.isLoading
                           ? null
                           : () => _runCartAction(
                               context,
-                              (state) => state.clearCart(),
+                              (state) => state.removeMultipleFromCart(selectedItems),
                             ),
                       child: const Text(
                         'Clear All',
@@ -85,17 +196,50 @@ class CartPage extends StatelessWidget {
                   ? const Center(child: CircularProgressIndicator())
                   : cartState.isEmpty
                   ? _buildEmptyCart(context)
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      itemCount: cartState.items.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final cartItem = cartState.items[index];
-                        return _buildCartItem(context, cartItem);
-                      },
+                  : Column(
+                      children: [
+                        if (selectedItems.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  value: isAllSelected,
+                                  onChanged: cartState.isLoading
+                                      ? null
+                                      : (value) => _toggleSelectAll(
+                                          cartState.items,
+                                          value ?? false,
+                                        ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Select all',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Expanded(
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            itemCount: cartState.items.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final cartItem = cartState.items[index];
+                              return _buildCartItem(
+                                context,
+                                cartItem,
+                                isSelected: _selectedItemIds.contains(cartItem.id),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
             ),
             if (cartState.isNotEmpty)
@@ -120,11 +264,11 @@ class CartPage extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Subtotal (${cartState.totalQuantity} items)',
+                          'Subtotal ($selectedQuantity items)',
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                         Text(
-                          '\$${cartState.subtotal.toStringAsFixed(2)}',
+                          '\$${selectedSubtotal.toStringAsFixed(2)}',
                           style: TextStyle(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w800,
@@ -138,10 +282,12 @@ class CartPage extends StatelessWidget {
                       width: double.infinity,
                       height: 52,
                       child: FilledButton.icon(
-                        onPressed: () => context.push('/checkout'),
+                        onPressed: selectedItems.isEmpty
+                            ? null
+                            : () => _handleCheckoutSelected(selectedItems),
                         icon: const Icon(Icons.lock_outline_rounded),
                         label: const Text(
-                          'Proceed to Checkout',
+                          'Checkout Selected',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -163,7 +309,11 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _buildCartItem(BuildContext context, CartModel cartItem) {
+  Widget _buildCartItem(
+    BuildContext context,
+    CartModel cartItem, {
+    required bool isSelected,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final product = cartItem.product;
     final cartState = context.read<CartState>();
@@ -182,6 +332,15 @@ class CartPage extends StatelessWidget {
       ),
       child: Row(
         children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Checkbox(
+              value: isSelected,
+              onChanged: cartState.isLoading
+                  ? null
+                  : (value) => _toggleSelection(cartItem.id, value ?? false),
+            ),
+          ),
           Expanded(
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
@@ -275,7 +434,7 @@ class CartPage extends StatelessWidget {
                   children: [
                     _buildQuantityButton(
                       icon: Icons.remove_rounded,
-                      onPressed: cartState.isLoading
+                      onPressed: cartState.isLoading || cartItem.quantity <= 1
                           ? null
                           : () => _runCartAction(
                               context,

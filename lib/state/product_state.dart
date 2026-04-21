@@ -43,7 +43,12 @@ class ProductState extends EntityState<ProductModel> {
       return product;
     } catch (e) {
       setError(e.toString());
-      return getById(productId);
+      final cachedProduct = getById(productId);
+      if (cachedProduct != null) {
+        setSelectedItem(cachedProduct);
+        return cachedProduct;
+      }
+      rethrow;
     } finally {
       setLoading(false);
     }
@@ -75,6 +80,7 @@ class ProductState extends EntityState<ProductModel> {
           price: (updateData['price'] as num?)?.toDouble(),
           condition: updateData['condition'],
           tradePreference: updateData['trade_preference'],
+          totalStock: updateData['total_stock'],
           availableQuantity: updateData['available_quantity'],
           openToOffers: updateData['open_to_offers'],
           status: updateData['status'],

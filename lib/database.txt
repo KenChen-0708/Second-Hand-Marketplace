@@ -137,6 +137,7 @@ CREATE TABLE products (
   title VARCHAR(255) NOT NULL,
   description TEXT NOT NULL,
   base_price NUMERIC(10,2) NOT NULL CHECK (base_price > 0),
+  total_stock INT NOT NULL DEFAULT 0 CHECK (total_stock >= 0),
 
   category_id VARCHAR(20) REFERENCES categories(id) ON DELETE SET NULL,
   subcategory_id VARCHAR(20) REFERENCES subcategories(id) ON DELETE SET NULL,
@@ -435,7 +436,6 @@ CREATE INDEX IF NOT EXISTS idx_disputes_reporter_id ON disputes(reporter_id);
 CREATE INDEX IF NOT EXISTS idx_disputes_accused_id ON disputes(accused_id);
 CREATE INDEX IF NOT EXISTS idx_subcategories_category_id ON subcategories(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_subcategory_id ON products(subcategory_id);
-
 
 //product image
 Bucket = product_images

@@ -204,6 +204,10 @@ class ProductService {
       if (!payload.containsKey('base_price') && payload.containsKey('price')) {
         payload['base_price'] = payload['price'];
       }
+      if (!payload.containsKey('total_stock') &&
+          payload.containsKey('available_quantity')) {
+        payload['total_stock'] = payload['available_quantity'];
+      }
       payload.remove('price');
 
       final response = await _supabase
@@ -355,6 +359,10 @@ class ProductService {
       };
       if (!data.containsKey('base_price') && data.containsKey('price')) {
         data['base_price'] = data['price'];
+      }
+      if (!data.containsKey('total_stock') &&
+          data.containsKey('available_quantity')) {
+        data['total_stock'] = data['available_quantity'];
       }
       data.remove('price');
       await _supabase.from('products').update(data).eq('id', productId);
