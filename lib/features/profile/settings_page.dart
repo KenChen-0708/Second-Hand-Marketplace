@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth/biometric_service.dart';
+import '../../services/notification/push_notification_service.dart';
 import '../../state/state.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -13,16 +14,29 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _emailNotifs = true;
-  bool _pushNotifs = true;
   bool _locationServices = false;
   bool _biometricEnabled = false;
   bool _biometricHardwareAvailable = false;
+  bool _pushNotifs = false;
+  
   final _biometricService = BiometricService();
+  final _pushNotificationService = PushNotificationService.instance;
 
   @override
   void initState() {
     super.initState();
-    _loadBiometricSettings();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    await _loadBiometricSettings();
+    final pushEnabled = await _pushNotificationService.isEnabled();
+    if (mounted) {
+      setState(() {
+        _pushNotifs = pushEnabled;
+      });
+      context.read<UserState>().updatePushPreference(pushEnabled);
+    }
   }
 
   Future<void> _loadBiometricSettings() async {
@@ -37,6 +51,41 @@ class _SettingsPageState extends State<SettingsPage> {
       }
     } catch (e) {
       debugPrint("SettingsPage: Failed to load biometric settings: $e");
+    }
+  }
+
+  Future<void> _handlePushNotificationsToggle(bool value) async {
+    final userState = context.read<UserState>();
+    final user = userState.currentUser;
+    if (user == null) return;
+
+    setState(() => _pushNotifs = value);
+    userState.updatePushPreference(value);
+
+    try {
+      if (value) {
+        await _pushNotificationService.enableNotifications(user.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Push notifications enabled')),
+          );
+        }
+      } else {
+        await _pushNotificationService.disableNotifications(user.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Push notifications disabled')),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _pushNotifs = !value);
+      userState.updatePushPreference(!value);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e')),
+        );
+      }
     }
   }
 
@@ -221,10 +270,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text(
-          'Settings',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -232,14 +278,20 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(24.0),
         children: [
-          const Text(
-            'Account',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: Colors.grey,
-            ),
+          const Text('Notifications', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.grey)),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('Push Notifications'),
+            secondary: const Icon(Icons.notifications_active_outlined),
+            value: _pushNotifs,
+            onChanged: _handlePushNotificationsToggle,
+            contentPadding: EdgeInsets.zero,
+            activeThumbColor: Theme.of(context).colorScheme.primary,
           ),
+          const Divider(),
+          const SizedBox(height: 24),
+          
+          const Text('Account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.grey)),
           const SizedBox(height: 16),
           ListTile(
             title: const Text('Edit Profile'),
@@ -251,14 +303,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(),
           const SizedBox(height: 24),
 
-          const Text(
-            'Appearance',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: Colors.grey,
-            ),
-          ),
+          const Text('Appearance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.grey)),
           const SizedBox(height: 16),
           SwitchListTile(
             title: const Text('Dark Theme'),
@@ -271,42 +316,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(),
           const SizedBox(height: 24),
 
-          const Text(
-            'Notifications',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 16),
-          SwitchListTile(
-            title: const Text('Email Notifications'),
-            secondary: const Icon(Icons.email_outlined),
-            value: _emailNotifs,
-            onChanged: (val) => setState(() => _emailNotifs = val),
-            contentPadding: EdgeInsets.zero,
-            activeThumbColor: Theme.of(context).colorScheme.primary,
-          ),
-          SwitchListTile(
-            title: const Text('Push Notifications'),
-            secondary: const Icon(Icons.notifications_active_outlined),
-            value: _pushNotifs,
-            onChanged: (val) => setState(() => _pushNotifs = val),
-            contentPadding: EdgeInsets.zero,
-            activeThumbColor: Theme.of(context).colorScheme.primary,
-          ),
-          const Divider(),
-          const SizedBox(height: 24),
-
-          const Text(
-            'Privacy & Security',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: Colors.grey,
-            ),
-          ),
+          const Text('Privacy & Security', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.grey)),
           const SizedBox(height: 16),
           if (_biometricHardwareAvailable)
             SwitchListTile(
@@ -336,15 +346,10 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const Divider(),
           const SizedBox(height: 32),
-
           Center(
             child: Text(
               'App Version 1.0.0',
-              style: TextStyle(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4)),
             ),
           ),
         ],

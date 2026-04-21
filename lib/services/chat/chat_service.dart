@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -7,14 +8,17 @@ import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
 import '../local/connectivity_service.dart';
 import '../local/local_database_service.dart';
+import '../notification/notification_service.dart';
 
 class ChatService {
   static const String _productSharePrefix = '[product_share]';
 
   ChatService({SupabaseClient? client})
-    : _supabase = client ?? Supabase.instance.client;
+    : _supabase = client ?? Supabase.instance.client,
+      _notificationService = NotificationService(client: client ?? Supabase.instance.client);
 
   final SupabaseClient _supabase;
+  final NotificationService _notificationService;
   final LocalDatabaseService _localDatabase = LocalDatabaseService.instance;
   final ConnectivityService _connectivityService = ConnectivityService.instance;
   final Uuid _uuid = const Uuid();
@@ -29,31 +33,64 @@ class ChatService {
 
     try {
       await syncPendingMessages();
+      
+      if (kDebugMode) {
+        print("--- CHAT FETCH DEBUG ---");
+        print("Searching for conversations where buyer_id=$userId OR seller_id=$userId");
+      }
 
+      // We use a broader query first to avoid join-related filtering issues.
+      // If a product or user is missing, a complex select might return nothing for that row.
       final conversationsData = await _supabase
           .from('chat_conversations')
           .select(
             '*, '
-            'product:products(*, variations:product_variations(*)), '
+            'product:products(*), '
             'buyer:users!chat_conversations_buyer_id_fkey(*), '
             'seller:users!chat_conversations_seller_id_fkey(*)',
           )
           .or('buyer_id.eq.$userId,seller_id.eq.$userId')
           .order('last_message_at', ascending: false);
 
-      final bundles = (conversationsData as List)
-          .map(
-            (item) => ChatConversationBundle.fromConversationMap(
-              Map<String, dynamic>.from(item as Map),
-              currentUserId: userId,
-            ),
-          )
-          .toList();
+      final rawList = conversationsData as List;
+      
+      if (kDebugMode) {
+        print("Supabase returned ${rawList.length} conversation rows.");
+      }
+
+      final bundles = <ChatConversationBundle>[];
+      
+      for (final item in rawList) {
+        try {
+          final map = Map<String, dynamic>.from(item as Map);
+          
+          // CRITICAL FIX: If for some reason the join failed (e.g. buyer/seller info missing),
+          // we still want to show the conversation if possible.
+          if (map['product'] == null) {
+            if (kDebugMode) print("Warning: Conversation ${map['id']} has no associated product.");
+            // We'll skip incomplete rows for now to prevent crashes, 
+            // but in a production app we might show a 'Deleted Product' placeholder.
+            continue; 
+          }
+
+          bundles.add(ChatConversationBundle.fromConversationMap(
+            map,
+            currentUserId: userId,
+          ));
+        } catch (e) {
+          if (kDebugMode) print("Error parsing conversation row: $e");
+        }
+      }
+
+      if (bundles.isEmpty && rawList.isNotEmpty) {
+         if (kDebugMode) print("Warning: Found ${rawList.length} rows but 0 could be parsed into bundles.");
+      }
 
       if (bundles.isEmpty) {
         return const [];
       }
 
+      // Fetch messages for all found conversations
       final conversationIds = bundles.map((bundle) => bundle.conversation.id).toList();
       final messagesData = await _supabase
           .from('chat_messages')
@@ -83,15 +120,11 @@ class ChatService {
       _sortBundles(hydratedBundles);
       return hydratedBundles;
     } on PostgrestException catch (e) {
-      if (cachedBundles.isNotEmpty) {
-        return cachedBundles;
-      }
-      throw Exception(e.message);
+      if (kDebugMode) print("PostgrestException: ${e.message}");
+      return cachedBundles;
     } catch (e) {
-      if (cachedBundles.isNotEmpty) {
-        return cachedBundles;
-      }
-      throw Exception('Unable to load messages right now.');
+      if (kDebugMode) print("Generic error in fetchUserConversations: $e");
+      return cachedBundles;
     }
   }
 
@@ -118,7 +151,7 @@ class ChatService {
           .from('chat_conversations')
           .select(
             '*, '
-            'product:products(*, variations:product_variations(*)), '
+            'product:products(*), '
             'buyer:users!chat_conversations_buyer_id_fkey(*), '
             'seller:users!chat_conversations_seller_id_fkey(*)',
           )
@@ -205,42 +238,6 @@ class ChatService {
       return existing['id'] as String;
     }
 
-    final existingSellerChat = await _supabase
-        .from('chat_conversations')
-        .select('id, product_id')
-        .eq('buyer_id', buyerId)
-        .eq('seller_id', sellerId)
-        .order('last_message_at', ascending: false)
-        .order('created_at', ascending: false)
-        .limit(1)
-        .maybeSingle();
-
-    if (existingSellerChat != null) {
-      final conversationId = existingSellerChat['id'] as String;
-      final currentProductId = existingSellerChat['product_id'] as String?;
-      if (currentProductId != productId) {
-        try {
-          await _supabase
-              .from('chat_conversations')
-              .update({'product_id': productId})
-              .eq('id', conversationId);
-        } on PostgrestException catch (e) {
-          if (e.code == '23505') {
-            final exactConversation = await _supabase
-                .from('chat_conversations')
-                .select('id')
-                .eq('product_id', productId)
-                .eq('buyer_id', buyerId)
-                .eq('seller_id', sellerId)
-                .single();
-            return exactConversation['id'] as String;
-          }
-          rethrow;
-        }
-      }
-      return conversationId;
-    }
-
     try {
       final inserted = await _supabase
           .from('chat_conversations')
@@ -309,10 +306,28 @@ class ChatService {
           message.createdAt?.toUtc().toIso8601String() ??
           DateTime.now().toUtc().toIso8601String();
 
+      // Get conversation to find recipient
+      final conv = await _supabase
+          .from('chat_conversations')
+          .select('buyer_id, seller_id')
+          .eq('id', conversationId)
+          .single();
+      
+      final recipientId = conv['buyer_id'] == senderId ? conv['seller_id'] : conv['buyer_id'];
+
       await _supabase
           .from('chat_conversations')
           .update({'last_message_at': lastMessageAt})
           .eq('id', conversationId);
+      
+      // TRIGGER NOTIFICATION FOR RECIPIENT
+      await _notificationService.createNotification(
+        userId: recipientId,
+        title: 'New Message',
+        message: isImage ? 'Sent a photo' : messageText,
+        type: 'message',
+      );
+
       await _localDatabase.upsertChatMessage(message, syncStatus: 'synced');
       return message;
     } on PostgrestException catch (e) {
@@ -588,14 +603,19 @@ class ChatConversationBundle {
     required String currentUserId,
   }) {
     final conversation = ChatConversationModel.fromMap(map);
-    final productMap = _resolveProductMap(Map<String, dynamic>.from(
-      (map['product'] as Map?) ?? <String, dynamic>{},
-    ));
+    
+    // Resolve product with safety defaults if data is missing
+    final Map<String, dynamic> rawProductMap = Map<String, dynamic>.from(
+      (map['product'] as Map?) ?? <String, dynamic>{'id': map['product_id'] ?? '', 'title': 'Deleted Product', 'price': 0.0},
+    );
+    final productMap = _resolveProductMap(rawProductMap);
+    
+    // Resolve users with safety defaults
     final buyerMap = Map<String, dynamic>.from(
-      (map['buyer'] as Map?) ?? <String, dynamic>{},
+      (map['buyer'] as Map?) ?? <String, dynamic>{'id': conversation.buyerId, 'name': 'Deleted User'},
     );
     final sellerMap = Map<String, dynamic>.from(
-      (map['seller'] as Map?) ?? <String, dynamic>{},
+      (map['seller'] as Map?) ?? <String, dynamic>{'id': conversation.sellerId, 'name': 'Deleted User'},
     );
 
     return ChatConversationBundle(

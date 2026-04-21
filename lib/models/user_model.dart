@@ -10,6 +10,7 @@ class UserModel implements AppModel {
   final String? avatarUrl;
   final String role;
   final bool isActive;
+  final bool pushEnabled; // Added this
   final String? phoneNumber;
   final String? address;
   final String? city;
@@ -26,6 +27,7 @@ class UserModel implements AppModel {
     this.avatarUrl,
     this.role = 'user',
     this.isActive = true,
+    this.pushEnabled = false, // Default to false
     this.phoneNumber,
     this.address,
     this.city,
@@ -43,6 +45,7 @@ class UserModel implements AppModel {
     String? avatarUrl,
     String? role,
     bool? isActive,
+    bool? pushEnabled,
     String? phoneNumber,
     String? address,
     String? city,
@@ -59,6 +62,7 @@ class UserModel implements AppModel {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       role: role ?? this.role,
       isActive: isActive ?? this.isActive,
+      pushEnabled: pushEnabled ?? this.pushEnabled,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       address: address ?? this.address,
       city: city ?? this.city,
@@ -78,6 +82,7 @@ class UserModel implements AppModel {
       avatarUrl: JsonUtils.asString(map['avatar_url']),
       role: JsonUtils.asString(map['role']) ?? 'user',
       isActive: JsonUtils.asBool(map['is_active']) ?? true,
+      pushEnabled: JsonUtils.asBool(map['push_enabled']) ?? false,
       phoneNumber: JsonUtils.asString(map['phone_number']),
       address: JsonUtils.asString(map['address']),
       city: JsonUtils.asString(map['city']),
@@ -97,14 +102,13 @@ class UserModel implements AppModel {
       'avatar_url': avatarUrl,
       'role': role,
       'is_active': isActive,
+      'push_enabled': pushEnabled,
       'phone_number': phoneNumber,
       'address': address,
       'city': city,
       'postal_code': postalCode,
       'country': country,
       'bio': bio,
-      // Note: created_at and updated_at are excluded from toMap() 
-      // because they are typically managed by Supabase/PostgreSQL.
     };
   }
 

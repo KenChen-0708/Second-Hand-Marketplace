@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +11,8 @@ import 'state/state.dart';
 import 'models/models.dart';
 import 'services/local/local_database_service.dart';
 import 'services/payment/stripe_service.dart';
+import 'services/notification/local_notification_manager.dart';
+import 'services/notification/push_notification_service.dart';
 
 import 'features/auth/login_page.dart';
 import 'features/auth/register_page.dart';
@@ -48,8 +52,21 @@ const String supabaseUrl = 'https://yqvgeownycvbzelukmfp.supabase.co';
 const String supabaseKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxdmdlb3dueWN2YnplbHVrbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzc2MjcsImV4cCI6MjA4NzgxMzYyN30.1OOTEJnPr7qXWLGdSUNmydvK6_UFSB38mkJbQnv1Qp0';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("!!! FCM BACKGROUND: Received ${message.notification?.title}");
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    print("!!! FIREBASE INIT ERROR: $e");
+  }
 
   if (StripeService.isSupportedPlatform && !kIsWeb) {
     Stripe.publishableKey = StripeService.publishableKey;
@@ -64,36 +81,23 @@ Future<void> main() async {
     ),
   );
   await LocalDatabaseService.instance.database;
+  
+  await LocalNotificationManager.instance.initialize();
+  await PushNotificationService.instance.initialize();
 
   runApp(const MyApp());
 }
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
-final _shellNavigatorHomeKey = GlobalKey<NavigatorState>(
-  debugLabel: 'shellHome',
-);
-final _shellNavigatorSellKey = GlobalKey<NavigatorState>(
-  debugLabel: 'shellSell',
-);
-final _shellNavigatorProfileKey = GlobalKey<NavigatorState>(
-  debugLabel: 'shellProfile',
-);
+final _shellNavigatorHomeKey = GlobalKey<NavigatorState>(debugLabel: 'shellHome');
+final _shellNavigatorSellKey = GlobalKey<NavigatorState>(debugLabel: 'shellSell');
+final _shellNavigatorProfileKey = GlobalKey<NavigatorState>(debugLabel: 'shellProfile');
 
-final _shellNavigatorAdminDashboardKey = GlobalKey<NavigatorState>(
-  debugLabel: 'adminDashboard',
-);
-final _shellNavigatorAdminUsersKey = GlobalKey<NavigatorState>(
-  debugLabel: 'adminUsers',
-);
-final _shellNavigatorAdminListingsKey = GlobalKey<NavigatorState>(
-  debugLabel: 'adminListings',
-);
-final _shellNavigatorAdminOrdersKey = GlobalKey<NavigatorState>(
-  debugLabel: 'adminOrders',
-);
-final _shellNavigatorAdminNotificationsKey = GlobalKey<NavigatorState>(
-  debugLabel: 'adminNotifications',
-);
+final _shellNavigatorAdminDashboardKey = GlobalKey<NavigatorState>(debugLabel: 'adminDashboard');
+final _shellNavigatorAdminUsersKey = GlobalKey<NavigatorState>(debugLabel: 'adminUsers');
+final _shellNavigatorAdminListingsKey = GlobalKey<NavigatorState>(debugLabel: 'adminListings');
+final _shellNavigatorAdminOrdersKey = GlobalKey<NavigatorState>(debugLabel: 'adminOrders');
+final _shellNavigatorAdminNotificationsKey = GlobalKey<NavigatorState>(debugLabel: 'adminNotifications');
 
 final _router = GoRouter(
   navigatorKey: _rootNavigatorKey,
@@ -102,32 +106,21 @@ final _router = GoRouter(
     final userState = context.read<UserState>();
     final user = userState.currentUser;
     
-    // Auth-related pages
     final bool isLoggingIn = state.matchedLocation == '/' || 
                            state.matchedLocation == '/register' ||
                            state.matchedLocation == '/reset-password' ||
                            state.matchedLocation == '/admin/login';
 
-    // If not authenticated, only allow auth pages
     if (!userState.isAuthenticated) {
       return isLoggingIn ? null : '/';
     }
 
-    // --- PROTECTED ROUTES (If Logged In) ---
-
-    // 1. Prevent non-admins from entering /admin/*
     if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
       if (user != null && user.role != 'admin') {
-        return '/home'; // Kick users back to marketplace
+        return '/home';
       }
     }
 
-    // 2. Prevent admins from entering /home or other user pages (Optional, but cleaner)
-    // if (user != null && user.role == 'admin' && !state.matchedLocation.startsWith('/admin')) {
-    //   return '/admin/dashboard';
-    // }
-
-    // 3. If authenticated and trying to go to login/register, redirect to appropriate home
     if (isLoggingIn && state.matchedLocation != '/reset-password') {
        if (user?.role == 'admin') return '/admin/dashboard';
        return '/home';
@@ -137,14 +130,8 @@ final _router = GoRouter(
   },
   routes: [
     GoRoute(path: '/', builder: (context, state) => const LoginPage()),
-    GoRoute(
-      path: '/register',
-      builder: (context, state) => const RegisterPage(),
-    ),
-    GoRoute(
-      path: '/reset-password',
-      builder: (context, state) => const ResetPasswordPage(),
-    ),
+    GoRoute(path: '/register', builder: (context, state) => const RegisterPage()),
+    GoRoute(path: '/reset-password', builder: (context, state) => const ResetPasswordPage()),
     GoRoute(
       path: '/cart',
       parentNavigatorKey: _rootNavigatorKey,
@@ -154,9 +141,7 @@ final _router = GoRouter(
       path: '/checkout',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => CheckoutPage(
-        session: state.extra is CheckoutSessionModel
-            ? state.extra as CheckoutSessionModel
-            : null,
+        session: state.extra is CheckoutSessionModel ? state.extra as CheckoutSessionModel : null,
       ),
     ),
     GoRoute(
@@ -168,15 +153,8 @@ final _router = GoRouter(
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(1.0, 0.0);
           const end = Offset.zero;
-          final tween = Tween(
-            begin: begin,
-            end: end,
-          ).chain(CurveTween(curve: Curves.easeInOutCubic));
-
-          return SlideTransition(
-            position: animation.drive(tween),
-            child: child,
-          );
+          final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOutCubic));
+          return SlideTransition(position: animation.drive(tween), child: child);
         },
       ),
     ),
@@ -191,15 +169,8 @@ final _router = GoRouter(
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
-            final tween = Tween(
-              begin: begin,
-              end: end,
-            ).chain(CurveTween(curve: Curves.easeInOutCubic));
-
-            return SlideTransition(
-              position: animation.drive(tween),
-              child: child,
-            );
+            final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOutCubic));
+            return SlideTransition(position: animation.drive(tween), child: child);
           },
         );
       },
@@ -218,9 +189,7 @@ final _router = GoRouter(
       builder: (context, state) {
         final args = state.extra;
         return ProductListingPage(
-          args: args is ProductListingArguments
-              ? args
-              : const ProductListingArguments(allProducts: []),
+          args: args is ProductListingArguments ? args : const ProductListingArguments(allProducts: []),
         );
       },
     ),
@@ -252,48 +221,23 @@ final _router = GoRouter(
       branches: [
         StatefulShellBranch(
           navigatorKey: _shellNavigatorAdminDashboardKey,
-          routes: [
-            GoRoute(
-              path: '/admin/dashboard',
-              builder: (context, state) => const AdminDashboardPage(),
-            ),
-          ],
+          routes: [GoRoute(path: '/admin/dashboard', builder: (context, state) => const AdminDashboardPage())],
         ),
         StatefulShellBranch(
           navigatorKey: _shellNavigatorAdminUsersKey,
-          routes: [
-            GoRoute(
-              path: '/admin/users',
-              builder: (context, state) => const AdminUserManagementPage(),
-            ),
-          ],
+          routes: [GoRoute(path: '/admin/users', builder: (context, state) => const AdminUserManagementPage())],
         ),
         StatefulShellBranch(
           navigatorKey: _shellNavigatorAdminListingsKey,
-          routes: [
-            GoRoute(
-              path: '/admin/listings',
-              builder: (context, state) => const AdminListingModerationPage(),
-            ),
-          ],
+          routes: [GoRoute(path: '/admin/listings', builder: (context, state) => const AdminListingModerationPage())],
         ),
         StatefulShellBranch(
           navigatorKey: _shellNavigatorAdminOrdersKey,
-          routes: [
-            GoRoute(
-              path: '/admin/orders',
-              builder: (context, state) => const AdminOrderManagementPage(),
-            ),
-          ],
+          routes: [GoRoute(path: '/admin/orders', builder: (context, state) => const AdminOrderManagementPage())],
         ),
         StatefulShellBranch(
           navigatorKey: _shellNavigatorAdminNotificationsKey,
-          routes: [
-            GoRoute(
-              path: '/admin/notifications',
-              builder: (context, state) => const AdminNotificationCenterPage(),
-            ),
-          ],
+          routes: [GoRoute(path: '/admin/notifications', builder: (context, state) => const AdminNotificationCenterPage())],
         ),
       ],
     ),
@@ -305,22 +249,11 @@ final _router = GoRouter(
       branches: [
         StatefulShellBranch(
           navigatorKey: _shellNavigatorHomeKey,
-          routes: [
-            GoRoute(
-              path: '/home',
-              builder: (context, state) => const HomePage(),
-              routes: const [],
-            ),
-          ],
+          routes: [GoRoute(path: '/home', builder: (context, state) => const HomePage())],
         ),
         StatefulShellBranch(
           navigatorKey: _shellNavigatorSellKey,
-          routes: [
-            GoRoute(
-              path: '/sell',
-              builder: (context, state) => const SellPage(),
-            ),
-          ],
+          routes: [GoRoute(path: '/sell', builder: (context, state) => const SellPage())],
         ),
         StatefulShellBranch(
           navigatorKey: _shellNavigatorProfileKey,
@@ -329,58 +262,13 @@ final _router = GoRouter(
               path: '/profile',
               builder: (context, state) => const ProfilePage(),
               routes: [
-                GoRoute(
-                  path: 'account',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const MyAccountPage(),
-                ),
-                GoRoute(
-                  path: 'edit',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const MyAccountPage(),
-                ),
-                GoRoute(
-                  path: 'notifications',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const NotificationsPage(),
-                ),
-                GoRoute(
-                  path: 'wishlist',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const WishlistPage(),
-                ),
-                GoRoute(
-                  path: 'settings',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const SettingsPage(),
-                ),
-                GoRoute(
-                  path: 'listings',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const MyListingsPage(),
-                ),
-                GoRoute(
-                  path: 'dashboard',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const SellerDashboardPage(),
-                ),
-                GoRoute(
-                  path: 'order-status',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) =>
-                      OrderStatusPage(order: state.extra),
-                ),
-                GoRoute(
-                  path: 'orders',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const OrderHistoryPage(),
-                ),
-                GoRoute(
-                  path: 'seller-review',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) =>
-                      SellerReviewPage(product: state.extra as ProductModel?),
-                ),
+                GoRoute(path: 'account', parentNavigatorKey: _rootNavigatorKey, builder: (context, state) => const MyAccountPage()),
+                GoRoute(path: 'notifications', parentNavigatorKey: _rootNavigatorKey, builder: (context, state) => const NotificationsPage()),
+                GoRoute(path: 'wishlist', parentNavigatorKey: _rootNavigatorKey, builder: (context, state) => const WishlistPage()),
+                GoRoute(path: 'settings', parentNavigatorKey: _rootNavigatorKey, builder: (context, state) => const SettingsPage()),
+                GoRoute(path: 'listings', parentNavigatorKey: _rootNavigatorKey, builder: (context, state) => const MyListingsPage()),
+                GoRoute(path: 'dashboard', parentNavigatorKey: _rootNavigatorKey, builder: (context, state) => const SellerDashboardPage()),
+                GoRoute(path: 'orders', parentNavigatorKey: _rootNavigatorKey, builder: (context, state) => const OrderHistoryPage()),
               ],
             ),
           ],
@@ -404,7 +292,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _userState = UserState();
-    _userState.initialize(); // Auto-login on start
+    _userState.initialize(); 
     _setupAuthListener();
   }
 
@@ -414,8 +302,6 @@ class _MyAppState extends State<MyApp> {
       if (event == AuthChangeEvent.passwordRecovery) {
         _router.go('/reset-password');
       }
-      
-      // Update isAuthenticated state whenever auth changes
       if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
         setState(() {});
       }
@@ -447,13 +333,17 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => AdminLogState()),
         ChangeNotifierProvider(create: (_) => AdminUserState()),
       ],
-      child: Consumer<ThemeState>(
-        builder: (context, themeState, child) {
+      child: Consumer2<UserState, AppNotificationState>(
+        builder: (context, userState, noteState, child) {
+          // ENSURE NOTIFICATION STATE HAS THE LATEST USER DATA
+          noteState.updateCurrentUser(userState.currentUser);
+          
           return MaterialApp.router(
+            scaffoldMessengerKey: LocalNotificationManager.instance.messengerKey,
             debugShowCheckedModeBanner: false,
             title: 'CampusSell',
             routerConfig: _router,
-            themeMode: themeState.themeMode,
+            themeMode: context.watch<ThemeState>().themeMode,
             theme: ThemeData(
               useMaterial3: true,
               colorScheme:

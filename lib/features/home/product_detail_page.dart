@@ -124,14 +124,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           .getOrCreateConversationForProduct(
             product: product,
           );
-      if (!context.mounted) {
-        return;
-      }
+      
+      if (!context.mounted) return;
+      
+      // We navigate to the chat room. The ChatService sendMessage will
+      // handle the actual push notification trigger when the first message is sent.
       await context.push('/chat/${bundle.conversation.id}');
     } catch (e) {
-      if (!context.mounted) {
-        return;
-      }
+      if (!context.mounted) return;
       _showMessage(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) {
@@ -283,7 +283,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final stockQuantity = product.stockQuantity;
         final isSoldOut = product.isSoldOut;
         
-        // Dynamic Avatar Resolution
         final sellerAvatar = ImageHelper.resolveProfileImageUrl(seller?.avatarUrl, name: seller?.name);
 
         final favoriteState = context.watch<FavoriteState>();
@@ -519,7 +518,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          // --- Added Trade Details Section ---
                           Text(
                             'Trade Details',
                             style: Theme.of(context).textTheme.titleMedium
@@ -793,7 +791,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     '/edit-product',
                                     extra: product,
                                   );
-                                  // The details will automatically update because of ProductState and FutureBuilder reload
                                   _reloadProduct();
                                 },
                                 child: const Text(

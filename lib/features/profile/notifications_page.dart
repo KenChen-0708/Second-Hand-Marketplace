@@ -14,7 +14,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to ensure the context is ready
+    // Notifications are now handled globally in main.dart and AppNotificationState.
+    // We just need to ensure the list is loaded if it hasn't been yet.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadNotifications();
     });
@@ -23,7 +24,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Future<void> _loadNotifications() async {
     final user = context.read<UserState>().currentUser;
     if (user != null) {
-      await context.read<AppNotificationState>().fetchNotifications(user.id);
+      await context.read<AppNotificationState>().fetchNotifications(user);
     }
   }
 
@@ -46,9 +47,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
         actions: [
           if (notifications.isNotEmpty)
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 if (user != null) {
-                  notificationState.markAllAsRead(user.id);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Marking all as read...'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                  await notificationState.markAllAsRead(user.id);
                 }
               },
               child: const Text('Mark all read'),
@@ -70,7 +77,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       return _NotificationCard(
                         notification: note,
                         onTap: () {
-                          notificationState.markAsRead(note.id);
+                          if (!note.isRead) {
+                            notificationState.markAsRead(note.id);
+                          }
                         },
                         onDelete: () {
                           notificationState.deleteNotification(note.id);
@@ -173,13 +182,15 @@ class _NotificationCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          notification.title,
-                          style: TextStyle(
-                            fontWeight: notification.isRead
-                                ? FontWeight.w600
-                                : FontWeight.bold,
-                            fontSize: 15,
+                        Expanded(
+                          child: Text(
+                            notification.title,
+                            style: TextStyle(
+                              fontWeight: notification.isRead
+                                  ? FontWeight.w600
+                                  : FontWeight.bold,
+                              fontSize: 15,
+                            ),
                           ),
                         ),
                         if (notification.createdAt != null)

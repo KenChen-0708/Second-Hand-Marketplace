@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/notification/push_notification_service.dart';
 
 class UserState extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -20,15 +21,11 @@ class UserState extends ChangeNotifier {
       if (email != null) {
         try {
           _currentUser = await _authService.fetchProfileByEmail(email);
-
-          // Check if the account is active
           if (_currentUser != null && !_currentUser!.isActive) {
             await logout();
             return;
           }
         } catch (e) {
-          // Keep the existing auth session when offline and continue with a
-          // minimal local user instead of forcing a logout.
           _currentUser = UserModel(
             id: _authService.supabase.auth.currentUser?.id ?? email,
             email: email,
@@ -37,13 +34,37 @@ class UserState extends ChangeNotifier {
         }
       }
     }
+    
+    // Load local preference immediately on boot
+    await syncPushPreference();
+    
     _isInitialized = true;
     notifyListeners();
+  }
+
+  /// Explicitly sync the push preference from local storage
+  Future<void> syncPushPreference() async {
+    if (_currentUser != null) {
+      final pushEnabled = await PushNotificationService.instance.isEnabled();
+      if (_currentUser!.pushEnabled != pushEnabled) {
+        _currentUser = _currentUser!.copyWith(pushEnabled: pushEnabled);
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Update just the push notification preference locally and in memory
+  void updatePushPreference(bool enabled) {
+    if (_currentUser != null && _currentUser!.pushEnabled != enabled) {
+      _currentUser = _currentUser!.copyWith(pushEnabled: enabled);
+      notifyListeners();
+    }
   }
 
   /// Standard Login
   Future<void> login(String email, String password) async {
     _currentUser = await _authService.loginUser(email, password);
+    await syncPushPreference();
     notifyListeners();
   }
 
@@ -58,6 +79,7 @@ class UserState extends ChangeNotifier {
       password: password,
       name: name,
     );
+    await syncPushPreference();
     notifyListeners();
   }
 
@@ -88,14 +110,15 @@ class UserState extends ChangeNotifier {
 
     try {
       await _authService.updateUserProfile(updatedUser);
-      _currentUser = updatedUser;
+      // Keep push enabled status after DB update
+      final currentPush = _currentUser!.pushEnabled;
+      _currentUser = updatedUser.copyWith(pushEnabled: currentPush);
       notifyListeners();
     } catch (e) {
       rethrow;
     }
   }
 
-  /// Change Password
   Future<void> changePassword(String newPassword) async {
     try {
       await _authService.changePassword(newPassword);
@@ -104,7 +127,6 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  /// Reset Password
   Future<void> resetPassword(String email) async {
     try {
       await _authService.resetPassword(email);
@@ -113,7 +135,6 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  /// Logout
   Future<void> logout() async {
     await _authService.logout();
     _currentUser = null;
