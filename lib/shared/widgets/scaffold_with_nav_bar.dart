@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../state/state.dart';
 
 class ScaffoldWithNavBar extends StatelessWidget {
   const ScaffoldWithNavBar({required this.navigationShell, Key? key})
@@ -22,6 +24,11 @@ class ScaffoldWithNavBar extends StatelessWidget {
     final selectedColor = Theme.of(context).colorScheme.primary;
     final primaryColor = Theme.of(context).colorScheme.primary;
     final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
+
+    // Watch for unread counts
+    final unreadNotifications = context.watch<AppNotificationState>().unreadCount;
+    final unreadChats = context.watch<ChatConversationState>().unreadCount;
+    final totalUnread = unreadNotifications + unreadChats;
 
     return Scaffold(
       body: navigationShell,
@@ -90,6 +97,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
               onTap: () => _goBranch(2),
               selectedColor: selectedColor,
               unselectedColor: unselectedColor,
+              badgeCount: totalUnread,
             ),
           ],
         ),
@@ -104,6 +112,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
     required VoidCallback onTap,
     required Color selectedColor,
     required Color unselectedColor,
+    int badgeCount = 0,
   }) {
     return InkWell(
       onTap: onTap,
@@ -115,10 +124,41 @@ class ScaffoldWithNavBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: isSelected ? selectedColor : unselectedColor,
-              size: 28,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? selectedColor : unselectedColor,
+                  size: 28,
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 2),
             Text(
