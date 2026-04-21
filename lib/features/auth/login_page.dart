@@ -458,6 +458,26 @@ class _LoginPageState extends State<LoginPage> {
 
                           const SizedBox(height: 12),
 
+                          OutlinedButton(
+                            onPressed: _isLoading ? null : () => context.go('/home'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              side: BorderSide(color: colorScheme.primary, width: 1.5),
+                            ),
+                            child: const Text(
+                              'Continue as Guest',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
                           if (_isBiometricAvailable)
                             OutlinedButton.icon(
                               onPressed: _isLoading ? null : _handleBiometricLogin,

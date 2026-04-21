@@ -121,26 +121,36 @@ final _router = GoRouter(
   redirect: (context, state) async {
     final userState = context.read<UserState>();
     final user = userState.currentUser;
+    final bool isAuthenticated = userState.isAuthenticated;
     
-    // Auth-related pages
-    final bool isLoggingIn = state.matchedLocation == '/' || 
-                           state.matchedLocation == '/register' ||
-                           state.matchedLocation == '/reset-password' ||
-                           state.matchedLocation == '/admin/login';
+    // Pages that are accessible without login
+    final bool isPublicPage = state.matchedLocation == '/' || 
+                            state.matchedLocation == '/register' ||
+                            state.matchedLocation == '/reset-password' ||
+                            state.matchedLocation == '/admin/login' ||
+                            state.matchedLocation == '/home' ||
+                            state.matchedLocation.startsWith('/product/') ||
+                            state.matchedLocation.startsWith('/seller/');
 
-    if (!userState.isAuthenticated) {
-      return isLoggingIn ? null : '/';
+    if (!isAuthenticated && !isPublicPage) {
+      return '/'; // Send to login if trying to access private page without login
     }
 
-    if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
-      if (user != null && user.role != 'admin') {
-        return '/home'; // Kick users back to marketplace
+    if (isAuthenticated) {
+      if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
+        if (user != null && user.role != 'admin') {
+          return '/home'; // Kick users back to marketplace
+        }
       }
-    }
 
-    if (isLoggingIn && state.matchedLocation != '/reset-password') {
-       if (user?.role == 'admin') return '/admin/dashboard';
-       return '/home';
+      // If already logged in and at auth pages, go home
+      final bool isAuthPage = state.matchedLocation == '/' || 
+                             state.matchedLocation == '/register' ||
+                             state.matchedLocation == '/admin/login';
+      if (isAuthPage && state.matchedLocation != '/reset-password') {
+         if (user?.role == 'admin') return '/admin/dashboard';
+         return '/home';
+      }
     }
 
     return null;
