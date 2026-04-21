@@ -195,6 +195,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
         final product = products[index];
         final relatedOrders = _ordersByProductId[product.id] ?? const [];
         final needsActionCount = _needsActionCountFor(product.id, _ordersByProductId);
+        final needsAction = needsActionCount > 0;
         return InkWell(
           onTap: () async {
             await context.push(
@@ -210,8 +211,11 @@ class _MyListingsPageState extends State<MyListingsPage> {
           },
           borderRadius: BorderRadius.circular(16),
           child: Card(
-            elevation: 2,
+            elevation: needsAction ? 8 : 2,
             shape: RoundedRectangleBorder(
+              side: needsAction
+                  ? const BorderSide(color: Colors.orange, width: 1.5)
+                  : BorderSide.none,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Padding(
@@ -285,20 +289,29 @@ class _MyListingsPageState extends State<MyListingsPage> {
                           ],
                         ),
                         if (needsActionCount > 0) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.orange.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Text(
-                              '$needsActionCount buyer ${needsActionCount == 1 ? 'action' : 'actions'} needed',
-                              style: const TextStyle(
-                                color: Colors.orange,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                              ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.priority_high_rounded, color: Colors.orange, size: 16),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '$needsActionCount buyer ${needsActionCount == 1 ? 'action' : 'actions'} needed',
+                                    style: const TextStyle(
+                                      color: Colors.orange,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -319,10 +332,13 @@ class _MyListingsPageState extends State<MyListingsPage> {
     Map<String, List<OrderModel>> ordersByProductId,
   ) {
     final orders = ordersByProductId[productId] ?? const [];
-    return orders
-        .where((order) => const {'pending', 'paid', 'pending_handover'}
-            .contains(order.status.toLowerCase()))
-        .length;
+    return orders.where(_orderNeedsAction).length;
+  }
+
+  static bool _orderNeedsAction(OrderModel order) {
+    final status = order.status.toLowerCase();
+    return status == 'paid' ||
+        (status == 'pending_handover' && order.handoverDate == null);
   }
 }
 
@@ -351,14 +367,14 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
     final product = widget.args.product;
     final orders = [..._orders]
       ..sort((a, b) {
-        final aAction = _needsAction(a.status) ? 1 : 0;
-        final bAction = _needsAction(b.status) ? 1 : 0;
+        final aAction = _needsAction(a) ? 1 : 0;
+        final bAction = _needsAction(b) ? 1 : 0;
         if (aAction != bAction) return bAction.compareTo(aAction);
         final aTime = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bTime = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bTime.compareTo(aTime);
       });
-    final actionCount = orders.where((order) => _needsAction(order.status)).length;
+    final actionCount = orders.where(_needsAction).length;
     final statusColor = actionCount > 0 ? Colors.orange : Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -421,39 +437,47 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                 ),
                 _section(
                   title: 'Listing Summary',
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: ImageHelper.productImage(
-                          product.imageUrl,
-                          width: 104,
-                          height: 104,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(product.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                            const SizedBox(height: 8),
-                            Text(
-                              '\$${product.price.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                              ),
+                  child: InkWell(
+                    onTap: () => context.push('/seller-product', extra: product),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: ImageHelper.productImage(
+                              product.imageUrl,
+                              width: 104,
+                              height: 104,
+                              fit: BoxFit.cover,
                             ),
-                            const SizedBox(height: 8),
-                            _pill(product.status.toUpperCase(), Theme.of(context).colorScheme.primary),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(product.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '\$${product.price.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                _pill(product.status.toUpperCase(), Theme.of(context).colorScheme.primary),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
                 _section(
@@ -485,11 +509,11 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
+                        child: ElevatedButton.icon(
                           onPressed: () => context.push('/edit-product', extra: product),
                           icon: const Icon(Icons.edit_rounded),
                           label: const Text('Edit Listing'),
-                          style: OutlinedButton.styleFrom(
+                          style: ElevatedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 50),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
@@ -497,12 +521,14 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => context.push('/product/${product.id}'),
-                          icon: const Icon(Icons.visibility_rounded),
-                          label: const Text('View Public'),
-                          style: ElevatedButton.styleFrom(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _confirmRemoveListing(context, product),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                          label: const Text('Remove Listing'),
+                          style: OutlinedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 50),
+                            foregroundColor: Theme.of(context).colorScheme.error,
+                            side: BorderSide(color: Theme.of(context).colorScheme.error),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
@@ -550,31 +576,88 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
     }
   }
 
-  static bool _needsAction(String status) {
-    return const {'pending', 'paid', 'pending_handover'}.contains(status.toLowerCase());
+  Future<void> _confirmRemoveListing(BuildContext context, ProductModel product) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Listing?'),
+        content: const Text('This listing will be removed from the marketplace.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) {
+      return;
+    }
+
+    try {
+      await context.read<ProductState>().deleteProduct(product.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Listing removed successfully')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove listing: $e')),
+        );
+      }
+    }
+  }
+
+  static bool _needsAction(OrderModel order) {
+    final status = order.status.toLowerCase();
+    return status == 'paid' ||
+        (status == 'pending_handover' && order.handoverDate == null);
   }
 
   Widget _orderCard(BuildContext context, OrderModel order) {
     final date = order.createdAt == null ? '' : DateFormat('MMM dd, yyyy').format(order.createdAt!);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _needsAction(order.status)
-              ? Colors.orange.withValues(alpha: 0.35)
-              : Colors.grey.withValues(alpha: 0.12),
+    final needsAction = _needsAction(order);
+    return InkWell(
+      onTap: () async {
+        await context.push('/profile/order-status', extra: order);
+        if (context.mounted) {
+          await _reloadOrders();
+        }
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: needsAction
+              ? Colors.orange.withValues(alpha: 0.06)
+              : const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: needsAction
+                ? Colors.orange.withValues(alpha: 0.55)
+                : Colors.grey.withValues(alpha: 0.12),
+            width: needsAction ? 1.5 : 1,
+          ),
         ),
-      ),
-      child: Column(
-        children: [
-          Row(
+        child: Column(
+          children: [
+            Row(
             children: [
               Icon(
-                _needsAction(order.status) ? Icons.notification_important_rounded : Icons.receipt_long_rounded,
-                color: _needsAction(order.status) ? Colors.orange : Colors.grey,
+                needsAction ? Icons.notification_important_rounded : Icons.receipt_long_rounded,
+                color: needsAction ? Colors.orange : Colors.grey,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -599,37 +682,40 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () async {
-                    await context.push('/profile/order-status', extra: order);
-                    if (context.mounted) {
-                      await _reloadOrders();
-                    }
-                  },
-                  child: const Text('Open Order'),
-                ),
-              ),
-              if (order.status.toLowerCase() == 'pending') ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _updateOrderStatus(context, order, 'paid'),
-                    child: const Text('Confirm'),
-                  ),
-                ),
-              ] else if (order.status.toLowerCase() == 'paid') ...[
-                const SizedBox(width: 12),
+              if (order.status.toLowerCase() == 'paid') ...[
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => _updateOrderStatus(context, order, 'pending_handover'),
-                    child: const Text('Ready'),
+                    child: const Text('Confirm Handover'),
+                  ),
+                ),
+              ] else if (needsAction) ...[
+                Expanded(
+                  child: Text(
+                    'Tap to schedule handover',
+                    style: TextStyle(
+                      color: Colors.orange[800],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Expanded(
+                  child: Text(
+                    'Tap to view order details',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
             ],
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

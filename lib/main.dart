@@ -36,6 +36,7 @@ import 'features/profile/seller_review_page.dart';
 import 'features/profile/seller_profile_page.dart';
 import 'features/sell/my_listings_page.dart';
 import 'features/sell/edit_product_page.dart';
+import 'features/sell/seller_product_page.dart';
 import 'features/sell/seller_dashboard_page.dart';
 
 import 'shared/widgets/scaffold_with_nav_bar.dart';
@@ -254,6 +255,14 @@ final _router = GoRouter(
       builder: (context, state) {
         final id = state.pathParameters['id']!;
         return ProductDetailPage(productId: id);
+      },
+    ),
+    GoRoute(
+      path: '/seller-product',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final product = state.extra as ProductModel;
+        return SellerProductPage(product: product);
       },
     ),
     GoRoute(
