@@ -88,6 +88,12 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     }
   }
 
+  double get _calculatedRating {
+    if (_reviews.isEmpty) return 0.0;
+    final sum = _reviews.fold<double>(0, (prev, r) => prev + r.rating);
+    return sum / _reviews.length;
+  }
+
   Future<void> _openSellerChat() async {
     final currentUser = context.read<UserState>().currentUser;
     if (currentUser == null) {
@@ -113,7 +119,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     }
 
     if (currentUser.id == widget.sellerId) {
-      SnackbarHelper.showTopMessage(context, 'This is your own profile.');
+      SnackbarHelper.showTopMessage(context, 'This is your profile.');
       return;
     }
 
@@ -121,7 +127,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
       if (_activeListings.isEmpty) {
         SnackbarHelper.showTopMessage(
           context,
-          'This seller has no active product to start a chat.',
+          'No active listings available.',
         );
         return;
       }
@@ -138,7 +144,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
       if (mounted) {
         SnackbarHelper.showError(
           context,
-          e.toString().replaceFirst('Exception: ', ''),
+          'Unable to open chat. Please try again.',
         );
       }
     }
@@ -184,7 +190,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                 Navigator.pop(context);
                 SnackbarHelper.showTopMessage(
                   context,
-                  'Link copied to clipboard!',
+                  'Link copied.',
                 );
               },
             ),
@@ -236,7 +242,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
               Navigator.pop(context);
               SnackbarHelper.showTopMessage(
                 context,
-                'Request submitted for review.',
+                'Request submitted.',
               );
             },
             child: Text(
@@ -342,6 +348,14 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final String avatarUrl = ImageHelper.resolveProfileImageUrl(seller.avatarUrl, name: seller.name);
+
+    // Use live calculation if profile data is missing or zero
+    final double rating = profile != null && profile.averageRating > 0 
+        ? profile.averageRating 
+        : _calculatedRating;
+    final int reviewCount = profile != null && profile.totalReviews > 0 
+        ? profile.totalReviews 
+        : _reviews.length;
 
     return Container(
       decoration: BoxDecoration(
@@ -462,7 +476,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
               children: [
                 _buildStatItem(
                   context,
-                  profile?.averageRating.toStringAsFixed(1) ?? '0.0',
+                  rating.toStringAsFixed(1),
                   'Rating',
                   icon: Icons.star_rounded,
                 ),
@@ -473,8 +487,8 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                 ),
                 _buildStatItem(
                   context,
-                  seller.createdAt?.year.toString() ?? '2024',
-                  'Joined',
+                  reviewCount.toString(),
+                  'Reviews',
                 ),
               ],
             ),

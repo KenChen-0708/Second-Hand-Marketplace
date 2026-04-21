@@ -4,9 +4,44 @@ import 'package:provider/provider.dart';
 
 import '../../state/state.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../models/models.dart';
+import '../../services/seller/seller_service.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  SellerStats? _sellerStats;
+  bool _isLoadingStats = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSellerStats();
+  }
+
+  Future<void> _loadSellerStats() async {
+    final user = context.read<UserState>().currentUser;
+    if (user == null) return;
+
+    setState(() => _isLoadingStats = true);
+    try {
+      final sellerService = SellerService();
+      final stats = await sellerService.getSellerStats(user.id);
+      if (mounted) {
+        setState(() {
+          _sellerStats = stats;
+          _isLoadingStats = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingStats = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +56,6 @@ class ProfilePage extends StatelessWidget {
     final unreadNotifications = context.watch<AppNotificationState>().unreadCount;
     final unreadChats = context.watch<ChatConversationState>().unreadCount;
 
-    // Resolve the full URL using our helper with initial fallback
     final avatarUrl = ImageHelper.resolveProfileImageUrl(user.avatarUrl, name: user.name);
 
     return Scaffold(
@@ -47,181 +81,248 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(width: 16),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 24),
-
-            Center(
-              child: Column(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.push('/profile/edit'),
-                    child: CircleAvatar(
-                      radius: 56,
-                      backgroundImage: NetworkImage(avatarUrl),
-                      backgroundColor: cs.surfaceContainerHighest,
+      body: RefreshIndicator(
+        onRefresh: _loadSellerStats,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              const SizedBox(height: 24),
+        
+              Center(
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: () => context.push('/profile/edit'),
+                      child: CircleAvatar(
+                        radius: 56,
+                        backgroundImage: NetworkImage(avatarUrl),
+                        backgroundColor: cs.surfaceContainerHighest,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    user.name,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user.email,
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.6),
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${user.role[0].toUpperCase()}${user.role.substring(1)} Account',
-                      style: TextStyle(
-                        color: cs.onPrimaryContainer,
+                    const SizedBox(height: 16),
+                    Text(
+                      user.name,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: cs.surfaceContainerHighest),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.person_outline_rounded,
-                    title: 'Edit Profile',
-                    onTap: () => context.push('/profile/edit'),
-                  ),
-                  const Divider(height: 1),
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.notifications_none_rounded,
-                    title: 'Notifications',
-                    onTap: () => context.push('/profile/notifications'),
-                    badgeCount: unreadNotifications,
-                  ),
-                  const Divider(height: 1),
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.favorite_border_rounded,
-                    title: 'Wishlist',
-                    onTap: () => context.push('/profile/wishlist'),
-                  ),
-                  const Divider(height: 1),
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.shopping_bag_outlined,
-                    title: 'Order History',
-                    onTap: () => context.push('/profile/orders'),
-                  ),
-                  const Divider(height: 1),
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.settings_outlined,
-                    title: 'Settings',
-                    onTap: () => context.push('/profile/settings'),
-                  ),
-                  const Divider(height: 1),
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.list_alt_rounded,
-                    title: 'My Listings',
-                    onTap: () => context.push('/profile/listings'),
-                  ),
-                  const Divider(height: 1),
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.bar_chart_rounded,
-                    title: 'Seller Dashboard',
-                    onTap: () => context.push('/profile/dashboard'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Material(
-                color: Colors.redAccent.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(20),
-                child: InkWell(
-                  onTap: () async {
-                    await userState.logout();
-                    if (context.mounted) {
-                      context.go('/'); 
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.redAccent.withValues(alpha: 0.15),
-                        width: 1.5,
+                    const SizedBox(height: 4),
+                    Text(
+                      user.email,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.6),
+                        fontSize: 14,
                       ),
                     ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.logout_rounded,
-                          color: Colors.redAccent,
-                          size: 22,
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'Log Out',
-                          style: TextStyle(
-                            color: Colors.redAccent,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
+                    const SizedBox(height: 24),
+                    
+                    // Seller Stats Row
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildStatItem(
+                            context,
+                            _sellerStats?.averageRating.toStringAsFixed(1) ?? '0.0',
+                            'Rating',
+                            icon: Icons.star_rounded,
                           ),
+                          _buildStatItem(
+                            context,
+                            _sellerStats?.itemsSold.toString() ?? '0',
+                            'Sold',
+                          ),
+                          _buildStatItem(
+                            context,
+                            _sellerStats?.totalReviews.toString() ?? '0',
+                            'Reviews',
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${user.role[0].toUpperCase()}${user.role.substring(1)} Account',
+                        style: TextStyle(
+                          color: cs.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
-                      ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+        
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: cs.surfaceContainerHighest),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.person_outline_rounded,
+                      title: 'Edit Profile',
+                      onTap: () => context.push('/profile/edit'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.notifications_none_rounded,
+                      title: 'Notifications',
+                      onTap: () => context.push('/profile/notifications'),
+                      badgeCount: unreadNotifications,
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.favorite_border_rounded,
+                      title: 'Wishlist',
+                      onTap: () => context.push('/profile/wishlist'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.shopping_bag_outlined,
+                      title: 'Order History',
+                      onTap: () => context.push('/profile/orders'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.settings_outlined,
+                      title: 'Settings',
+                      onTap: () => context.push('/profile/settings'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.list_alt_rounded,
+                      title: 'My Listings',
+                      onTap: () => context.push('/profile/listings'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.bar_chart_rounded,
+                      title: 'Seller Dashboard',
+                      onTap: () => context.push('/profile/dashboard'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+        
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Material(
+                  color: Colors.redAccent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    onTap: () async {
+                      await userState.logout();
+                      if (context.mounted) {
+                        context.go('/'); 
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.redAccent.withValues(alpha: 0.15),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.logout_rounded,
+                            color: Colors.redAccent,
+                            size: 22,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Log Out',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 60),
-          ],
+              const SizedBox(height: 60),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStatItem(
+    BuildContext context,
+    String value,
+    String label, {
+    IconData? icon,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: Colors.amber, size: 18),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label, 
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.5), 
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          )
+        ),
+      ],
     );
   }
 

@@ -233,14 +233,12 @@ class ImageHelper {
     IconData icon = Icons.image_outlined,
     bool isLoading = false,
   }) {
-    final effectiveWidth = width ?? double.infinity;
-    final effectiveHeight = height ?? double.infinity;
     final isCompact =
         (width != null && width <= 36) || (height != null && height <= 36);
 
     return Container(
-      width: effectiveWidth,
-      height: effectiveHeight,
+      width: width,
+      height: height,
       color: const Color(0xFFF3F4F6),
       alignment: Alignment.center,
       child: Column(

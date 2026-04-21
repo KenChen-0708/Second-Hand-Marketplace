@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
@@ -73,7 +72,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
     final currentUser = userState.currentUser;
     
     if (currentUser == null) {
-      SnackbarHelper.showError(context, 'You must be logged in to submit a review.');
+      SnackbarHelper.showError(context, 'Please log in to submit a review.');
       return;
     }
 
@@ -89,9 +88,10 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
             : '$finalComment\n\nHighlights: $tagsString';
       }
 
+      // We pass an empty string for ID so that generate_prefixed_id handles it in Supabase
       final review = ReviewModel(
-        id: const Uuid().v4(),
-        orderId: widget.orderId ?? 'ORD-${DateTime.now().millisecondsSinceEpoch}', // Fallback if no order passed
+        id: '', 
+        orderId: widget.orderId ?? '',
         reviewerId: currentUser.id,
         revieweeId: widget.product!.sellerId,
         productId: widget.product!.id,
@@ -105,7 +105,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Review submitted successfully!'),
+            content: Text('Review submitted.'),
             backgroundColor: Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
           ),
@@ -114,7 +114,7 @@ class _SellerReviewPageState extends State<SellerReviewPage> {
       }
     } catch (e) {
       if (mounted) {
-        SnackbarHelper.showError(context, 'Failed to submit review: $e');
+        SnackbarHelper.showError(context, 'Unable to submit review. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

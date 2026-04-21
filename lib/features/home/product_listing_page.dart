@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../models/mock_data.dart';
 import '../../shared/utils/camera_capture_helper.dart';
+import '../../shared/utils/currency_helper.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../shared/utils/product_display_helper.dart';
 import '../../state/state.dart';
@@ -393,7 +394,7 @@ class _ProductListingPageState extends State<ProductListingPage> {
                             sectionLabel('Price Range'),
                             Row(
                               children: [
-                                _pricePill(context, '\$${tempPrice.start.toInt()}'),
+                                _pricePill(context, 'RM ${tempPrice.start.toInt()}'),
                                 const Spacer(),
                                 Text(
                                   'to',
@@ -402,7 +403,7 @@ class _ProductListingPageState extends State<ProductListingPage> {
                                   ),
                                 ),
                                 const Spacer(),
-                                _pricePill(context, '\$${tempPrice.end.toInt()}'),
+                                _pricePill(context, 'RM ${tempPrice.end.toInt()}'),
                               ],
                             ),
                             const SizedBox(height: 4),
@@ -778,7 +779,7 @@ class _ProductListingPageState extends State<ProductListingPage> {
                                                   MainAxisAlignment.spaceBetween,
                                               children: [
                                                 Text(
-                                                  '\$${product.price.toStringAsFixed(2)}',
+                                                  CurrencyHelper.formatRM(product.price),
                                                   style: TextStyle(
                                                     color: cs.primary,
                                                     fontWeight: FontWeight.w800,
