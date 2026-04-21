@@ -178,111 +178,121 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
     final colorScheme = Theme.of(context).colorScheme;
     final (icon, backgroundColor) = _getIconAndColor(widget.type, colorScheme);
 
-    return IgnorePointer(
-      ignoring: true,
-      child: Material(
-        color: Colors.transparent,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Opacity(
-                  opacity: _fadeAnimation.value,
-                  child: Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: child,
-                  ),
-                );
-              },
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 18,
-                      ),
-                      decoration: BoxDecoration(
-                        color: backgroundColor,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          width: 1.0,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 32,
-                            offset: const Offset(0, 8),
+    return Stack(
+      children: [
+        const Positioned.fill(
+          child: IgnorePointer(
+            ignoring: true,
+            child: SizedBox.expand(),
+          ),
+        ),
+        SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) {
+                  return Opacity(
+                    opacity: _fadeAnimation.value,
+                    child: Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: child,
+                    ),
+                  );
+                },
+                child: Material(
+                  color: Colors.transparent,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
                           ),
-                          BoxShadow(
-                            color: Colors.white.withValues(alpha: 0.05),
-                            blurRadius: 2,
-                            offset: const Offset(0, -1),
-                            spreadRadius: 0.5,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: colorScheme.onInverseSurface.withValues(
-                                alpha: 0.10,
+                          decoration: BoxDecoration(
+                            color: backgroundColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              width: 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 32,
+                                offset: const Offset(0, 8),
                               ),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              icon,
-                              color: colorScheme.onInverseSurface,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              widget.message,
-                              softWrap: true,
-                              overflow: TextOverflow.visible,
-                              style: TextStyle(
-                                color: colorScheme.onInverseSurface,
-                                fontSize: 16,
-                                height: 1.4,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: -0.2,
+                              BoxShadow(
+                                color: Colors.white.withValues(alpha: 0.05),
+                                blurRadius: 2,
+                                offset: const Offset(0, -1),
+                                spreadRadius: 0.5,
                               ),
-                            ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          InkWell(
-                            onTap: _dismiss,
-                            borderRadius: BorderRadius.circular(99),
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: colorScheme.onInverseSurface.withValues(
-                                  alpha: 0.10,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.onInverseSurface.withValues(
+                                    alpha: 0.10,
+                                  ),
+                                  shape: BoxShape.circle,
                                 ),
-                                shape: BoxShape.circle,
+                                child: Icon(
+                                  icon,
+                                  color: colorScheme.onInverseSurface,
+                                  size: 20,
+                                ),
                               ),
-                              child: Icon(
-                                Icons.close_rounded,
-                                color: colorScheme.onInverseSurface,
-                                size: 18,
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Text(
+                                  widget.message,
+                                  softWrap: true,
+                                  overflow: TextOverflow.visible,
+                                  style: TextStyle(
+                                    color: colorScheme.onInverseSurface,
+                                    fontSize: 16,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 12),
+                              InkWell(
+                                onTap: _dismiss,
+                                borderRadius: BorderRadius.circular(99),
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.onInverseSurface.withValues(
+                                      alpha: 0.10,
+                                    ),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    color: colorScheme.onInverseSurface,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -291,7 +301,7 @@ class _CenteredSnackbarOverlayState extends State<_CenteredSnackbarOverlay>
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 

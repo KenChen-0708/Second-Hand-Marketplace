@@ -65,6 +65,7 @@ class OrderService {
           .toList();
 
       await _supabase.from('order_items').insert(orderItemPayload);
+      await _reduceStockQuantities(orderItems);
 
       // 🔥 NOTIFICATION TRIGGERS
       // 1. Notify Buyer
@@ -183,5 +184,65 @@ class OrderService {
   String _generateOrderNumber() {
     final now = DateTime.now().millisecondsSinceEpoch;
     return 'ORD-$now';
+  }
+
+  Future<void> _reduceStockQuantities(List<OrderItemModel> orderItems) async {
+    final productQuantityReductions = <String, int>{};
+
+    for (final item in orderItems) {
+      if (item.variantId != null && item.variantId!.isNotEmpty) {
+        final variantData = await _supabase
+            .from('product_variants')
+            .select('quantity, product_id')
+            .eq('id', item.variantId!)
+            .single();
+
+        final currentQuantity = (variantData['quantity'] as num?)?.toInt() ?? 0;
+        final nextQuantity = currentQuantity - item.quantity;
+        if (nextQuantity < 0) {
+          throw Exception(
+            'Not enough stock is available for one of the selected variants.',
+          );
+        }
+
+        await _supabase
+            .from('product_variants')
+            .update({'quantity': nextQuantity})
+            .eq('id', item.variantId!);
+
+        final productId = variantData['product_id']?.toString() ?? item.productId;
+        productQuantityReductions[productId] =
+            (productQuantityReductions[productId] ?? 0) + item.quantity;
+      } else {
+        productQuantityReductions[item.productId] =
+            (productQuantityReductions[item.productId] ?? 0) + item.quantity;
+      }
+    }
+
+    for (final entry in productQuantityReductions.entries) {
+      final productData = await _supabase
+          .from('products')
+          .select('total_stock, status')
+          .eq('id', entry.key)
+          .single();
+
+      final currentStock = (productData['total_stock'] as num?)?.toInt() ?? 0;
+      final nextStock = currentStock - entry.value;
+      if (nextStock < 0) {
+        throw Exception(
+          'Not enough stock is available for one of the selected products.',
+        );
+      }
+
+      final currentStatus = productData['status']?.toString() ?? 'active';
+      final nextStatus = nextStock == 0 ? 'sold' : currentStatus;
+      await _supabase
+          .from('products')
+          .update({
+            'total_stock': nextStock,
+            'status': nextStatus,
+          })
+          .eq('id', entry.key);
+    }
   }
 }

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
+import '../../shared/utils/currency_helper.dart';
 import '../../state/state.dart';
 
 class OrderHistoryPage extends StatefulWidget {
@@ -397,7 +398,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> with SingleTickerPr
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '\$${order.totalPrice.toStringAsFixed(2)}',
+                            CurrencyHelper.formatRM(order.totalPrice),
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 18,

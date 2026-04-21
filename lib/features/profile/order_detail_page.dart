@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
+import '../../shared/utils/currency_helper.dart';
 import '../../state/state.dart';
 
 class OrderStatusPage extends StatelessWidget {
@@ -62,10 +63,17 @@ class OrderStatusPage extends StatelessWidget {
                 children: [
                   ...currentOrder.orderItems.map((item) => _buildProductItem(context, item)),
                   const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
-                  _buildSummaryRow('Subtotal', '\$${currentOrder.totalPrice.toStringAsFixed(2)}'),
+                  _buildSummaryRow(
+                    'Subtotal',
+                    CurrencyHelper.formatRM(currentOrder.totalPrice),
+                  ),
                   _buildSummaryRow('Escrow Protection', 'Included', isGreen: true),
                   const SizedBox(height: 8),
-                  _buildSummaryRow('Total', '\$${currentOrder.totalPrice.toStringAsFixed(2)}', isTotal: true),
+                  _buildSummaryRow(
+                    'Total',
+                    CurrencyHelper.formatRM(currentOrder.totalPrice),
+                    isTotal: true,
+                  ),
                 ],
               ),
             ),
@@ -299,11 +307,11 @@ class OrderStatusPage extends StatelessWidget {
                 const SizedBox(height: 4),
                 Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)), child: Text((item.product?.condition ?? 'good').replaceAll('_', ' ').toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.grey[700]))),
                 const SizedBox(height: 8),
-                Text('${item.quantity} x \$${item.unitPrice.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
+                Text('${item.quantity} x ${CurrencyHelper.formatRM(item.unitPrice)}', style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
-          Text('\$${item.subtotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(CurrencyHelper.formatRM(item.subtotal), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
         ],
       ),
     );

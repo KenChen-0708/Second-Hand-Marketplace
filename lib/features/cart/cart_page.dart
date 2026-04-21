@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
+import '../../services/local/connectivity_service.dart';
+import '../../shared/utils/currency_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../shared/utils/snackbar_helper.dart';
@@ -16,13 +18,32 @@ class CartPage extends StatefulWidget {
 
 class _CartPageState extends State<CartPage> {
   final Set<String> _selectedItemIds = <String>{};
+  final Set<String> _pendingQuantityItemIds = <String>{};
 
   Future<void> _runCartAction(
     BuildContext context,
     Future<void> Function(CartState cartState) action,
+    {String? actionKey}
   ) async {
+    if (actionKey != null) {
+      if (_pendingQuantityItemIds.contains(actionKey)) {
+        return;
+      }
+      setState(() {
+        _pendingQuantityItemIds.add(actionKey);
+      });
+    }
+
     final cartState = context.read<CartState>();
-    await action(cartState);
+    try {
+      await action(cartState);
+    } finally {
+      if (actionKey != null && mounted) {
+        setState(() {
+          _pendingQuantityItemIds.remove(actionKey);
+        });
+      }
+    }
 
     if (!context.mounted || cartState.error == null) {
       return;
@@ -85,7 +106,7 @@ class _CartPageState extends State<CartPage> {
     return commonOptions != null && commonOptions.isNotEmpty;
   }
 
-  void _handleCheckoutSelected(List<CartModel> selectedItems) {
+  Future<void> _handleCheckoutSelected(List<CartModel> selectedItems) async {
     if (selectedItems.isEmpty) {
       SnackbarHelper.showInfo(context, 'Select at least one item to checkout.');
       return;
@@ -95,6 +116,17 @@ class _CartPageState extends State<CartPage> {
       SnackbarHelper.showWarning(
         context,
         'Selected items do not share the same handover option. Please checkout them separately.',
+      );
+      return;
+    }
+
+    if (!await ConnectivityService.instance.isOnline()) {
+      if (!mounted) {
+        return;
+      }
+      SnackbarHelper.showInfo(
+        context,
+        'You\'re offline. Reconnect to continue with checkout.',
       );
       return;
     }
@@ -268,7 +300,7 @@ class _CartPageState extends State<CartPage> {
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                         Text(
-                          '\$${selectedSubtotal.toStringAsFixed(2)}',
+                          CurrencyHelper.formatRM(selectedSubtotal),
                           style: TextStyle(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w800,
@@ -317,6 +349,14 @@ class _CartPageState extends State<CartPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final product = cartItem.product;
     final cartState = context.read<CartState>();
+    final availableQuantity =
+        cartItem.selectedVariant?.availableQuantity ?? product.stockQuantity;
+    final isQuantityActionPending = _pendingQuantityItemIds.contains(cartItem.id);
+    final canIncrease =
+        !cartState.isLoading &&
+        !isQuantityActionPending &&
+        (availableQuantity == null ||
+            (availableQuantity > 0 && cartItem.quantity < availableQuantity));
 
     return Container(
       decoration: BoxDecoration(
@@ -353,12 +393,12 @@ class _CartPageState extends State<CartPage> {
                     ),
                     child: ImageHelper.productImage(
                       product.imageUrl,
-                      width: 90,
-                      height: 110,
+                      width: 74,
+                      height: 96,
                       fit: BoxFit.cover,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -395,7 +435,7 @@ class _CartPageState extends State<CartPage> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '\$${cartItem.unitPrice.toStringAsFixed(2)}',
+                            CurrencyHelper.formatRM(cartItem.unitPrice),
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontWeight: FontWeight.w800,
@@ -413,7 +453,7 @@ class _CartPageState extends State<CartPage> {
                           ],
                           const SizedBox(height: 4),
                           Text(
-                            'Item total: \$${cartItem.totalPrice.toStringAsFixed(2)}',
+                            'Item total: ${CurrencyHelper.formatRM(cartItem.totalPrice)}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
@@ -434,11 +474,12 @@ class _CartPageState extends State<CartPage> {
                   children: [
                     _buildQuantityButton(
                       icon: Icons.remove_rounded,
-                      onPressed: cartState.isLoading || cartItem.quantity <= 1
+                      onPressed: cartState.isLoading || isQuantityActionPending
                           ? null
                           : () => _runCartAction(
                               context,
                               (state) => state.decreaseQuantity(cartItem),
+                              actionKey: cartItem.id,
                             ),
                     ),
                     Padding(
@@ -453,23 +494,33 @@ class _CartPageState extends State<CartPage> {
                     ),
                     _buildQuantityButton(
                       icon: Icons.add_rounded,
-                      onPressed: cartState.isLoading
-                          ? null
-                          : () => _runCartAction(
+                      onPressed: canIncrease
+                          ? () => _runCartAction(
                               context,
                               (state) => state.increaseQuantity(cartItem),
-                            ),
+                              actionKey: cartItem.id,
+                            )
+                          : null,
                     ),
                   ],
                 ),
+                if (availableQuantity != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '$availableQuantity available',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 IconButton(
                   onPressed: cartState.isLoading
-                      ? null
-                      : () => _runCartAction(
-                          context,
-                          (state) => state.removeFromCart(cartItem),
-                        ),
+                          ? null
+                          : () => _runCartAction(
+                              context,
+                              (state) => state.removeFromCart(cartItem),
+                            ),
                   icon: const Icon(Icons.delete_outline_rounded),
                   color: Colors.redAccent,
                 ),
