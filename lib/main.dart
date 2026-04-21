@@ -47,6 +47,7 @@ import 'features/admin/admin_user_management_page.dart';
 import 'features/admin/admin_listing_moderation_page.dart';
 import 'features/admin/admin_order_management_page.dart';
 import 'features/admin/admin_notification_center_page.dart';
+import 'features/admin/admin_category_management_page.dart';
 
 const String supabaseUrl = 'https://yqvgeownycvbzelukmfp.supabase.co';
 const String supabaseKey =
@@ -105,6 +106,9 @@ final _shellNavigatorAdminDashboardKey = GlobalKey<NavigatorState>(
 final _shellNavigatorAdminUsersKey = GlobalKey<NavigatorState>(
   debugLabel: 'adminUsers',
 );
+final _shellNavigatorAdminCategoriesKey = GlobalKey<NavigatorState>(
+  debugLabel: 'adminCategories',
+);
 final _shellNavigatorAdminListingsKey = GlobalKey<NavigatorState>(
   debugLabel: 'adminListings',
 );
@@ -120,27 +124,30 @@ final _router = GoRouter(
   initialLocation: '/',
   redirect: (context, state) async {
     final userState = context.read<UserState>();
-    final user = userState.currentUser;
     
-    // Auth-related pages
+    if (!userState.isInitialized) return null;
+
+    final user = userState.currentUser;
+    final bool isAuthenticated = userState.isAuthenticated;
+    
     final bool isLoggingIn = state.matchedLocation == '/' || 
                            state.matchedLocation == '/register' ||
                            state.matchedLocation == '/reset-password' ||
                            state.matchedLocation == '/admin/login';
 
-    if (!userState.isAuthenticated) {
+    if (!isAuthenticated) {
       return isLoggingIn ? null : '/';
-    }
-
-    if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
-      if (user != null && user.role != 'admin') {
-        return '/home'; // Kick users back to marketplace
-      }
     }
 
     if (isLoggingIn && state.matchedLocation != '/reset-password') {
        if (user?.role == 'admin') return '/admin/dashboard';
        return '/home';
+    }
+
+    if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
+      if (user != null && user.role != 'admin') {
+        return '/home';
+      }
     }
 
     return null;
@@ -279,6 +286,15 @@ final _router = GoRouter(
           ],
         ),
         StatefulShellBranch(
+          navigatorKey: _shellNavigatorAdminCategoriesKey,
+          routes: [
+            GoRoute(
+              path: '/admin/categories',
+              builder: (context, state) => const AdminCategoryManagementPage(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
           navigatorKey: _shellNavigatorAdminListingsKey,
           routes: [
             GoRoute(
@@ -319,7 +335,6 @@ final _router = GoRouter(
             GoRoute(
               path: '/home',
               builder: (context, state) => const HomePage(),
-              routes: const [],
             ),
           ],
         ),
@@ -341,11 +356,6 @@ final _router = GoRouter(
               routes: [
                 GoRoute(
                   path: 'account',
-                  parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const MyAccountPage(),
-                ),
-                GoRoute(
-                  path: 'edit',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const MyAccountPage(),
                 ),
@@ -414,7 +424,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _userState = UserState();
-    _userState.initialize(); // Auto-login on start
+    _userState.initialize();
     _setupAuthListener();
   }
 
@@ -425,7 +435,6 @@ class _MyAppState extends State<MyApp> {
         _router.go('/reset-password');
       }
       
-      // Update isAuthenticated state whenever auth changes
       if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
         setState(() {});
       }
@@ -457,17 +466,13 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => AdminLogState()),
         ChangeNotifierProvider(create: (_) => AdminUserState()),
       ],
-      child: Consumer2<UserState, AppNotificationState>(
-        builder: (context, userState, noteState, child) {
-          // ENSURE NOTIFICATION STATE HAS THE LATEST USER DATA
-          noteState.updateCurrentUser(userState.currentUser);
-
+      child: Consumer<ThemeState>(
+        builder: (context, themeState, child) {
           return MaterialApp.router(
-            scaffoldMessengerKey: LocalNotificationManager.instance.messengerKey,
             debugShowCheckedModeBanner: false,
-            title: 'CampusSell',
+            title: 'Campus Marketplace',
             routerConfig: _router,
-            themeMode: context.watch<ThemeState>().themeMode,
+            themeMode: themeState.themeMode,
             theme: ThemeData(
               useMaterial3: true,
               colorScheme:

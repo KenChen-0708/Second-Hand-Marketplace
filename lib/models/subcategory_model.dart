@@ -2,57 +2,54 @@ import 'dart:convert';
 import 'app_model.dart';
 import 'json_utils.dart';
 
-class CategoryModel implements AppModel {
+class SubcategoryModel implements AppModel {
   @override
   final String id;
+  final String categoryId;
   final String name;
   final String? description;
   final bool isEnabled;
   final int sortPriority;
-  final int productCount;
   final DateTime? createdAt;
 
-  const CategoryModel({
+  const SubcategoryModel({
     required this.id,
+    required this.categoryId,
     required this.name,
     this.description,
     this.isEnabled = true,
     this.sortPriority = 0,
-    this.productCount = 0,
     this.createdAt,
   });
 
-  bool get isActive => isEnabled;
-  int get displayOrder => sortPriority;
-
-  CategoryModel copyWith({
+  SubcategoryModel copyWith({
     String? id,
+    String? categoryId,
     String? name,
     String? description,
     bool? isEnabled,
     int? sortPriority,
-    int? productCount,
     DateTime? createdAt,
   }) {
-    return CategoryModel(
+    return SubcategoryModel(
       id: id ?? this.id,
+      categoryId: categoryId ?? this.categoryId,
       name: name ?? this.name,
       description: description ?? this.description,
       isEnabled: isEnabled ?? this.isEnabled,
       sortPriority: sortPriority ?? this.sortPriority,
-      productCount: productCount ?? this.productCount,
       createdAt: createdAt ?? this.createdAt,
     );
   }
 
-  factory CategoryModel.fromMap(Map<String, dynamic> map) {
-    return CategoryModel(
+  factory SubcategoryModel.fromMap(Map<String, dynamic> map) {
+    return SubcategoryModel(
       id: JsonUtils.asString(map['id']) ?? '',
+      categoryId: JsonUtils.asString(map['category_id']) ?? '',
       name: JsonUtils.asString(map['name']) ?? '',
       description: JsonUtils.asString(map['description']),
       isEnabled: map['is_enabled'] ?? true,
       sortPriority: JsonUtils.asInt(map['sort_priority']) ?? 0,
-      productCount: JsonUtils.asInt(map['product_count']) ?? 0,
       createdAt: JsonUtils.asDateTime(map['created_at']),
     );
   }
@@ -60,6 +57,7 @@ class CategoryModel implements AppModel {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'category_id': categoryId,
       'name': name,
       'description': description,
       'is_enabled': isEnabled,
@@ -68,8 +66,8 @@ class CategoryModel implements AppModel {
     };
   }
 
-  factory CategoryModel.fromJson(String source) =>
-      CategoryModel.fromMap(json.decode(source) as Map<String, dynamic>);
+  factory SubcategoryModel.fromJson(String source) =>
+      SubcategoryModel.fromMap(json.decode(source) as Map<String, dynamic>);
 
   String toJson() => json.encode(toMap());
 }

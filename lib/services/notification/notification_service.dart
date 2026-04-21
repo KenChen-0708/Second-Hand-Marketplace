@@ -82,4 +82,55 @@ class NotificationService {
       print('Silent failure creating notification: $e');
     }
   }
+
+  /// Broadcast a notification to all users (Admin)
+  Future<void> broadcastToAllUsers({
+    required String title,
+    required String message,
+    String type = 'broadcast',
+  }) async {
+    try {
+      // 1. Fetch all user IDs
+      final usersResponse = await _supabase.from('users').select('id');
+      final List<dynamic> users = usersResponse as List;
+
+      if (users.isEmpty) return;
+
+      // 2. Prepare bulk insert
+      final notifications = users.map((user) => {
+        'user_id': user['id'],
+        'title': title,
+        'message': message,
+        'notification_type': type,
+        'is_read': false,
+      }).toList();
+
+      // 3. Insert in batches if necessary
+      await _supabase.from('notifications').insert(notifications);
+
+      // 4. Log the admin action
+      await _supabase.from('admin_logs').insert({
+        'action': 'broadcast_notification',
+        'details': 'Sent "$title" to ${users.length} users.', // Saved as string
+      });
+
+    } catch (e) {
+      throw Exception('Failed to broadcast notification: $e');
+    }
+  }
+
+  /// Fetch all system logs for notifications (Admin)
+  Future<List<Map<String, dynamic>>> fetchAdminNotificationLogs() async {
+    try {
+      final response = await _supabase
+          .from('admin_logs')
+          .select()
+          .eq('action', 'broadcast_notification')
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      throw Exception('Failed to fetch admin logs: $e');
+    }
+  }
 }
