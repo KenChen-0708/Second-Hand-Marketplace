@@ -176,14 +176,14 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Enter your student email to receive a password reset link.'),
+                const Text('Enter your email to receive a password reset link.'),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: resetEmailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    labelText: 'Student Email',
-                    hintText: 'student@university.edu',
+                    labelText: 'Email',
+                    hintText: 'name@example.com',
                   ),
                   validator: (value) {
                     final text = value?.trim() ?? '';
@@ -363,8 +363,8 @@ class _LoginPageState extends State<LoginPage> {
                             autofillHints: const [AutofillHints.email],
                             decoration: _inputDecoration(
                               context: context,
-                              labelText: 'Student Email',
-                              hintText: 'student@university.edu',
+                              labelText: 'Email',
+                              hintText: 'name@example.com',
                               prefixIcon: const Icon(Icons.email_outlined),
                             ),
                             validator: (value) {

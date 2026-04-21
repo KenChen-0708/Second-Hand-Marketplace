@@ -14,7 +14,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _emailNotifs = true;
-  bool _locationServices = false;
   bool _biometricEnabled = false;
   bool _biometricHardwareAvailable = false;
   bool _pushNotifs = false;
@@ -328,15 +327,6 @@ class _SettingsPageState extends State<SettingsPage> {
               contentPadding: EdgeInsets.zero,
               activeThumbColor: Theme.of(context).colorScheme.primary,
             ),
-          SwitchListTile(
-            title: const Text('Location Services'),
-            subtitle: const Text('Used to find nearby items'),
-            secondary: const Icon(Icons.location_on_outlined),
-            value: _locationServices,
-            onChanged: (val) => setState(() => _locationServices = val),
-            contentPadding: EdgeInsets.zero,
-            activeThumbColor: Theme.of(context).colorScheme.primary,
-          ),
           ListTile(
             title: const Text('Change Password'),
             leading: const Icon(Icons.lock_outline),
