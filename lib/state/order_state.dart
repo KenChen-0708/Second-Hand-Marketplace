@@ -28,6 +28,7 @@ class OrderState extends EntityState<OrderModel> {
     String? handoverLocation,
     DateTime? handoverDate,
     String? notes,
+    double additionalFee = 0,
     String status = 'pending',
     String paymentStatus = 'pending',
   }) async {
@@ -61,6 +62,7 @@ class OrderState extends EntityState<OrderModel> {
         handoverLocation: handoverLocation,
         handoverDate: handoverDate,
         notes: notes,
+        additionalFee: additionalFee,
         status: status,
         paymentStatus: paymentStatus,
       );
@@ -85,6 +87,7 @@ class OrderState extends EntityState<OrderModel> {
     String? handoverLocation,
     DateTime? handoverDate,
     String? notes,
+    double additionalFee = 0,
   }) async {
     return checkoutItems(
       items: cartState.items,
@@ -93,6 +96,7 @@ class OrderState extends EntityState<OrderModel> {
       handoverLocation: handoverLocation,
       handoverDate: handoverDate,
       notes: notes,
+      additionalFee: additionalFee,
     );
   }
 

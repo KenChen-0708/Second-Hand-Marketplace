@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../models/mock_data.dart';
 import '../../shared/utils/camera_capture_helper.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/product_display_helper.dart';
+import '../../state/state.dart';
 
 class ProductListingArguments {
   const ProductListingArguments({
@@ -115,7 +118,12 @@ class _ProductListingPageState extends State<ProductListingPage> {
     final activeCategories = categories ?? _selectedCategories;
     final activeSort = sort ?? _selectedSort;
 
+    final currentUserId = context.read<UserState>().currentUser?.id;
     final result = widget.args.allProducts.where((product) {
+      if (!ProductDisplayHelper.isVisibleToUser(product, currentUserId)) {
+        return false;
+      }
+
       final inPrice =
           product.price >= activePriceRange.start &&
           (activePriceRange.end >= 2000
@@ -163,7 +171,7 @@ class _ProductListingPageState extends State<ProductListingPage> {
   }
 
   Future<void> _openCamera() async {
-    await CameraCaptureHelper.openCamera(context);
+    await CameraCaptureHelper.pickFromCameraOrGallery(context);
   }
 
   void _showFilterModal() {

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../services/payment/stripe_service.dart';
+import '../../shared/utils/currency_helper.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
@@ -19,7 +20,12 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
+  static const String _meetUpOption = 'meet_up';
+  static const String _deliveryOption = 'delivery';
+  static const double _officialDeliveryFee = 5.0;
+
   String _selectedPaymentMethod = 'Credit/Debit Card';
+  String _selectedHandoverOption = _meetUpOption;
   final TextEditingController _messageController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   bool _isProcessing = false;
@@ -36,12 +42,45 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _checkoutItemsSnapshot = List<CartModel>.from(
       widget.session?.items ?? context.read<CartState>().items,
     );
+    _selectedHandoverOption = _defaultHandoverOption;
     if (!StripeService.isSupportedPlatform) {
       _selectedPaymentMethod = 'Campus Wallet';
     }
   }
 
   Future<void> _handlePayment() async {
+    if (!_hasProvidedLocation) {
+      SnackbarHelper.showInfo(
+        context,
+        'Please provide a location before making payment.',
+      );
+      return;
+    }
+
+    if (!_hasCompatibleHandoverOption) {
+      SnackbarHelper.showInfo(
+        context,
+        'Selected items have different handover methods. Please checkout them separately.',
+      );
+      return;
+    }
+
+    if (_selectedHandoverOption == _meetUpOption && !_meetUpAvailable) {
+      SnackbarHelper.showInfo(
+        context,
+        'Meet up is not available for all selected items.',
+      );
+      return;
+    }
+
+    if (!_availableHandoverOptions.contains(_selectedHandoverOption)) {
+      SnackbarHelper.showInfo(
+        context,
+        'That handover option is not available for all selected items.',
+      );
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     final cartState = context.read<CartState>();
@@ -51,8 +90,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     StripePaymentResult? stripeResult;
 
     try {
+      if (widget.session?.isBuyNow != true) {
+        await cartState.syncWithRemote();
+      }
+
       if (_isCardPayment) {
-        stripeResult = await paymentState.payWithCard(_totalAmount);
+        stripeResult = await paymentState.payWithCard(_grandTotal);
       }
 
       final orders = await orderState.checkoutItems(
@@ -63,9 +106,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         clearCartAfterSuccess:
             widget.session?.clearCartAfterSuccess ?? widget.session == null,
         handoverLocation: _selectedAddress.isNotEmpty ? _selectedAddress : null,
-        notes: _messageController.text.trim().isEmpty
-            ? null
-            : _messageController.text.trim(),
+        notes: _buildCheckoutNotes(),
+        additionalFee: _deliveryFee,
         status: _isCardPayment ? 'paid' : 'pending',
         paymentStatus: _isCardPayment ? 'paid' : 'pending',
       );
@@ -78,7 +120,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (_isCardPayment && createdOrder != null) {
         await paymentState.createPaymentRecord(
           orderId: createdOrder.id,
-          amount: _totalAmount,
+          amount: _grandTotal,
           paymentMethod: _paymentMethodCode,
           paymentStatus: 'paid',
           transactionId: stripeResult?.paymentIntentId,
@@ -262,8 +304,57 @@ class _CheckoutPageState extends State<CheckoutPage> {
   List<CartModel> get _checkoutItems =>
       List.unmodifiable(_checkoutItemsSnapshot);
 
-  double get _totalAmount =>
+  double get _itemsSubtotal =>
       _checkoutItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
+
+  Set<String> get _availableHandoverOptions {
+    final options = <String>{};
+    if (_meetUpAvailable) {
+      options.add(_meetUpOption);
+    }
+    if (_deliveryAvailable) {
+      options.add(_deliveryOption);
+    }
+    return options;
+  }
+
+  bool get _meetUpAvailable => _checkoutItems.isNotEmpty &&
+      _checkoutItems.every(
+        (item) => item.product.tradePreference.contains('face_to_face'),
+      );
+
+  bool get _deliveryAvailable => _checkoutItems.isNotEmpty &&
+      _checkoutItems.every(
+        (item) => item.product.tradePreference.any(
+          (preference) =>
+              preference == 'delivery_official' ||
+              preference == 'delivery_self',
+        ),
+      );
+
+  bool get _hasCompatibleHandoverOption => _availableHandoverOptions.isNotEmpty;
+
+  String get _defaultHandoverOption {
+    if (_meetUpAvailable) {
+      return _meetUpOption;
+    }
+    if (_deliveryAvailable) {
+      return _deliveryOption;
+    }
+    return _meetUpOption;
+  }
+
+  double get _deliveryFee =>
+      _selectedHandoverOption == _deliveryOption &&
+              _checkoutItems.any(
+                (item) => item.product.tradePreference.contains('delivery_official'),
+              )
+          ? _officialDeliveryFee
+          : 0;
+
+  double get _grandTotal => _itemsSubtotal + _deliveryFee;
+
+  bool get _hasProvidedLocation => _selectedAddress.trim().isNotEmpty;
 
   bool get _isCardPayment => _selectedPaymentMethod == 'Credit/Debit Card';
 
@@ -278,6 +369,63 @@ class _CheckoutPageState extends State<CheckoutPage> {
       default:
         return 'card';
     }
+  }
+
+  String get _locationLabel =>
+      _selectedHandoverOption == _meetUpOption
+          ? 'Meet-up Location'
+          : 'Delivery Address';
+
+  String get _locationHint =>
+      _selectedHandoverOption == _meetUpOption
+          ? 'Enter meet-up location or tap map to select'
+          : 'Enter delivery address or tap map to select';
+
+  String get _selectedHandoverLabel {
+    switch (_selectedHandoverOption) {
+      case _meetUpOption:
+        return 'Meet Up';
+      case _deliveryOption:
+        return 'Delivery';
+      default:
+        return 'Meet Up';
+    }
+  }
+
+  String get _selectedDeliveryHelperText {
+    if (_selectedHandoverOption == _deliveryOption) {
+      final hasOfficialDeliveryItem = _checkoutItems.any(
+        (item) => item.product.tradePreference.contains('delivery_official'),
+      );
+      if (hasOfficialDeliveryItem) {
+        return 'Delivery includes the seller\'s configured delivery method and any official delivery fee.';
+      }
+      return 'The seller will arrange delivery directly with you.';
+    }
+    return 'Meet-up details will be shared with the seller after checkout.';
+  }
+
+  String? get _incompatibleHandoverMessage {
+    if (_hasCompatibleHandoverOption) {
+      return null;
+    }
+
+    return 'These items do not share a common buyer-facing handover option. Please checkout them separately.';
+  }
+
+  String get _currentLocationTitle =>
+      _selectedHandoverOption == _meetUpOption
+          ? 'Current Meet-up Location'
+          : 'Current Delivery Address';
+
+  String? _buildCheckoutNotes() {
+    final buyerMessage = _messageController.text.trim();
+    final noteParts = <String>[
+      'Handover option: $_selectedHandoverLabel',
+      if (buyerMessage.isNotEmpty) 'Buyer message: $buyerMessage',
+    ];
+
+    return noteParts.isEmpty ? null : noteParts.join('\n');
   }
 
   Widget _buildOrderSummary(
@@ -337,7 +485,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            '\$${cartItem.product.price.toStringAsFixed(2)} x ${cartItem.quantity}',
+                            '${CurrencyHelper.formatRM(cartItem.product.price)} x ${cartItem.quantity}',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.bold,
@@ -355,6 +503,50 @@ class _CheckoutPageState extends State<CheckoutPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
+                'Items Subtotal',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey,
+                ),
+              ),
+              Text(
+                CurrencyHelper.formatRM(_itemsSubtotal),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          if (_deliveryFee > 0) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Delivery Fee',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey,
+                  ),
+                ),
+                Text(
+                  CurrencyHelper.formatRM(_deliveryFee),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const Divider(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
                 'Total Amount',
                 style: TextStyle(
                   fontSize: 16,
@@ -363,7 +555,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
               ),
               Text(
-                '\$${checkoutItems.fold<double>(0, (sum, item) => sum + item.totalPrice).toStringAsFixed(2)}',
+                CurrencyHelper.formatRM(_grandTotal),
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
@@ -520,8 +712,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           const SizedBox(height: 20),
 
           // Location Section
-          const Text(
-            'Meet-up Location',
+          Text(
+            _locationLabel,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -539,7 +731,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   maxLines: 4,
                   textInputAction: TextInputAction.newline,
                   decoration: InputDecoration(
-                    hintText: 'Enter address or tap map to select',
+                    hintText: _locationHint,
                     prefixIcon: const Icon(
                       Icons.location_on_outlined,
                       size: 20,
@@ -619,7 +811,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Current Address',
+                          _currentLocationTitle,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -680,7 +872,108 @@ class _CheckoutPageState extends State<CheckoutPage> {
               filled: true,
             ),
           ),
+          const SizedBox(height: 20),
+          const Text(
+            'Handover Option',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _buildDeliveryOptionChip(
+                label: 'Meet Up',
+                value: _meetUpOption,
+                icon: Icons.handshake_outlined,
+                enabled: _meetUpAvailable,
+              ),
+              _buildDeliveryOptionChip(
+                label: 'Delivery',
+                value: _deliveryOption,
+                icon: Icons.local_shipping_outlined,
+                enabled: _deliveryAvailable,
+              ),
+            ],
+          ),
+          if (_incompatibleHandoverMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                _incompatibleHandoverMessage!,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            )
+          else if (_selectedHandoverOption == _deliveryOption &&
+              _deliveryFee > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'Official delivery adds ${CurrencyHelper.formatRM(_officialDeliveryFee)} to this checkout.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                _selectedDeliveryHelperText,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryOptionChip({
+    required String label,
+    required String value,
+    required IconData icon,
+    bool enabled = true,
+  }) {
+    final isSelected = _selectedHandoverOption == value;
+
+    return ChoiceChip(
+      avatar: Icon(
+        icon,
+        size: 18,
+        color: enabled
+            ? (isSelected ? Colors.white : Theme.of(context).colorScheme.primary)
+            : Colors.grey,
+      ),
+      label: Text(label),
+      selected: isSelected,
+      onSelected: enabled
+          ? (_) => setState(() => _selectedHandoverOption = value)
+          : null,
+      selectedColor: Theme.of(context).colorScheme.primary,
+      labelStyle: TextStyle(
+        color: enabled
+            ? (isSelected ? Colors.white : null)
+            : Colors.grey,
+        fontWeight: FontWeight.w600,
+      ),
+      side: BorderSide(
+        color: enabled
+            ? Theme.of(context).colorScheme.outlineVariant
+            : Colors.grey.shade300,
       ),
     );
   }
@@ -710,7 +1003,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           width: double.infinity,
           height: 56,
           child: FilledButton(
-            onPressed: _isProcessing || checkoutItems.isEmpty
+            onPressed: _isProcessing ||
+                    checkoutItems.isEmpty ||
+                    !_hasProvidedLocation ||
+                    !_hasCompatibleHandoverOption
                 ? null
                 : _handlePayment,
             style: FilledButton.styleFrom(
@@ -720,9 +1016,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
               elevation: 0,
             ),
-            child: const Text(
-              'Pay & Confirm',
-              style: TextStyle(
+            child: Text(
+              !_hasCompatibleHandoverOption
+                  ? 'Separate Items to Checkout'
+                  : _hasProvidedLocation
+                  ? 'Pay ${CurrencyHelper.formatRM(_grandTotal)}'
+                  : 'Add Location to Continue',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
