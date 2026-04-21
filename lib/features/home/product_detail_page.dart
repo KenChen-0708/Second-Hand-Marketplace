@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../shared/utils/product_display_helper.dart';
+import '../../shared/widgets/purchase_selection_sheet.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
 import '../../services/product/product_service.dart';
@@ -63,7 +64,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     List<ReviewModel> reviews;
     try {
-      // Fetch reviews for the seller instead of just this specific product
       reviews = await ReviewService().fetchSellerReviews(product.sellerId);
     } catch (_) {
       reviews = const [];
@@ -161,21 +161,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
   }
 
-  Future<_PurchaseSelection?> _showPurchaseOptionsSheet(
+  Future<PurchaseSelection?> _showPurchaseOptionsSheet(
     BuildContext context,
     ProductModel product, {
     required String actionLabel,
     required IconData actionIcon,
+    ProductVariationModel? initialVariant,
+    int initialQuantity = 1,
   }) {
-    return showModalBottomSheet<_PurchaseSelection>(
+    return showModalBottomSheet<PurchaseSelection>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return _PurchaseOptionsSheet(
+        return PurchaseSelectionSheet(
           product: product,
           actionLabel: actionLabel,
           actionIcon: actionIcon,
+          initialVariant: initialVariant,
+          initialQuantity: initialQuantity,
         );
       },
     );
@@ -209,7 +213,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return;
     }
 
-    final variantMessage = selection.selectedOption == null
+    final variantMessage = selection.selectedVariant == null
         ? result.message
         : '${result.message} (${selection.selectedOption})';
     _showMessage(context, variantMessage);
@@ -370,7 +374,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         final averageRating = detail.reviews.isEmpty
             ? 0.0
             : detail.reviews
-                    .fold<double>(0, (sum, review) => sum + review.rating) /
+                    .fold<int>(0, (sum, review) => sum + review.rating) /
                 detail.reviews.length;
         
         final favoriteState = context.watch<FavoriteState>();
@@ -591,7 +595,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          // --- Trade Details Section ---
+                          // --- Added Trade Details Section ---
                           Text(
                             'Trade Details',
                             style: Theme.of(context).textTheme.titleMedium
@@ -762,7 +766,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: const Text(
-                                'No reviews for this seller yet.',
+                                'No seller reviews yet.',
                               ),
                             )
                           else ...[
@@ -792,7 +796,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    '(${detail.reviews.length} review${detail.reviews.length == 1 ? '' : 's'})',
+                                    '(${detail.reviews.length} seller review${detail.reviews.length == 1 ? '' : 's'})',
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -1096,405 +1100,6 @@ class _ProductDetailData {
   final UserModel? seller;
   final Map<String, dynamic>? meetupLocation;
   final List<ReviewModel> reviews;
-}
-
-class _PurchaseSelection {
-  const _PurchaseSelection({
-    required this.quantity,
-    this.selectedOption,
-    this.selectedVariant,
-  });
-
-  final int quantity;
-  final String? selectedOption;
-  final ProductVariationModel? selectedVariant;
-}
-
-class _PurchaseOptionsSheet extends StatefulWidget {
-  const _PurchaseOptionsSheet({
-    required this.product,
-    required this.actionLabel,
-    required this.actionIcon,
-  });
-
-  final ProductModel product;
-  final String actionLabel;
-  final IconData actionIcon;
-
-  @override
-  State<_PurchaseOptionsSheet> createState() => _PurchaseOptionsSheetState();
-}
-
-class _PurchaseOptionsSheetState extends State<_PurchaseOptionsSheet> {
-  ProductVariationModel? _selectedVariant;
-  int _quantity = 1;
-  final Map<String, String> _selectedAttributes = {};
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.product.variations.isNotEmpty) {
-      _selectedVariant = widget.product.variations.firstWhere(
-        (variation) => variation.availableQuantity > 0,
-        orElse: () => widget.product.variations.first,
-      );
-      _selectedAttributes
-        ..clear()
-        ..addAll(_selectedVariant!.normalizedAttributes);
-    }
-  }
-
-  int? get _stockLimit {
-    if (_selectedVariant != null) {
-      return _selectedVariant!.availableQuantity;
-    }
-
-    return widget.product.stockQuantity;
-  }
-
-  List<String> get _attributeNames {
-    final names = <String>[];
-    for (final variation in widget.product.variations) {
-      for (final name in variation.normalizedAttributes.keys) {
-        if (!names.contains(name)) {
-          names.add(name);
-        }
-      }
-    }
-    return names;
-  }
-
-  List<String> _allValuesForAttribute(String attributeName) {
-    final values = <String>[];
-    for (final variation in widget.product.variations) {
-      final value = variation.normalizedAttributes[attributeName];
-      if (value != null && value.isNotEmpty && !values.contains(value)) {
-        values.add(value);
-      }
-    }
-    return values;
-  }
-
-  bool _matchesOtherSelections(
-    ProductVariationModel variation,
-    String activeAttribute,
-  ) {
-    final attributes = variation.normalizedAttributes;
-    for (final entry in _selectedAttributes.entries) {
-      if (entry.key == activeAttribute) {
-        continue;
-      }
-      if (attributes[entry.key] != entry.value) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  ProductVariationModel? _firstMatchingVariantFor(
-    String attributeName,
-    String attributeValue,
-  ) {
-    final matches = widget.product.variations.where((variation) {
-      final attributes = variation.normalizedAttributes;
-      return attributes[attributeName] == attributeValue &&
-          _matchesOtherSelections(variation, attributeName);
-    }).toList();
-
-    if (matches.isEmpty) {
-      return null;
-    }
-
-    return matches.firstWhere(
-      (variation) => variation.availableQuantity > 0,
-      orElse: () => matches.first,
-    );
-  }
-
-  void _selectAttributeValue(String attributeName, String attributeValue) {
-    final matchedVariant = _firstMatchingVariantFor(attributeName, attributeValue);
-    if (matchedVariant == null) {
-      return;
-    }
-
-    setState(() {
-      _selectedVariant = matchedVariant;
-      _selectedAttributes
-        ..clear()
-        ..addAll(matchedVariant.normalizedAttributes);
-
-      final updatedLimit = _stockLimit;
-      if (updatedLimit != null && _quantity > updatedLimit) {
-        _quantity = updatedLimit < 1 ? 1 : updatedLimit;
-      }
-    });
-  }
-
-  String? get _selectedOption => _selectedVariant?.optionSummary;
-
-  Widget _buildVariantSelector(
-    BuildContext context,
-    ProductModel product,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Variant',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        const SizedBox(height: 12),
-        ..._attributeNames.map((attributeName) {
-          final selectedValue = _selectedAttributes[attributeName];
-          final values = _allValuesForAttribute(attributeName);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  attributeName,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: values.map((value) {
-                    final matchedVariant = _firstMatchingVariantFor(
-                      attributeName,
-                      value,
-                    );
-                    final isSelected = selectedValue == value;
-                    final isEnabled =
-                        matchedVariant != null &&
-                        matchedVariant.availableQuantity > 0;
-                    final variationPrice =
-                        matchedVariant == null
-                            ? product.price
-                            : product.priceForVariant(matchedVariant);
-
-                    return ChoiceChip(
-                      label: Text(
-                        variationPrice != product.price
-                            ? '$value  RM ${variationPrice.toStringAsFixed(2)}'
-                            : value,
-                      ),
-                      selected: isSelected,
-                      onSelected: isEnabled
-                          ? (_) => _selectAttributeValue(attributeName, value)
-                          : null,
-                      selectedColor: colorScheme.primary,
-                      disabledColor: colorScheme.surfaceContainerHighest,
-                      labelStyle: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : isEnabled
-                            ? colorScheme.onSurface
-                            : colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      side: BorderSide(
-                        color: isSelected
-                            ? colorScheme.primary
-                            : colorScheme.outlineVariant,
-                      ),
-                      showCheckmark: false,
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final product = widget.product;
-    final stockLimit = _stockLimit;
-    final isSoldOut = product.isSoldOut || (stockLimit != null && stockLimit <= 0);
-    final displayPrice = product.priceForVariant(_selectedVariant);
-
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        ),
-        child: Material(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(28),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: ImageHelper.productImage(
-                        product.imageUrl,
-                        width: 92,
-                        height: 92,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'RM ${displayPrice.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: colorScheme.primary,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          if (_selectedOption != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              _selectedOption!,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                if (product.variations.isNotEmpty) _buildVariantSelector(context, product),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Text(
-                      'Quantity',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    if (stockLimit != null) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        '$stockLimit left',
-                        style: TextStyle(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    const Spacer(),
-                    _QuantityButton(
-                      icon: Icons.remove_rounded,
-                      onPressed: _quantity > 1
-                          ? () => setState(() => _quantity -= 1)
-                          : null,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        '$_quantity',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                    _QuantityButton(
-                      icon: Icons.add_rounded,
-                      onPressed: stockLimit == null || _quantity < stockLimit
-                          ? () => setState(() => _quantity += 1)
-                          : null,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    onPressed: isSoldOut
-                        ? null
-                        : () => Navigator.pop(
-                              context,
-                              _PurchaseSelection(
-                                quantity: _quantity,
-                                selectedOption: _selectedOption,
-                                selectedVariant: _selectedVariant,
-                              ),
-                            ),
-                    icon: Icon(widget.actionIcon),
-                    label: Text(
-                      isSoldOut ? 'Sold Out' : widget.actionLabel,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuantityButton extends StatelessWidget {
-  const _QuantityButton({required this.icon, this.onPressed});
-
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: Icon(icon, size: 18),
-      ),
-    );
-  }
 }
 
 class _ImageCarousel extends StatefulWidget {

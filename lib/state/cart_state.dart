@@ -264,6 +264,87 @@ class CartState extends ChangeNotifier {
     await updateQuantity(item, _items[index].quantity - 1);
   }
 
+  Future<CartActionResult> replaceCartItemSelection(
+    CartModel item, {
+    ProductVariationModel? selectedVariant,
+    required int quantity,
+  }) async {
+    if (quantity <= 0) {
+      const result = CartActionResult(
+        success: false,
+        message: 'Please enter a valid quantity.',
+      );
+      _setError(result.message);
+      return result;
+    }
+
+    final currentVariantId = item.selectedVariant?.id;
+    final nextVariantId = selectedVariant?.id;
+    if (currentVariantId == nextVariantId) {
+      await updateQuantity(item, quantity);
+      final updatedItem = _items.cast<CartModel?>().firstWhere(
+        (existing) => existing?.id == item.id,
+        orElse: () => null,
+      );
+      return CartActionResult(
+        success: true,
+        message: 'Cart updated.',
+        item: updatedItem,
+      );
+    }
+
+    final userId = await _authService.getCurrentUserId();
+    if (userId == null || userId.isEmpty) {
+      const result = CartActionResult(
+        success: false,
+        message: 'Please log in to update your cart.',
+      );
+      _setError(result.message);
+      return result;
+    }
+
+    _setLoading(true);
+    _setError(null);
+
+    try {
+      final addResult = await _cartService.addToCart(
+        userId: userId,
+        product: item.product,
+        selectedVariant: selectedVariant,
+        quantity: quantity,
+      );
+      await _cartService.removeCartItem(
+        userId: userId,
+        productId: item.product.id,
+        variantId: item.selectedVariant?.id,
+      );
+
+      _items.removeWhere((existing) => existing.id == item.id);
+      if (addResult.item != null) {
+        _upsertLocalItem(addResult.item!);
+      }
+
+      notifyListeners();
+      return CartActionResult(
+        success: true,
+        message: 'Cart updated.',
+        item: addResult.item,
+      );
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      final result = CartActionResult(
+        success: false,
+        message: message.isEmpty
+            ? 'Unable to update your cart right now.'
+            : message,
+      );
+      _setError(result.message);
+      return result;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   Future<void> clearCart() async {
     final userId = await _authService.getCurrentUserId();
     if (userId == null || userId.isEmpty) {
