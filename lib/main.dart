@@ -520,56 +520,61 @@ class _MyAppState extends State<MyApp> {
                     surface: surfaceColor,
                     brightness: Brightness.light,
                     primaryContainer: primaryColor.withValues(alpha: 0.1),
-                    onPrimaryContainer: primaryColor.withValues(alpha: 0.1),
+                    onPrimaryContainer: primaryColor,
+                  ).copyWith(
+                    surface: surfaceColor,
+                    onSurface: const Color(0xFF1F2937),
+                    surfaceContainerHighest: const Color(0xFFF3F4F6),
+                    outlineVariant: const Color(0xFFD1D5DB),
                   ),
               scaffoldBackgroundColor: scaffoldBgColor,
-              appBarTheme: const AppBarTheme(
-                backgroundColor: surfaceColor,
-                elevation: 0,
-                centerTitle: true,
-                titleTextStyle: TextStyle(
-                  color: Colors.black,
-                  fontSize: 18,
+              fontFamily: 'Roboto',
+              textTheme: const TextTheme(
+                headlineSmall: TextStyle(
                   fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
                 ),
-                iconTheme: IconThemeData(color: Colors.black),
+                titleLarge: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
+                ),
+                bodyLarge: TextStyle(color: Color(0xFF374151)),
+                bodyMedium: TextStyle(color: Color(0xFF4B5563)),
               ),
-              bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-                backgroundColor: surfaceColor,
-                selectedItemColor: primaryColor,
-                unselectedItemColor: Colors.grey,
-                type: BottomNavigationBarType.fixed,
-                elevation: 10,
-              ),
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
+              filledButtonTheme: FilledButtonThemeData(
+                style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  elevation: 0,
                 ),
               ),
               inputDecorationTheme: InputDecorationTheme(
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: const Color(0xFFF3F4F6),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: primaryColor),
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const Color(0xFF10B981) == primaryColor ? const BorderSide(color: Color(0xFF10B981), width: 2) : const BorderSide(color: primaryColor, width: 2),
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
               ),
+            ),
+            darkTheme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: primaryColor,
+                primary: primaryColor,
+                brightness: Brightness.dark,
+              ),
+              fontFamily: 'Roboto',
             ),
           );
         },
