@@ -45,6 +45,17 @@ class AdminScaffold extends StatelessWidget {
           ),
           backgroundColor: const Color(0xFF1E1E2C),
           iconTheme: const IconThemeData(color: Colors.white),
+          // Removing the circle background (IconButton style) from the menu icon
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                hoverColor: Colors.white.withValues(alpha: 0.1),
+              ),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
         ),
         drawer: Drawer(
           backgroundColor: const Color(0xFF1E1E2C),
@@ -62,16 +73,16 @@ class AdminScaffold extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 24),
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.shield_rounded,
                 color: Colors.blueAccent,
                 size: 32,
               ),
-              const SizedBox(width: 8),
-              const Text(
+              SizedBox(width: 8),
+              Text(
                 'CampusAdmin',
                 style: TextStyle(
                   color: Colors.white,
@@ -155,6 +166,7 @@ class AdminScaffold extends StatelessWidget {
   }
 }
 
+//
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;

@@ -2,10 +2,68 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'entity_state.dart';
 import '../models/models.dart';
 
+enum CategorySortMode {
+  custom,
+  nameAsc,
+  nameDesc,
+  countAsc,
+  countDesc,
+}
+
 class CategoryState extends EntityState<CategoryModel> {
   final _supabase = Supabase.instance.client;
   List<SubcategoryModel> _subcategories = [];
   List<SubcategoryModel> get subcategories => _subcategories;
+
+  CategorySortMode _sortMode = CategorySortMode.custom;
+  CategorySortMode get sortMode => _sortMode;
+
+  String _searchQuery = '';
+  String get searchQuery => _searchQuery;
+
+  void setSortMode(CategorySortMode mode) {
+    _sortMode = mode;
+    _applySortAndFilter();
+  }
+
+  void setSearchQuery(String query) {
+    _searchQuery = query.toLowerCase();
+    _applySortAndFilter();
+  }
+
+  List<CategoryModel> get filteredItems {
+    List<CategoryModel> list = List.from(items);
+    
+    // Filter
+    if (_searchQuery.isNotEmpty) {
+      list = list.where((item) => item.name.toLowerCase().contains(_searchQuery)).toList();
+    }
+
+    // Sort
+    switch (_sortMode) {
+      case CategorySortMode.custom:
+        list.sort((a, b) => a.sortPriority.compareTo(b.sortPriority));
+        break;
+      case CategorySortMode.nameAsc:
+        list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        break;
+      case CategorySortMode.nameDesc:
+        list.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+        break;
+      case CategorySortMode.countAsc:
+        list.sort((a, b) => a.productCount.compareTo(b.productCount));
+        break;
+      case CategorySortMode.countDesc:
+        list.sort((a, b) => b.productCount.compareTo(a.productCount));
+        break;
+    }
+    
+    return list;
+  }
+
+  void _applySortAndFilter() {
+    notifyListeners();
+  }
 
   Future<void> fetchAllCategories() async {
     setLoading(true);
@@ -151,6 +209,9 @@ class CategoryState extends EntityState<CategoryModel> {
   }
 
   Future<void> updateCategoryOrder(List<CategoryModel> reorderedList) async {
+    // If we are in custom sort mode, we update the database
+    if (_sortMode != CategorySortMode.custom) return;
+
     setItems(reorderedList);
     try {
       final updates = reorderedList.asMap().entries.map((entry) {

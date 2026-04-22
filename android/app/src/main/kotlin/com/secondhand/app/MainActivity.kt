@@ -1,0 +1,5 @@
+package com.secondhand.app
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()

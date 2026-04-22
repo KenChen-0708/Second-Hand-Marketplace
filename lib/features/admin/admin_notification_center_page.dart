@@ -21,7 +21,9 @@ class _AdminNotificationCenterPageState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AdminLogState>().fetchNotificationLogs();
+      if (mounted) {
+        context.read<AdminLogState>().fetchNotificationLogs();
+      }
     });
   }
 
@@ -168,7 +170,14 @@ class _AdminNotificationCenterPageState
             child: FilledButton.icon(
               onPressed: _isSending ? null : () => _handleSubmit(context),
               icon: _isSending
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.send_rounded),
               label: Text(_isSending ? 'Sending...' : 'Send to All Users'),
               style: FilledButton.styleFrom(
@@ -201,11 +210,22 @@ class _AdminNotificationCenterPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Activity Log',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Activity Log',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              TextButton.icon(
+                onPressed: () => _confirmClearLogs(context),
+                icon: const Icon(Icons.delete_sweep_rounded, size: 18),
+                label: const Text('Clear All'),
+                style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Consumer<AdminLogState>(
@@ -230,58 +250,92 @@ class _AdminNotificationCenterPageState
                 itemBuilder: (context, index) {
                   final log = logState.items[index];
 
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.blue.withValues(alpha: 0.1),
-                        child: const Icon(
-                          Icons.campaign_rounded,
-                          color: Colors.blue,
-                          size: 20,
-                        ),
+                  return Dismissible(
+                    key: Key(log.id),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Broadcast Notification',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
+                      child: const Icon(Icons.delete_outline, color: Colors.red),
+                    ),
+                    onDismissed: (_) {
+                      context.read<AdminLogState>().deleteLog(log.id);
+                    },
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                          child: const Icon(
+                            Icons.campaign_rounded,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Broadcast Notification',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
                                     ),
                                   ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _formatDate(log.createdAt),
+                                    style: TextStyle(
+                                      color: Colors.grey.shade400,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                log.details?['title'] ??
+                                    log.details?.toString() ??
+                                    'No details provided.',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  height: 1.4,
                                 ),
-                                const SizedBox(width: 8),
+                              ),
+                              if (log.details?['user_count'] != null)
                                 Text(
-                                  _formatDate(log.createdAt),
+                                  'Recipient: ${log.details!['user_count']} users',
                                   style: TextStyle(
-                                    color: Colors.grey.shade400,
-                                    fontSize: 12,
+                                    color: Colors.blue.shade300,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            // Handle details as a map by converting to string or accessing a specific field
-                            Text(
-                              log.details?.toString() ?? 'No details provided.',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        IconButton(
+                          onPressed: () =>
+                              context.read<AdminLogState>().deleteLog(log.id),
+                          icon: const Icon(Icons.close,
+                              size: 16, color: Colors.black26),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
                   );
                 },
               );
@@ -297,8 +351,43 @@ class _AdminNotificationCenterPageState
     return '${date.day}/${date.month} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 
+  void _confirmClearLogs(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Logs?'),
+        content: const Text(
+            'This will permanently delete all broadcast notification history.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.read<AdminLogState>().clearNotificationLogs();
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _handleSubmit(BuildContext context) {
-    if (_titleController.text.isEmpty || _bodyController.text.isEmpty) {
+    final userState = context.read<UserState>();
+    final adminId = userState.currentUser?.id;
+
+    if (adminId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session expired. Please log in again.')),
+      );
+      return;
+    }
+
+    if (_titleController.text.trim().isEmpty ||
+        _bodyController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in both title and body.')),
       );
@@ -320,7 +409,7 @@ class _AdminNotificationCenterPageState
           FilledButton(
             onPressed: () {
               Navigator.pop(context);
-              _processSend();
+              _processSend(adminId);
             },
             child: const Text('Confirm & Send'),
           ),
@@ -329,13 +418,15 @@ class _AdminNotificationCenterPageState
     );
   }
 
-  Future<void> _processSend() async {
+  Future<void> _processSend(String adminId) async {
     setState(() => _isSending = true);
 
     try {
-      await NotificationService().broadcastToAllUsers(
-        title: _titleController.text,
-        message: _bodyController.text,
+      final service = NotificationService();
+      await service.broadcastToAllUsers(
+        adminId: adminId,
+        title: _titleController.text.trim(),
+        message: _bodyController.text.trim(),
       );
 
       if (mounted) {

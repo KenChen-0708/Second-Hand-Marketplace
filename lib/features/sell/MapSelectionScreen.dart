@@ -59,6 +59,7 @@ class _MapSelectionScreenState extends State<MapSelectionScreen> {
   Future<void> _initialize() async {
     _hasLocationAccess = await _ensureLocationAccess();
     
+    await setLocaleIdentifier('en_US');
     // Perform initial reverse geocoding for the starting position
     await _reverseGeocode(_center);
 
@@ -132,46 +133,50 @@ class _MapSelectionScreenState extends State<MapSelectionScreen> {
   }
 
   Future<void> _reverseGeocode(LatLng position) async {
-    if (!mounted) return;
+  if (!mounted) return;
 
-    setState(() => _isReverseGeocoding = true);
-    try {
-      final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      if (placemarks.isEmpty) throw Exception('No address found');
+  setState(() => _isReverseGeocoding = true);
+  try {
+    await setLocaleIdentifier('en_US');
 
-      final place = placemarks.first;
-      final address = [
-        place.name,
-        place.street,
-        place.subLocality,
-        place.locality,
-        place.administrativeArea,
-        place.postalCode,
-        place.country,
-      ].where((part) => part != null && part.trim().isNotEmpty).join(', ');
+    final placemarks = await placemarkFromCoordinates(
+      position.latitude,
+      position.longitude,
+    );
 
-      if (mounted) {
-        setState(() {
-          _selectedAddress = address.isEmpty
-              ? '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}'
-              : address;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _selectedAddress = '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isReverseGeocoding = false);
-      }
+    if (placemarks.isEmpty) throw Exception('No address found');
+
+    final place = placemarks.first;
+    final address = [
+      place.name,
+      place.street,
+      place.subLocality,
+      place.locality,
+      place.administrativeArea,
+      place.postalCode,
+      place.country,
+    ].where((part) => part != null && part.trim().isNotEmpty).join(', ');
+
+    if (mounted) {
+      setState(() {
+        _selectedAddress = address.isEmpty
+            ? '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}'
+            : address;
+      });
+    }
+  } catch (_) {
+    if (mounted) {
+      setState(() {
+        _selectedAddress =
+            '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+      });
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isReverseGeocoding = false);
     }
   }
+}
 
   Future<void> _searchPlaces(String query) async {
     final trimmed = query.trim();
@@ -186,7 +191,8 @@ class _MapSelectionScreenState extends State<MapSelectionScreen> {
       {
         'input': trimmed,
         'key': _googlePlacesApiKey,
-        'components': 'country:my', // Restricted to Malaysia as per project context
+        'components': 'country:my', 
+        'language': 'en',// Restricted to Malaysia as per project context
       },
     );
 
@@ -213,6 +219,7 @@ class _MapSelectionScreenState extends State<MapSelectionScreen> {
         'place_id': suggestion.placeId,
         'fields': 'geometry,name,formatted_address',
         'key': _googlePlacesApiKey,
+        'language': 'en',
       },
     );
 

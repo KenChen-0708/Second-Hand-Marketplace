@@ -74,9 +74,9 @@ Future<void> main() async {
     Stripe.publishableKey = StripeService.publishableKey;
     await Stripe.instance.applySettings();
   }
-  
+
   await Supabase.initialize(
-    url: supabaseUrl, 
+    url: supabaseUrl,
     anonKey: supabaseKey,
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
@@ -127,15 +127,15 @@ final _router = GoRouter(
     final userState = context.read<UserState>();
     final user = userState.currentUser;
     final bool isAuthenticated = userState.isAuthenticated;
-    
+
     // Pages that are accessible without login
-    final bool isPublicPage = state.matchedLocation == '/' || 
-                            state.matchedLocation == '/register' ||
-                            state.matchedLocation == '/reset-password' ||
-                            state.matchedLocation == '/admin/login' ||
-                            state.matchedLocation == '/home' ||
-                            state.matchedLocation.startsWith('/product/') ||
-                            state.matchedLocation.startsWith('/seller/');
+    final bool isPublicPage = state.matchedLocation == '/' ||
+        state.matchedLocation == '/register' ||
+        state.matchedLocation == '/reset-password' ||
+        state.matchedLocation == '/admin/login' ||
+        state.matchedLocation == '/home' ||
+        state.matchedLocation.startsWith('/product/') ||
+        state.matchedLocation.startsWith('/seller/');
 
     if (!isAuthenticated && !isPublicPage) {
       return '/'; // Send to login if trying to access private page without login
@@ -149,12 +149,12 @@ final _router = GoRouter(
       }
 
       // If already logged in and at auth pages, go home
-      final bool isAuthPage = state.matchedLocation == '/' || 
-                             state.matchedLocation == '/register' ||
-                             state.matchedLocation == '/admin/login';
+      final bool isAuthPage = state.matchedLocation == '/' ||
+          state.matchedLocation == '/register' ||
+          state.matchedLocation == '/admin/login';
       if (isAuthPage && state.matchedLocation != '/reset-password') {
-         if (user?.role == 'admin') return '/admin/dashboard';
-         return '/home';
+        if (user?.role == 'admin') return '/admin/dashboard';
+        return '/home';
       }
     }
 
@@ -476,7 +476,7 @@ class _MyAppState extends State<MyApp> {
       if (event == AuthChangeEvent.passwordRecovery) {
         _router.go('/reset-password');
       }
-      
+
       // Update isAuthenticated state whenever auth changes
       if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
         setState(() {});
@@ -598,7 +598,7 @@ class _MyAppState extends State<MyApp> {
                   borderSide: const BorderSide(color: primaryColor),
                 ),
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               ),
               cardColor: surfaceColor,
               dividerColor: outlineVariantColor,

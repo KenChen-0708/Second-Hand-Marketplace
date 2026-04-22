@@ -312,6 +312,15 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
             ),
             const SizedBox(height: 12),
           ],
+          if (status == 'pending_handover' && order.handoverDate != null) ...[
+            _buildPrimaryAction(
+              'Confirm Handover Time',
+              Icons.event_available_rounded,
+              const Color(0xFF10B981),
+              () => _confirmHandoverTime(context, order),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (status == 'pending_handover' && isBuyer && canBuyerComplete) ...[
             _buildPrimaryAction('Confirm Received', Icons.check_circle_rounded, Colors.green, () => _showConfirmReceipt(context, order)),
             const SizedBox(height: 12),
@@ -748,13 +757,43 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       return;
     }
 
+    final isReschedule = order.handoverDate != null;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(isReschedule ? 'Confirm Reschedule?' : 'Confirm Handover Time?'),
+        content: Text(
+          'Set handover for ${DateFormat('MMM dd, yyyy HH:mm').format(scheduledAt)}? '
+          '${isReschedule ? 'The other user will receive a message and should confirm the new time.' : 'The other user will receive a message to confirm this time.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
     try {
       await context.read<OrderState>().updateHandoverSchedule(
             order.id,
             scheduledAt,
           );
+      await _sendHandoverScheduleMessage(order, scheduledAt, isReschedule);
       if (context.mounted) {
-        await _reloadAfterAction('Handover schedule updated.');
+        await _reloadAfterAction(
+          isReschedule
+              ? 'Handover rescheduled. Confirmation message sent.'
+              : 'Handover schedule updated. Confirmation message sent.',
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -763,6 +802,120 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
         );
       }
     }
+  }
+
+  Future<void> _sendHandoverScheduleMessage(
+    OrderModel order,
+    DateTime scheduledAt,
+    bool isReschedule,
+  ) async {
+    final userState = context.read<UserState>();
+    final currentUserId = userState.currentUser?.id;
+    final productId = order.primaryProductId;
+    final sellerId = order.primarySellerId;
+    if (currentUserId == null ||
+        currentUserId.isEmpty ||
+        productId == null ||
+        sellerId == null) {
+      return;
+    }
+
+    final isBuyer = order.isBuyer(currentUserId);
+    final chatService = ChatService();
+    final bundle = await chatService.getOrCreateConversation(
+      productId: productId,
+      buyerId: isBuyer ? currentUserId : order.buyerId,
+      sellerId: isBuyer ? sellerId : currentUserId,
+      currentUserId: currentUserId,
+    );
+
+    final formattedTime = DateFormat('MMM dd, yyyy HH:mm').format(scheduledAt);
+    await chatService.sendMessage(
+      conversationId: bundle.conversation.id,
+      senderId: currentUserId,
+      messageText: isReschedule
+          ? 'Handover has been rescheduled to $formattedTime. Please confirm this new date and time.'
+          : 'Handover has been scheduled for $formattedTime. Please confirm this date and time.',
+    );
+  }
+
+  Future<void> _confirmHandoverTime(
+    BuildContext context,
+    OrderModel order,
+  ) async {
+    final handoverDate = order.handoverDate;
+    if (handoverDate == null) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirm Handover Time?'),
+        content: Text(
+          'Confirm the handover date and time: ${DateFormat('MMM dd, yyyy HH:mm').format(handoverDate)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    try {
+      await _sendHandoverConfirmationMessage(order, handoverDate);
+      if (context.mounted) {
+        await _reloadAfterAction('Handover time confirmed. Message sent.');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to confirm handover time: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendHandoverConfirmationMessage(
+    OrderModel order,
+    DateTime scheduledAt,
+  ) async {
+    final userState = context.read<UserState>();
+    final currentUserId = userState.currentUser?.id;
+    final productId = order.primaryProductId;
+    final sellerId = order.primarySellerId;
+    if (currentUserId == null ||
+        currentUserId.isEmpty ||
+        productId == null ||
+        sellerId == null) {
+      return;
+    }
+
+    final isBuyer = order.isBuyer(currentUserId);
+    final chatService = ChatService();
+    final bundle = await chatService.getOrCreateConversation(
+      productId: productId,
+      buyerId: isBuyer ? currentUserId : order.buyerId,
+      sellerId: isBuyer ? sellerId : currentUserId,
+      currentUserId: currentUserId,
+    );
+
+    final formattedTime = DateFormat('MMM dd, yyyy HH:mm').format(scheduledAt);
+    await chatService.sendMessage(
+      conversationId: bundle.conversation.id,
+      senderId: currentUserId,
+      messageText: 'I confirm the handover date and time: $formattedTime.',
+    );
   }
 
   void _handleReport(BuildContext context, OrderModel order) {

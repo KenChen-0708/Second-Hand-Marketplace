@@ -1,24 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../models/models.dart';
+import '../../services/order/order_service.dart';
 import '../../state/state.dart';
 
-class ScaffoldWithNavBar extends StatelessWidget {
+class ScaffoldWithNavBar extends StatefulWidget {
   const ScaffoldWithNavBar({required this.navigationShell, Key? key})
     : super(key: key ?? const ValueKey<String>('ScaffoldWithNavBar'));
 
   final StatefulNavigationShell navigationShell;
 
+  @override
+  State<ScaffoldWithNavBar> createState() => _ScaffoldWithNavBarState();
+}
+
+class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> {
+  final OrderService _orderService = OrderService();
+  String? _loadedUserId;
+  int _profileActionCount = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final userId = context.watch<UserState>().currentUser?.id;
+    if (userId != _loadedUserId) {
+      _loadedUserId = userId;
+      _profileActionCount = 0;
+      if (userId != null) {
+        _loadProfileActionCount(userId);
+      }
+    }
+  }
+
+  Future<void> _loadProfileActionCount(String userId) async {
+    try {
+      final results = await Future.wait([
+        _orderService.getBuyerOrders(userId),
+        _orderService.getSellerOrders(userId),
+      ]);
+      if (!mounted || _loadedUserId != userId) {
+        return;
+      }
+      final buyerActions = results[0].where(_orderNeedsAction).length;
+      final sellerActions = results[1].where(_orderNeedsAction).length;
+      setState(() => _profileActionCount = buyerActions + sellerActions);
+    } catch (_) {
+      if (mounted && _loadedUserId == userId) {
+        setState(() => _profileActionCount = 0);
+      }
+    }
+  }
+
   void _goBranch(int index) {
-    navigationShell.goBranch(
+    widget.navigationShell.goBranch(
       index,
-      initialLocation: index == navigationShell.currentIndex,
+      initialLocation: index == widget.navigationShell.currentIndex,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = navigationShell.currentIndex;
+    final currentIndex = widget.navigationShell.currentIndex;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final unselectedColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
     final selectedColor = Theme.of(context).colorScheme.primary;
@@ -26,12 +69,14 @@ class ScaffoldWithNavBar extends StatelessWidget {
     final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
 
     // Watch for unread counts
-    final unreadNotifications = context.watch<AppNotificationState>().unreadCount;
+    final unreadNotifications = context
+        .watch<AppNotificationState>()
+        .unreadCount;
     final unreadChats = context.watch<ChatConversationState>().unreadCount;
-    final totalUnread = unreadNotifications + unreadChats;
+    final totalUnread = unreadNotifications + unreadChats + _profileActionCount;
 
     return Scaffold(
-      body: navigationShell,
+      body: widget.navigationShell,
       bottomNavigationBar: BottomAppBar(
         color: Theme.of(context).colorScheme.surface,
         elevation: 8,
@@ -73,7 +118,11 @@ class ScaffoldWithNavBar extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Icon(Icons.add, color: onPrimaryColor, size: 28), // Slightly smaller icon
+                      child: Icon(
+                        Icons.add,
+                        color: onPrimaryColor,
+                        size: 28,
+                      ), // Slightly smaller icon
                     ),
                     const SizedBox(height: 1), // Reduced from 2
                     Text(
@@ -123,7 +172,10 @@ class ScaffoldWithNavBar extends StatelessWidget {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 2.0), // Reduced vertical padding
+        padding: const EdgeInsets.symmetric(
+          horizontal: 24.0,
+          vertical: 2.0,
+        ), // Reduced vertical padding
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Column(
@@ -181,5 +233,10 @@ class ScaffoldWithNavBar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static bool _orderNeedsAction(OrderModel order) {
+    final status = order.status.toLowerCase();
+    return status == 'paid' || status == 'pending_handover';
   }
 }

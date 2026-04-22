@@ -132,7 +132,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Sign up with your student email to buy and sell safely on campus.',
+                  'Sign up with your email to buy and sell safely on campus.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
@@ -169,12 +169,12 @@ class _RegisterPageState extends State<RegisterPage> {
                   enabled: !_isLoading,
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    labelText: 'Student Email',
+                    labelText: 'Email',
                     prefixIcon: const Icon(Icons.email_outlined),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   validator: (v) {
-                    if (v == null || !v.contains('@')) return 'Enter a valid student email';
+                    if (v == null || !v.contains('@')) return 'Enter a valid email';
                     return null;
                   },
                 ),
