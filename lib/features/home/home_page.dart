@@ -962,12 +962,16 @@ class _HomePageState extends State<HomePage> {
                               setState(_applyAllFilters);
                             },
                           )
-                        : IconButton(
-                            icon: Icon(
-                              Icons.camera_alt_outlined,
-                              color: cs.primary,
+                        : Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: IconButton(
+                              style: IconButton.styleFrom(
+                                backgroundColor: cs.surface,
+                                foregroundColor: cs.primary,
+                              ),
+                              icon: const Icon(Icons.camera_alt_outlined),
+                              onPressed: _openCamera,
                             ),
-                            onPressed: _openCamera,
                           ),
                     filled: true,
                     fillColor: cs.surfaceContainerHighest.withValues(
@@ -1321,12 +1325,17 @@ class _HomePageState extends State<HomePage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: Text(
-                                CurrencyHelper.formatRM(product.price),
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  CurrencyHelper.formatRM(product.price),
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                  ),
                                 ),
                               ),
                             ),
