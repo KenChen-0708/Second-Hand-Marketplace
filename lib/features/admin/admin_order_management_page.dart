@@ -256,7 +256,7 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                 border: Border.all(color: Colors.orange, width: 1.5),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -434,7 +434,7 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
           border: Border.all(color: Colors.black12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -823,11 +823,12 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
           width: 500,
           height: 600,
           child: FutureBuilder<List<ChatMessageModel>>(
-            future: ChatService().fetchDisputeChatHistory(
+            future: ChatService().getOrCreateConversation(
               productId: productId,
               buyerId: buyerId,
               sellerId: sellerId,
-            ),
+              currentUserId: buyerId,
+            ).then((bundle) => bundle.messages),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
