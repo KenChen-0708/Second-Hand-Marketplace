@@ -19,7 +19,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   final List<String> _statusFilters = [
     'all',
-    'paid',
+    'pending',
     'pending_handover',
     'completed',
     'cancelled',
@@ -172,7 +172,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 final filter = _statusFilters[index];
                 final isSelected = _selectedStatus == filter;
                 final label = filter
-                    .replaceAll('paid', 'pending')
                     .replaceAll('_', ' ')
                     .split(' ')
                     .map(
@@ -525,17 +524,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     switch (status.toLowerCase()) {
       case 'pending':
         return _StatusInfo(
-          label: 'Pending',
-          explanation: 'Order is waiting for payment',
+          label: 'Awaiting Seller',
+          explanation: 'Payment received, waiting for seller confirmation',
           color: Colors.orange,
           icon: Icons.hourglass_empty_rounded,
-        );
-      case 'paid':
-        return _StatusInfo(
-          label: 'Paid',
-          explanation: 'Buyer has paid for this order',
-          color: Colors.blue,
-          icon: Icons.payments_outlined,
         );
       case 'pending_handover':
         return _StatusInfo(

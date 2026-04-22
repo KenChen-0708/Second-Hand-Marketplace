@@ -316,7 +316,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    '$needsActionCount buyer ${needsActionCount == 1 ? 'action' : 'actions'} needed',
+                                    '$needsActionCount buyer ${needsActionCount == 1 ? 'order' : 'orders'} need attention',
                                     style: const TextStyle(
                                       color: Colors.orange,
                                       fontSize: 12,
@@ -350,7 +350,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
 
   static bool _orderNeedsAction(OrderModel order) {
     final status = order.status.toLowerCase();
-    return status == 'paid' || status == 'pending_handover';
+    return status == 'pending' || status == 'pending_handover';
   }
 }
 
@@ -700,7 +700,7 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
 
   static bool _needsAction(OrderModel order) {
     final status = order.status.toLowerCase();
-    return status == 'paid' || status == 'pending_handover';
+    return status == 'pending' || status == 'pending_handover';
   }
 
   Widget _orderCard(BuildContext context, OrderModel order) {
@@ -770,7 +770,7 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
             const SizedBox(height: 12),
             Row(
               children: [
-                if (order.status.toLowerCase() == 'paid') ...[
+                if (order.status.toLowerCase() == 'pending') ...[
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () => _updateOrderStatus(
@@ -778,7 +778,7 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
                         order,
                         'pending_handover',
                       ),
-                      child: const Text('Confirm Handover'),
+                      child: const Text('Confirm Order'),
                     ),
                   ),
                 ] else if (needsAction) ...[
@@ -912,7 +912,6 @@ class _ListingDetailPageState extends State<ListingDetailPage> {
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-      case 'paid':
         return Colors.orange;
       case 'pending_handover':
         return Colors.indigo;

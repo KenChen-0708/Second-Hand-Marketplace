@@ -35,9 +35,14 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     final userState = context.read<UserState>();
     final currentUserId = userState.currentUser?.id;
 
-    if (order != null && currentUserId != null && order.status.toLowerCase() == 'completed') {
+    if (order != null &&
+        currentUserId != null &&
+        order.status.toLowerCase() == 'completed') {
       final reviewService = ReviewService();
-      final review = await reviewService.fetchReviewForOrder(order.id, currentUserId);
+      final review = await reviewService.fetchReviewForOrder(
+        order.id,
+        currentUserId,
+      );
       if (mounted) {
         setState(() {
           _existingReview = review;
@@ -107,15 +112,34 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
                         if (currentOrder.orderItems.isEmpty)
                           Text(
                             'No items were found for this order.',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
                           )
                         else
-                          ...currentOrder.orderItems.map((item) => _buildProductItem(context, item)),
-                        const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
-                        _buildSummaryRow('Subtotal', '\$${(currentOrder.totalPrice).toStringAsFixed(2)}'),
-                        _buildSummaryRow('Escrow Protection', 'Included', isGreen: true),
+                          ...currentOrder.orderItems.map(
+                            (item) => _buildProductItem(context, item),
+                          ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Divider(height: 1),
+                        ),
+                        _buildSummaryRow(
+                          'Subtotal',
+                          '\$${(currentOrder.totalPrice).toStringAsFixed(2)}',
+                        ),
+                        _buildSummaryRow(
+                          'Escrow Protection',
+                          'Included',
+                          isGreen: true,
+                        ),
                         const SizedBox(height: 8),
-                        _buildSummaryRow('Total', '\$${(currentOrder.totalPrice).toStringAsFixed(2)}', isTotal: true),
+                        _buildSummaryRow(
+                          'Total',
+                          '\$${(currentOrder.totalPrice).toStringAsFixed(2)}',
+                          isTotal: true,
+                        ),
                       ],
                     ),
                   ),
@@ -123,12 +147,29 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
                     title: 'Handover Details',
                     child: Column(
                       children: [
-                        _buildInfoField('Location', currentOrder.handoverLocation ?? 'TBD', icon: Icons.location_on_rounded, color: Colors.blue),
+                        _buildInfoField(
+                          'Location',
+                          currentOrder.handoverLocation ?? 'TBD',
+                          icon: Icons.location_on_rounded,
+                          color: Colors.blue,
+                        ),
                         const SizedBox(height: 16),
-                        _buildInfoField('Agreed Time', currentOrder.handoverDate != null ? dateFormat.format(currentOrder.handoverDate!) : 'To be scheduled', icon: Icons.calendar_today_rounded, color: Colors.indigo),
+                        _buildInfoField(
+                          'Agreed Time',
+                          currentOrder.handoverDate != null
+                              ? dateFormat.format(currentOrder.handoverDate!)
+                              : 'To be scheduled',
+                          icon: Icons.calendar_today_rounded,
+                          color: Colors.indigo,
+                        ),
                         if (currentOrder.notes?.isNotEmpty ?? false) ...[
                           const SizedBox(height: 16),
-                          _buildInfoField('Special Instructions', currentOrder.notes!, icon: Icons.info_outline_rounded, color: Colors.amber),
+                          _buildInfoField(
+                            'Special Instructions',
+                            currentOrder.notes!,
+                            icon: Icons.info_outline_rounded,
+                            color: Colors.amber,
+                          ),
                         ],
                       ],
                     ),
@@ -157,7 +198,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     }
 
     setState(() => _isReloading = true);
-    final updatedOrder = await context.read<OrderState>().fetchOrderById(orderId);
+    final updatedOrder = await context.read<OrderState>().fetchOrderById(
+      orderId,
+    );
     if (!mounted) {
       return;
     }
@@ -175,9 +218,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(successMessage)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(successMessage)));
   }
 
   Widget _buildStatusHeader(BuildContext context, _StatusInfo info) {
@@ -189,7 +232,10 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: info.color.withValues(alpha: 0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: info.color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
             child: Icon(info.icon, color: info.color, size: 28),
           ),
           const SizedBox(width: 16),
@@ -197,9 +243,22 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(info.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                Text(
+                  info.label,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(info.explanation, style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                Text(
+                  info.explanation,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),
@@ -208,24 +267,26 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     );
   }
 
-  Widget _buildContextualAlert(BuildContext context, OrderModel order, bool isBuyer) {
+  Widget _buildContextualAlert(
+    BuildContext context,
+    OrderModel order,
+    bool isBuyer,
+  ) {
     final status = order.status.toLowerCase();
     String message = '';
     IconData icon = Icons.info_outline_rounded;
     Color color = Colors.blue;
 
     if (status == 'pending') {
-      message = isBuyer ? 'Wait for seller to confirm your order.' : 'Please confirm this order to proceed with handover.';
-    } else if (status == 'paid') {
-      message = isBuyer ? 'Payment protected until you confirm receipt.' : 'Ready for handover. Coordinate meet-up in chat.';
-      icon = Icons.security_rounded;
-      color = Colors.green;
+      message = isBuyer
+          ? 'Wait for seller to confirm your order.'
+          : 'Please confirm this order to proceed with handover.';
     } else if (status == 'pending_handover') {
       message = order.handoverDate == null
           ? 'Set the handover date and time before completing this order.'
           : isBuyer
-              ? 'Bring your confirmation code and inspect item before confirming.'
-              : 'Ensure buyer inspects the item before finalizing.';
+          ? 'Bring your confirmation code and inspect item before confirming.'
+          : 'Ensure buyer inspects the item before finalizing.';
       icon = Icons.handshake_rounded;
       color = Colors.indigo;
     }
@@ -235,12 +296,25 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withValues(alpha: 0.1))),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.1)),
+      ),
       child: Row(
         children: [
           Icon(icon, size: 20, color: color),
           const SizedBox(width: 12),
-          Expanded(child: Text(message, style: TextStyle(fontSize: 12, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w600))),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 12,
+                color: color.withValues(alpha: 0.8),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -250,12 +324,13 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     final status = order.status.toLowerCase();
     final showCompletedStep =
         status == 'completed' ||
-        (order.handoverDate != null && !order.handoverDate!.isAfter(DateTime.now()));
+        (order.handoverDate != null &&
+            !order.handoverDate!.isAfter(DateTime.now()));
     final steps = <Map<String, String>>[
       {
         'title': 'Order Placed',
-        'subtitle': 'Buyer paid for the order',
-        'key': 'paid',
+        'subtitle': 'Payment received; waiting for seller confirmation',
+        'key': 'pending',
       },
       {
         'title': 'Handover Scheduled',
@@ -285,7 +360,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
         return _StatusItem(
           title: step['title']!,
           subtitle: isCurrent ? currentInfo.explanation : step['subtitle']!,
-          time: index == 0 ? order.createdAt : (isCurrent ? order.updatedAt : null),
+          time: index == 0
+              ? order.createdAt
+              : (isCurrent ? order.updatedAt : null),
           isCompleted: isCompleted,
           isCurrent: isCurrent,
           isLast: index == steps.length - 1,
@@ -294,9 +371,14 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     );
   }
 
-  Widget _buildRoleAwareActions(BuildContext context, OrderModel order, bool isBuyer) {
+  Widget _buildRoleAwareActions(
+    BuildContext context,
+    OrderModel order,
+    bool isBuyer,
+  ) {
     final status = order.status.toLowerCase();
-    final canBuyerComplete = order.handoverDate != null &&
+    final canBuyerComplete =
+        order.handoverDate != null &&
         !order.handoverDate!.isAfter(DateTime.now());
     final canScheduleHandover = status == 'pending_handover';
     return Padding(
@@ -305,7 +387,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
         children: [
           if (canScheduleHandover) ...[
             _buildPrimaryAction(
-              order.handoverDate == null ? 'Schedule Handover' : 'Reschedule Handover',
+              order.handoverDate == null
+                  ? 'Schedule Handover'
+                  : 'Reschedule Handover',
               Icons.event_available_rounded,
               Colors.indigo,
               () => _scheduleHandover(context, order),
@@ -322,26 +406,56 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
             const SizedBox(height: 12),
           ],
           if (status == 'pending_handover' && isBuyer && canBuyerComplete) ...[
-            _buildPrimaryAction('Confirm Received', Icons.check_circle_rounded, Colors.green, () => _showConfirmReceipt(context, order)),
+            _buildPrimaryAction(
+              'Confirm Received',
+              Icons.check_circle_rounded,
+              Colors.green,
+              () => _showConfirmReceipt(context, order),
+            ),
             const SizedBox(height: 12),
           ],
-          if (status == 'paid' && !isBuyer) ...[
-            _buildPrimaryAction('Confirm Handover', Icons.check_circle_rounded, Colors.green, () => _updateStatus(context, order, 'pending_handover')),
+          if (status == 'pending' && !isBuyer) ...[
+            _buildPrimaryAction(
+              'Confirm Order',
+              Icons.check_circle_rounded,
+              Colors.green,
+              () => _updateStatus(context, order, 'pending_handover'),
+            ),
             const SizedBox(height: 12),
           ],
           if (status == 'completed' && isBuyer) ...[
             if (_existingReview == null)
-              _buildPrimaryAction('Leave Review', Icons.star_rounded, Colors.amber[700]!, () => _navigateToReview(context, order))
+              _buildPrimaryAction(
+                'Leave Review',
+                Icons.star_rounded,
+                Colors.amber[700]!,
+                () => _navigateToReview(context, order),
+              )
             else
               _buildDisabledAction('Review Submitted', Icons.star_rounded),
             const SizedBox(height: 12),
           ],
           Row(
             children: [
-              Expanded(child: _buildSecondaryAction('Chat', Icons.chat_bubble_rounded, Colors.blue, () => _navigateToChat(context, order))),
+              Expanded(
+                child: _buildSecondaryAction(
+                  'Chat',
+                  Icons.chat_bubble_rounded,
+                  Colors.blue,
+                  () => _navigateToChat(context, order),
+                ),
+              ),
               if (status != 'completed' && status != 'cancelled') ...[
                 const SizedBox(width: 12),
-                Expanded(child: _buildSecondaryAction('Cancel', Icons.cancel_rounded, Colors.grey[700]!, () => _showCancelConfirmation(context, order), isDestructive: true))
+                Expanded(
+                  child: _buildSecondaryAction(
+                    'Cancel',
+                    Icons.cancel_rounded,
+                    Colors.grey[700]!,
+                    () => _showCancelConfirmation(context, order),
+                    isDestructive: true,
+                  ),
+                ),
               ],
             ],
           ),
@@ -350,7 +464,12 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     );
   }
 
-  Widget _buildPrimaryAction(String label, IconData icon, Color color, VoidCallback onPressed) {
+  Widget _buildPrimaryAction(
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onPressed,
+  ) {
     return ElevatedButton.icon(
       onPressed: onPressed,
       icon: Icon(icon, size: 20),
@@ -380,15 +499,26 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     );
   }
 
-  Widget _buildSecondaryAction(String label, IconData icon, Color color, VoidCallback onPressed, {bool isDestructive = false}) {
+  Widget _buildSecondaryAction(
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onPressed, {
+    bool isDestructive = false,
+  }) {
     return TextButton.icon(
       onPressed: onPressed,
       icon: Icon(icon, size: 18),
-      label: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+      ),
       style: TextButton.styleFrom(
         minimumSize: const Size(double.infinity, 50),
         foregroundColor: isDestructive ? Colors.red : color,
-        backgroundColor: (isDestructive ? Colors.red : color).withValues(alpha: 0.05),
+        backgroundColor: (isDestructive ? Colors.red : color).withValues(
+          alpha: 0.05,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
@@ -403,7 +533,15 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey[400], letterSpacing: 1)),
+          Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: Colors.grey[400],
+              letterSpacing: 1,
+            ),
+          ),
           const SizedBox(height: 20),
           child,
         ],
@@ -431,11 +569,43 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.product?.title ?? 'Item', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                Text(
+                  item.product?.title ?? 'Item',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)), child: Text((item.product?.condition ?? 'good').replaceAll('_', ' ').toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.grey[700]))),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    (item.product?.condition ?? 'good')
+                        .replaceAll('_', ' ')
+                        .toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 8),
-                Text('${item.quantity} x \$${item.unitPrice.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
+                Text(
+                  '${item.quantity} x \$${item.unitPrice.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),
@@ -469,7 +639,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.1),
               child: Icon(
                 Icons.storefront_rounded,
                 color: Theme.of(context).colorScheme.primary,
@@ -491,7 +663,10 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
                   const SizedBox(height: 2),
                   Text(
                     sellerName,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
                   ),
                 ],
               ),
@@ -511,23 +686,53 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
         color: Colors.grey[100],
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[400], size: 32),
+      child: Icon(
+        Icons.image_not_supported_outlined,
+        color: Colors.grey[400],
+        size: 32,
+      ),
     );
   }
 
-  Widget _buildInfoField(String label, String value, {required IconData icon, required Color color}) {
+  Widget _buildInfoField(
+    String label,
+    String value, {
+    required IconData icon,
+    required Color color,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 20, color: color)),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 20, color: color),
+        ),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[500],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, height: 1.4)),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
             ],
           ),
         ),
@@ -535,14 +740,35 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, {bool isTotal = false, bool isGreen = false}) {
+  Widget _buildSummaryRow(
+    String label,
+    String value, {
+    bool isTotal = false,
+    bool isGreen = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: isTotal ? 16 : 14, fontWeight: isTotal ? FontWeight.w900 : FontWeight.w500, color: isTotal ? Colors.black : Colors.grey[600])),
-          Text(value, style: TextStyle(fontSize: isTotal ? 22 : 14, fontWeight: FontWeight.w900, color: (isTotal || isGreen) ? const Color(0xFF10B981) : Colors.black)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.w900 : FontWeight.w500,
+              color: isTotal ? Colors.black : Colors.grey[600],
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: isTotal ? 22 : 14,
+              fontWeight: FontWeight.w900,
+              color: (isTotal || isGreen)
+                  ? const Color(0xFF10B981)
+                  : Colors.black,
+            ),
+          ),
         ],
       ),
     );
@@ -550,13 +776,48 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
 
   _StatusInfo _getStatusDisplayInfo(String status) {
     switch (status.toLowerCase()) {
-      case 'pending': return _StatusInfo(label: 'Pending Payment', explanation: 'Waiting for buyer payment', color: Colors.orange, icon: Icons.hourglass_empty_rounded);
-      case 'paid': return _StatusInfo(label: 'Order Placed', explanation: 'Buyer has paid for the order', color: Colors.blue, icon: Icons.payments_outlined);
-      case 'pending_handover': return _StatusInfo(label: 'Handover Scheduled', explanation: 'Seller confirmed; arrange date and time', color: Colors.indigo, icon: Icons.handshake_outlined);
-      case 'completed': return _StatusInfo(label: 'Completed', explanation: 'Transaction finished successfully', color: const Color(0xFF10B981), icon: Icons.check_circle_outline_rounded);
-      case 'cancelled': return _StatusInfo(label: 'Cancelled', explanation: 'This order was cancelled', color: Colors.grey, icon: Icons.cancel_outlined);
-      case 'disputed': return _StatusInfo(label: 'Disputed', explanation: 'Under investigation', color: Colors.redAccent, icon: Icons.gavel_rounded);
-      default: return _StatusInfo(label: status, explanation: '', color: Colors.grey, icon: Icons.info_outline_rounded);
+      case 'pending':
+        return _StatusInfo(
+          label: 'Awaiting Seller Confirmation',
+          explanation: 'Payment received; waiting for seller confirmation',
+          color: Colors.orange,
+          icon: Icons.hourglass_empty_rounded,
+        );
+      case 'pending_handover':
+        return _StatusInfo(
+          label: 'Handover Scheduled',
+          explanation: 'Seller confirmed; arrange date and time',
+          color: Colors.indigo,
+          icon: Icons.handshake_outlined,
+        );
+      case 'completed':
+        return _StatusInfo(
+          label: 'Completed',
+          explanation: 'Transaction finished successfully',
+          color: const Color(0xFF10B981),
+          icon: Icons.check_circle_outline_rounded,
+        );
+      case 'cancelled':
+        return _StatusInfo(
+          label: 'Cancelled',
+          explanation: 'This order was cancelled',
+          color: Colors.grey,
+          icon: Icons.cancel_outlined,
+        );
+      case 'disputed':
+        return _StatusInfo(
+          label: 'Disputed',
+          explanation: 'Under investigation',
+          color: Colors.redAccent,
+          icon: Icons.gavel_rounded,
+        );
+      default:
+        return _StatusInfo(
+          label: status,
+          explanation: '',
+          color: Colors.grey,
+          icon: Icons.info_outline_rounded,
+        );
     }
   }
 
@@ -564,26 +825,57 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (context) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Need Help?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            const Text(
+              'Need Help?',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 16),
-            _buildHelpItem(Icons.security_rounded, 'Payment Protection', 'Your funds are held safely until you confirm receipt.'),
-            _buildHelpItem(Icons.handshake_rounded, 'Handover Safety', 'Meet in public places. Inspect item before confirming.'),
+            _buildHelpItem(
+              Icons.security_rounded,
+              'Payment Protection',
+              'Your funds are held safely until you confirm receipt.',
+            ),
+            _buildHelpItem(
+              Icons.handshake_rounded,
+              'Handover Safety',
+              'Meet in public places. Inspect item before confirming.',
+            ),
             const Divider(height: 32),
-            _buildHelpItem(Icons.report_problem_rounded, 'Something wrong?', 'If the item is not as described or you have issues with the other party, let us know.'),
+            _buildHelpItem(
+              Icons.report_problem_rounded,
+              'Something wrong?',
+              'If the item is not as described or you have issues with the other party, let us know.',
+            ),
             const SizedBox(height: 12),
-            _buildSecondaryAction('Report Issue', Icons.report_problem_rounded, Colors.orange[800]!, () {
-              Navigator.pop(context);
-              _handleReport(context, order);
-            }),
+            _buildSecondaryAction(
+              'Report Issue',
+              Icons.report_problem_rounded,
+              Colors.orange[800]!,
+              () {
+                Navigator.pop(context);
+                _handleReport(context, order);
+              },
+            ),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: () => Navigator.pop(context), style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text('Got it')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Got it'),
+            ),
           ],
         ),
       ),
@@ -598,7 +890,24 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
         children: [
           Icon(icon, size: 20, color: Colors.blue),
           const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), Text(desc, style: TextStyle(color: Colors.grey[600], fontSize: 12))])),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  desc,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -611,7 +920,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
 
     if (order.orderItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This order has no product to chat about.')),
+        const SnackBar(
+          content: Text('This order has no product to chat about.'),
+        ),
       );
       return;
     }
@@ -635,7 +946,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error opening chat: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error opening chat: $e')));
       }
     }
   }
@@ -643,16 +956,20 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
   void _navigateToReview(BuildContext context, OrderModel order) async {
     if (order.orderItems.isEmpty) return;
     final item = order.orderItems.first;
-    await context.push('/profile/seller-review', extra: {
-      'product': item.product,
-      'orderId': order.id,
-    });
+    await context.push(
+      '/profile/seller-review',
+      extra: {'product': item.product, 'orderId': order.id},
+    );
     if (mounted) {
       _checkExistingReview();
     }
   }
 
-  void _navigateToProfile(BuildContext context, OrderModel order, bool isBuyer) {
+  void _navigateToProfile(
+    BuildContext context,
+    OrderModel order,
+    bool isBuyer,
+  ) {
     final otherUserId = isBuyer ? order.primarySellerId : order.buyerId;
     if (otherUserId != null) {
       context.push('/seller/$otherUserId');
@@ -663,16 +980,27 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cancel Order?', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to cancel this order? This action cannot be undone.'),
+        title: const Text(
+          'Cancel Order?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Are you sure you want to cancel this order? This action cannot be undone.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Go Back')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Go Back'),
+          ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               _cancelOrder(context, order);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Yes, Cancel'),
           ),
         ],
@@ -689,7 +1017,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to cancel order: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to cancel order: $e')));
       }
     }
   }
@@ -708,19 +1038,17 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update order: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update order: $e')));
       }
     }
   }
 
-  Future<void> _scheduleHandover(
-    BuildContext context,
-    OrderModel order,
-  ) async {
+  Future<void> _scheduleHandover(BuildContext context, OrderModel order) async {
     final now = DateTime.now();
-    final initial = order.handoverDate != null && order.handoverDate!.isAfter(now)
+    final initial =
+        order.handoverDate != null && order.handoverDate!.isAfter(now)
         ? order.handoverDate!
         : now.add(const Duration(hours: 1));
 
@@ -761,7 +1089,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(isReschedule ? 'Confirm Reschedule?' : 'Confirm Handover Time?'),
+        title: Text(
+          isReschedule ? 'Confirm Reschedule?' : 'Confirm Handover Time?',
+        ),
         content: Text(
           'Set handover for ${DateFormat('MMM dd, yyyy HH:mm').format(scheduledAt)}? '
           '${isReschedule ? 'The other user will receive a message and should confirm the new time.' : 'The other user will receive a message to confirm this time.'}',
@@ -784,9 +1114,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
 
     try {
       await context.read<OrderState>().updateHandoverSchedule(
-            order.id,
-            scheduledAt,
-          );
+        order.id,
+        scheduledAt,
+      );
       await _sendHandoverScheduleMessage(order, scheduledAt, isReschedule);
       if (context.mounted) {
         await _reloadAfterAction(
@@ -979,19 +1309,21 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
                 final description = descriptionController.text.trim();
                 if (reason.isEmpty || description.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please fill in both fields.')),
+                    const SnackBar(
+                      content: Text('Please fill in both fields.'),
+                    ),
                   );
                   return;
                 }
 
                 try {
                   await context.read<OrderState>().reportOrderIssue(
-                        orderId: order.id,
-                        reporterId: currentUserId,
-                        accusedId: accusedId,
-                        reason: reason,
-                        description: description,
-                      );
+                    orderId: order.id,
+                    reporterId: currentUserId,
+                    accusedId: accusedId,
+                    reason: reason,
+                    description: description,
+                  );
                   if (context.mounted) {
                     Navigator.pop(sheetContext);
                     await _reloadAfterAction('Report submitted to support.');
@@ -1010,7 +1342,9 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
                 minimumSize: const Size(double.infinity, 50),
                 backgroundColor: Colors.orange[800],
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -1023,16 +1357,43 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
   }
 
   void _showConfirmReceipt(BuildContext context, OrderModel order) {
-    showDialog(context: context, builder: (context) => AlertDialog(title: const Text('Confirm Receipt?'), content: const Text('Only confirm if you have received and inspected the item. This will release the payment to the seller.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not yet')), ElevatedButton(onPressed: () { Navigator.pop(context); _updateStatus(context, order, 'completed'); }, child: const Text('Confirm'))]));
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Receipt?'),
+        content: const Text(
+          'Only confirm if you have received and inspected the item. This will release the payment to the seller.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Not yet'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _updateStatus(context, order, 'completed');
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
   }
-
 }
 
 class _StatusItem extends StatelessWidget {
   final String title, subtitle;
   final DateTime? time;
   final bool isCompleted, isCurrent, isLast;
-  const _StatusItem({required this.title, required this.subtitle, required this.time, required this.isCompleted, required this.isCurrent, required this.isLast});
+  const _StatusItem({
+    required this.title,
+    required this.subtitle,
+    required this.time,
+    required this.isCompleted,
+    required this.isCurrent,
+    required this.isLast,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1043,8 +1404,36 @@ class _StatusItem extends StatelessWidget {
         children: [
           Column(
             children: [
-              Container(width: 24, height: 24, decoration: BoxDecoration(color: isCurrent ? Colors.white : (isCompleted ? color : Colors.white), shape: BoxShape.circle, border: Border.all(color: color, width: isCurrent ? 6 : 2), boxShadow: isCurrent ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10)] : null), child: isCompleted && !isCurrent ? const Icon(Icons.check, size: 14, color: Colors.white) : null),
-              if (!isLast) Expanded(child: Container(width: 2, color: color, margin: const EdgeInsets.symmetric(vertical: 4))),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: isCurrent
+                      ? Colors.white
+                      : (isCompleted ? color : Colors.white),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: isCurrent ? 6 : 2),
+                  boxShadow: isCurrent
+                      ? [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.3),
+                            blurRadius: 10,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: isCompleted && !isCurrent
+                    ? const Icon(Icons.check, size: 14, color: Colors.white)
+                    : null,
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: color,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                  ),
+                ),
             ],
           ),
           const SizedBox(width: 16),
@@ -1052,9 +1441,37 @@ class _StatusItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: isCompleted ? Colors.black : Colors.grey[400])), const Spacer(), if (time != null) Text(DateFormat('MMM dd, HH:mm').format(time!), style: TextStyle(fontSize: 11, color: Colors.grey[400], fontWeight: FontWeight.bold))]),
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                        color: isCompleted ? Colors.black : Colors.grey[400],
+                      ),
+                    ),
+                    const Spacer(),
+                    if (time != null)
+                      Text(
+                        DateFormat('MMM dd, HH:mm').format(time!),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[400],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(fontSize: 12, color: isCurrent ? Colors.black87 : Colors.grey[500], fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal)),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isCurrent ? Colors.black87 : Colors.grey[500],
+                    fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
                 const SizedBox(height: 24),
               ],
             ),
@@ -1069,5 +1486,10 @@ class _StatusInfo {
   final String label, explanation;
   final Color color;
   final IconData icon;
-  _StatusInfo({required this.label, required this.explanation, required this.color, required this.icon});
+  _StatusInfo({
+    required this.label,
+    required this.explanation,
+    required this.color,
+    required this.icon,
+  });
 }
