@@ -103,22 +103,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
         child: notificationState.isLoading && notifications.isEmpty
             ? const Center(child: CircularProgressIndicator())
             : notifications.isEmpty
-                ? _buildEmptyState(context)
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16.0),
-                    itemCount: notifications.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final note = notifications[index];
-                      return _NotificationCard(
-                        notification: note,
-                        onTap: () => _handleNotificationTap(note),
-                        onDelete: () {
-                          notificationState.deleteNotification(note.id);
-                        },
-                      );
-                    },
-                  ),
+            ? _buildEmptyState(context)
+            : ListView.separated(
+          padding: const EdgeInsets.all(16.0),
+          itemCount: notifications.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final note = notifications[index];
+            return _NotificationCard(
+              notification: note,
+              onTap: () => _handleNotificationTap(note),
+              onDelete: () {
+                notificationState.deleteNotification(note.id);
+              },
+            );
+          },
+        ),
       ),
     );
   }
