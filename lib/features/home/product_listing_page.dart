@@ -38,6 +38,15 @@ class ProductListingPage extends StatefulWidget {
 }
 
 class _ProductListingPageState extends State<ProductListingPage> {
+  static const Map<String, IconData> _categoryIconOverrides = {
+    'Textbooks': Icons.menu_book_rounded,
+    'Electronics': Icons.laptop_mac_rounded,
+    'Dorm Gear': Icons.chair_rounded,
+    'Furniture': Icons.chair_rounded,
+    'Sports': Icons.sports_basketball_rounded,
+    'Clothing': Icons.checkroom_rounded,
+  };
+
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
 
@@ -62,14 +71,6 @@ class _ProductListingPageState extends State<ProductListingPage> {
     'Newest First',
   ];
 
-  final List<Map<String, dynamic>> _categoryOptions = const [
-    {'icon': Icons.menu_book_rounded, 'label': 'Textbooks'},
-    {'icon': Icons.laptop_mac_rounded, 'label': 'Electronics'},
-    {'icon': Icons.chair_rounded, 'label': 'Dorm Gear'},
-    {'icon': Icons.sports_basketball_rounded, 'label': 'Sports'},
-    {'icon': Icons.checkroom_rounded, 'label': 'Clothing'},
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -78,7 +79,36 @@ class _ProductListingPageState extends State<ProductListingPage> {
     _selectedSort = widget.args.initialSort;
     _selectedCategories = widget.args.initialCategories.toSet();
     _selectedConditions = widget.args.initialConditions.toSet();
+    _selectedCategories.removeWhere(
+      (category) => !_availableCategoryOptions.any(
+        (option) => option['label'] == category,
+      ),
+    );
     _visibleProducts = _buildResults();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final categoryState = context.read<CategoryState>();
+      if (categoryState.items.isEmpty) {
+        try {
+          await categoryState.fetchAllCategories();
+        } catch (_) {
+          return;
+        }
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _selectedCategories.removeWhere(
+            (category) => !_availableCategoryOptions.any(
+              (option) => option['label'] == category,
+            ),
+          );
+          _visibleProducts = _buildResults();
+        });
+      }
+    });
   }
 
   @override
@@ -89,15 +119,37 @@ class _ProductListingPageState extends State<ProductListingPage> {
   }
 
   String _getCategoryName(String? categoryId) {
-    if (categoryId == null) {
+    if (categoryId == null || categoryId.isEmpty) {
       return 'Uncategorized';
     }
 
-    final category = mockCategories.firstWhere(
-      (c) => c.id == categoryId,
-      orElse: () => mockCategories[0],
+    final categoryState = context.read<CategoryState>();
+    final category = categoryState.items.cast<CategoryModel?>().firstWhere(
+      (c) => c?.id == categoryId,
+      orElse: () => mockCategories.cast<CategoryModel?>().firstWhere(
+        (c) => c?.id == categoryId,
+        orElse: () => null,
+      ),
     );
-    return category.name;
+    return category?.name ?? 'Uncategorized';
+  }
+
+  List<Map<String, dynamic>> get _availableCategoryOptions {
+    final labels = widget.args.allProducts
+        .map((product) => _getCategoryName(product.categoryId))
+        .where((name) => name.isNotEmpty && name != 'Uncategorized')
+        .toSet()
+        .toList()
+      ..sort();
+
+    return labels
+        .map(
+          (label) => {
+            'label': label,
+            'icon': _categoryIconOverrides[label] ?? Icons.category_rounded,
+          },
+        )
+        .toList();
   }
 
   bool get _hasActiveFilters =>
@@ -343,53 +395,61 @@ class _ProductListingPageState extends State<ProductListingPage> {
                             ),
                             divider(),
                             sectionLabel('Category'),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _categoryOptions.map((category) {
-                                final label = category['label'] as String;
-                                final icon = category['icon'] as IconData;
-                                final isSelected = tempCategories.contains(label);
+                            if (_availableCategoryOptions.isEmpty)
+                              Text(
+                                'No categories available right now.',
+                                style: tt.bodyMedium?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              )
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _availableCategoryOptions.map((category) {
+                                  final label = category['label'] as String;
+                                  final icon = category['icon'] as IconData;
+                                  final isSelected = tempCategories.contains(label);
 
-                                return FilterChip(
-                                  avatar: Icon(
-                                    icon,
-                                    size: 16,
-                                    color: isSelected
-                                        ? cs.primary
-                                        : cs.onSurfaceVariant,
-                                  ),
-                                  label: Text(label),
-                                  selected: isSelected,
-                                  onSelected: (selected) => setModalState(() {
-                                    if (selected) {
-                                      tempCategories.add(label);
-                                    } else {
-                                      tempCategories.remove(label);
-                                    }
-                                  }),
-                                  selectedColor: cs.primaryContainer,
-                                  checkmarkColor: cs.primary,
-                                  backgroundColor: cs.surfaceContainerHighest,
-                                  labelStyle: TextStyle(
-                                    color: isSelected ? cs.primary : cs.onSurface,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.normal,
-                                    fontSize: 13,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(
+                                  return FilterChip(
+                                    avatar: Icon(
+                                      icon,
+                                      size: 16,
                                       color: isSelected
                                           ? cs.primary
-                                          : cs.outlineVariant,
+                                          : cs.onSurfaceVariant,
                                     ),
-                                  ),
-                                  showCheckmark: false,
-                                );
-                              }).toList(),
-                            ),
+                                    label: Text(label),
+                                    selected: isSelected,
+                                    onSelected: (selected) => setModalState(() {
+                                      if (selected) {
+                                        tempCategories.add(label);
+                                      } else {
+                                        tempCategories.remove(label);
+                                      }
+                                    }),
+                                    selectedColor: cs.primaryContainer,
+                                    checkmarkColor: cs.primary,
+                                    backgroundColor: cs.surfaceContainerHighest,
+                                    labelStyle: TextStyle(
+                                      color: isSelected ? cs.primary : cs.onSurface,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: isSelected
+                                            ? cs.primary
+                                            : cs.outlineVariant,
+                                      ),
+                                    ),
+                                    showCheckmark: false,
+                                  );
+                                }).toList(),
+                              ),
                             divider(),
                             sectionLabel('Price Range'),
                             Row(

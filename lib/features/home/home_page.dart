@@ -19,6 +19,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static const Map<String, IconData> _categoryIconOverrides = {
+    'Textbooks': Icons.menu_book_rounded,
+    'Electronics': Icons.laptop_mac_rounded,
+    'Dorm Gear': Icons.chair_rounded,
+    'Furniture': Icons.chair_rounded,
+    'Sports': Icons.sports_basketball_rounded,
+    'Clothing': Icons.checkroom_rounded,
+  };
+
   // --- Search State ---
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
@@ -69,6 +78,7 @@ class _HomePageState extends State<HomePage> {
     if (mounted && _productState != null) {
       setState(() {
         _allProducts = _visibleMarketplaceProducts(_productState!.items);
+        _syncSelectedCategoriesWithAvailableOptions();
         _applyAllFilters();
       });
     }
@@ -90,6 +100,11 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
+      final categoryState = context.read<CategoryState>();
+      if (categoryState.items.isEmpty) {
+        await categoryState.fetchAllCategories();
+      }
+
       final products = await context.read<ProductState>().fetchProducts();
       if (!mounted) {
         return;
@@ -97,6 +112,7 @@ class _HomePageState extends State<HomePage> {
 
       setState(() {
         _allProducts = _visibleMarketplaceProducts(products);
+        _syncSelectedCategoriesWithAvailableOptions();
         _applyAllFilters();
       });
     } catch (e) {
@@ -126,12 +142,45 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _getCategoryName(String? categoryId) {
-    if (categoryId == null) return 'Uncategorized';
-    final category = mockCategories.firstWhere(
-      (c) => c.id == categoryId,
-      orElse: () => mockCategories[0],
+    if (categoryId == null || categoryId.isEmpty) return 'Uncategorized';
+
+    final categoryState = context.read<CategoryState>();
+    final category = categoryState.items.cast<CategoryModel?>().firstWhere(
+      (c) => c?.id == categoryId,
+      orElse: () => mockCategories.cast<CategoryModel?>().firstWhere(
+        (c) => c?.id == categoryId,
+        orElse: () => null,
+      ),
     );
-    return category.name;
+
+    return category?.name ?? 'Uncategorized';
+  }
+
+  List<Map<String, dynamic>> get _availableCategoryOptions {
+    final labels = _allProducts
+        .map((product) => _getCategoryName(product.categoryId))
+        .where((name) => name.isNotEmpty && name != 'Uncategorized')
+        .toSet()
+        .toList()
+      ..sort();
+
+    return labels
+        .map(
+          (label) => {
+            'label': label,
+            'icon': _categoryIconOverrides[label] ?? Icons.category_rounded,
+          },
+        )
+        .toList();
+  }
+
+  void _syncSelectedCategoriesWithAvailableOptions() {
+    final availableLabels = _availableCategoryOptions
+        .map((category) => category['label'] as String)
+        .toSet();
+    _selectedCategories.removeWhere(
+      (category) => !availableLabels.contains(category),
+    );
   }
 
   void _onSearchSubmitted(String query) {
@@ -171,14 +220,6 @@ class _HomePageState extends State<HomePage> {
     'Price: Low to High',
     'Price: High to Low',
     'Newest First',
-  ];
-
-  final List<Map<String, dynamic>> _categoryOptions = [
-    {'icon': Icons.menu_book_rounded, 'label': 'Textbooks'},
-    {'icon': Icons.laptop_mac_rounded, 'label': 'Electronics'},
-    {'icon': Icons.chair_rounded, 'label': 'Dorm Gear'},
-    {'icon': Icons.sports_basketball_rounded, 'label': 'Sports'},
-    {'icon': Icons.checkroom_rounded, 'label': 'Clothing'},
   ];
 
   bool get _hasActiveFilters =>
@@ -368,52 +409,60 @@ class _HomePageState extends State<HomePage> {
 
                             // ── CATEGORY ─────────────────────
                             sectionLabel('Category'),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _categoryOptions.map((cat) {
-                                final label = cat['label'] as String;
-                                final icon = cat['icon'] as IconData;
-                                final sel = tempCategories.contains(label);
-                                return FilterChip(
-                                  avatar: Icon(
-                                    icon,
-                                    size: 16,
-                                    color: sel
-                                        ? cs.primary
-                                        : cs.onSurfaceVariant,
-                                  ),
-                                  label: Text(label),
-                                  selected: sel,
-                                  onSelected: (v) => setModalState(() {
-                                    if (v) {
-                                      tempCategories.add(label);
-                                    } else {
-                                      tempCategories.remove(label);
-                                    }
-                                  }),
-                                  selectedColor: cs.primaryContainer,
-                                  checkmarkColor: cs.primary,
-                                  backgroundColor: cs.surfaceContainerHighest,
-                                  labelStyle: TextStyle(
-                                    color: sel ? cs.primary : cs.onSurface,
-                                    fontWeight: sel
-                                        ? FontWeight.w700
-                                        : FontWeight.normal,
-                                    fontSize: 13,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(
+                            if (_availableCategoryOptions.isEmpty)
+                              Text(
+                                'No categories available right now.',
+                                style: tt.bodyMedium?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              )
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _availableCategoryOptions.map((cat) {
+                                  final label = cat['label'] as String;
+                                  final icon = cat['icon'] as IconData;
+                                  final sel = tempCategories.contains(label);
+                                  return FilterChip(
+                                    avatar: Icon(
+                                      icon,
+                                      size: 16,
                                       color: sel
                                           ? cs.primary
-                                          : cs.outlineVariant,
+                                          : cs.onSurfaceVariant,
                                     ),
-                                  ),
-                                  showCheckmark: false,
-                                );
-                              }).toList(),
-                            ),
+                                    label: Text(label),
+                                    selected: sel,
+                                    onSelected: (v) => setModalState(() {
+                                      if (v) {
+                                        tempCategories.add(label);
+                                      } else {
+                                        tempCategories.remove(label);
+                                      }
+                                    }),
+                                    selectedColor: cs.primaryContainer,
+                                    checkmarkColor: cs.primary,
+                                    backgroundColor: cs.surfaceContainerHighest,
+                                    labelStyle: TextStyle(
+                                      color: sel ? cs.primary : cs.onSurface,
+                                      fontWeight: sel
+                                          ? FontWeight.w700
+                                          : FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: sel
+                                            ? cs.primary
+                                            : cs.outlineVariant,
+                                      ),
+                                    ),
+                                    showCheckmark: false,
+                                  );
+                                }).toList(),
+                              ),
 
                             divider(),
 
@@ -1137,13 +1186,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildCategories(BuildContext context) {
-    final categories = [
-      {'icon': Icons.menu_book_rounded, 'label': 'Textbooks'},
-      {'icon': Icons.laptop_mac_rounded, 'label': 'Electronics'},
-      {'icon': Icons.chair_rounded, 'label': 'Dorm Gear'},
-      {'icon': Icons.sports_basketball_rounded, 'label': 'Sports'},
-      {'icon': Icons.checkroom_rounded, 'label': 'Clothing'},
-    ];
+    final categories = _availableCategoryOptions;
+
+    if (categories.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -1271,33 +1318,42 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(height: 4),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              CurrencyHelper.formatRM(product.price),
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
+                            Expanded(
                               child: Text(
-                                product.condition,
+                                CurrencyHelper.formatRM(product.price),
                                 style: TextStyle(
                                   color: Theme.of(context).colorScheme.primary,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  product.condition,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  textAlign: TextAlign.right,
+                                  softWrap: true,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ),

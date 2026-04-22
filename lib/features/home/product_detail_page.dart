@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
+import '../../models/mock_data.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../shared/utils/product_display_helper.dart';
 import '../../shared/widgets/purchase_selection_sheet.dart';
@@ -35,6 +36,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<_ProductDetailData> _loadProductDetail() async {
     final productState = context.read<ProductState>();
+    final categoryState = context.read<CategoryState>();
+    if (categoryState.items.isEmpty) {
+      try {
+        await categoryState.fetchAllCategories();
+      } catch (_) {
+        // Keep the page usable if categories fail to load.
+      }
+    }
     final product = await productState.fetchProductById(widget.productId);
 
     if (product == null) {
@@ -74,6 +83,54 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       seller: seller,
       meetupLocation: meetupLocation,
       reviews: reviews,
+    );
+  }
+
+  String _getCategoryName(String? categoryId) {
+    if (categoryId == null || categoryId.isEmpty) {
+      return 'Uncategorized';
+    }
+
+    final categoryState = context.read<CategoryState>();
+    final category = categoryState.items.cast<CategoryModel?>().firstWhere(
+      (item) => item?.id == categoryId,
+      orElse: () => mockCategories.cast<CategoryModel?>().firstWhere(
+        (item) => item?.id == categoryId,
+        orElse: () => null,
+      ),
+    );
+
+    return category?.name ?? 'Uncategorized';
+  }
+
+  Widget _buildMetaChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -543,6 +600,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               fontWeight: FontWeight.w900,
                               fontSize: 28,
                             ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildMetaChip(
+                                context,
+                                icon: Icons.category_rounded,
+                                label: _getCategoryName(product.categoryId),
+                              ),
+                            ],
                           ),
                           if (isSoldOut || !product.hasVariants) ...[
                             const SizedBox(height: 8),
