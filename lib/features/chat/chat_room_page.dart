@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
 import '../../services/chat/chat_service.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/presence_helper.dart';
 import '../../shared/utils/snackbar_helper.dart';
 import '../../state/state.dart';
 import 'chat_models.dart';
@@ -30,15 +31,22 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   bool _isSending = false;
   String? _error;
   StreamSubscription<List<Map<String, dynamic>>>? _presenceSubscription;
+  Timer? _presenceRefreshTimer;
 
   @override
   void initState() {
     super.initState();
+    _presenceRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadConversation());
   }
 
   @override
   void dispose() {
+    _presenceRefreshTimer?.cancel();
     _presenceSubscription?.cancel();
     _textController.dispose();
     _scrollController.dispose();
@@ -254,6 +262,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
     final bundle = _bundle!;
     final messages = bundle.messages;
+    final isOtherUserOnline = PresenceHelper.isUserOnline(bundle.otherUser);
     
     // Resolve profile image with initials fallback for the header
     return Scaffold(
@@ -272,11 +281,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: bundle.otherUser.isOnline
+                color: isOtherUserOnline
                     ? const Color(0xFF10B981).withValues(alpha: 0.10)
                     : colorScheme.surfaceContainerHighest,
                 border: Border.all(
-                  color: bundle.otherUser.isOnline
+                  color: isOtherUserOnline
                       ? const Color(0xFF10B981)
                       : colorScheme.outline,
                   width: 2,
@@ -297,7 +306,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: bundle.otherUser.isOnline
+                        color: isOtherUserOnline
                             ? const Color(0xFF10B981)
                             : colorScheme.outline,
                         shape: BoxShape.circle,
@@ -330,7 +339,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: bundle.otherUser.isOnline
+                      color: isOtherUserOnline
                           ? const Color(0xFF10B981)
                           : colorScheme.outline,
                     ),
@@ -424,30 +433,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   }
 
   String _buildPresenceText(UserModel user) {
-    if (user.isOnline) {
-      return 'Online';
-    }
-
-    final lastSeen = user.lastSeenAt;
-    if (lastSeen == null) {
-      return 'Offline';
-    }
-
-    final difference = DateTime.now().difference(lastSeen.toLocal());
-    if (difference.inMinutes < 1) {
-      return 'Last seen just now';
-    }
-    if (difference.inMinutes < 60) {
-      return 'Last seen ${difference.inMinutes}m ago';
-    }
-    if (difference.inHours < 24) {
-      return 'Last seen ${difference.inHours}h ago';
-    }
-    if (difference.inDays < 7) {
-      return 'Last seen ${difference.inDays}d ago';
-    }
-
-    return 'Last seen ${lastSeen.day}/${lastSeen.month}/${lastSeen.year}';
+    return PresenceHelper.buildPresenceText(user);
   }
 }
 

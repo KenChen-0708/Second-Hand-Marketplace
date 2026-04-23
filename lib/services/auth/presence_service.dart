@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PresenceService with WidgetsBindingObserver {
-  static const Duration _heartbeatInterval = Duration(seconds: 45);
+  static const Duration _heartbeatInterval = Duration(seconds: 15);
 
   PresenceService._();
 

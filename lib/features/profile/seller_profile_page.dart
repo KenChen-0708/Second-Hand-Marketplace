@@ -13,6 +13,7 @@ import '../../services/product/product_service.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/presence_helper.dart';
 
 class SellerProfilePage extends StatefulWidget {
   final String sellerId;
@@ -27,6 +28,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   StreamSubscription<List<Map<String, dynamic>>>? _presenceSubscription;
+  Timer? _presenceRefreshTimer;
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -46,6 +48,11 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabSelection);
+    _presenceRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     _loadSellerData();
   }
 
@@ -271,6 +278,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
   @override
   void dispose() {
+    _presenceRefreshTimer?.cancel();
     _presenceSubscription?.cancel();
     _tabController.removeListener(_handleTabSelection);
     _tabController.dispose();
@@ -384,6 +392,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     final isOwnProfile = currentUserId == seller.id;
     final isFollowing = followState.isFollowing(seller.id);
     final followerCount = followState.followerCountFor(seller.id);
+    final isSellerOnline = PresenceHelper.isUserOnline(seller);
 
     // Use live calculation if profile data is missing or zero
     final double rating = stats?.averageRating ?? (profile != null && profile.averageRating > 0 
@@ -470,17 +479,17 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                     padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: seller.isOnline
+                      color: isSellerOnline
                           ? const Color(0xFF10B981).withValues(alpha: 0.10)
                           : cs.surfaceContainerHighest,
                       border: Border.all(
-                        color: _presenceColor(seller.isOnline, cs),
+                        color: _presenceColor(isSellerOnline, cs),
                         width: 3,
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: _presenceColor(
-                            seller.isOnline,
+                            isSellerOnline,
                             cs,
                           ).withValues(alpha: 0.20),
                           blurRadius: 18,
@@ -498,7 +507,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                     bottom: -12,
                     child: _buildPresenceChip(
                       context,
-                      isOnline: seller.isOnline,
+                      isOnline: isSellerOnline,
                     ),
                   ),
                 ],
@@ -515,7 +524,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
             Text(
               _buildPresenceSubtitle(seller),
               style: textTheme.bodyMedium?.copyWith(
-                color: seller.isOnline
+                color: isSellerOnline
                     ? const Color(0xFF047857)
                     : cs.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
@@ -797,30 +806,11 @@ class _SellerProfilePageState extends State<SellerProfilePage>
   }
 
   String _buildPresenceSubtitle(UserModel seller) {
-    if (seller.isOnline) {
-      return 'Active now';
-    }
-
-    final lastSeen = seller.lastSeenAt;
-    if (lastSeen == null) {
-      return 'Last seen recently';
-    }
-
-    final difference = DateTime.now().difference(lastSeen.toLocal());
-    if (difference.inMinutes < 1) {
-      return 'Last seen just now';
-    }
-    if (difference.inMinutes < 60) {
-      return 'Last seen ${difference.inMinutes}m ago';
-    }
-    if (difference.inHours < 24) {
-      return 'Last seen ${difference.inHours}h ago';
-    }
-    if (difference.inDays < 7) {
-      return 'Last seen ${difference.inDays}d ago';
-    }
-
-    return 'Last seen ${lastSeen.day}/${lastSeen.month}/${lastSeen.year}';
+    return PresenceHelper.buildPresenceText(
+      seller,
+      onlineText: 'Active now',
+      offlineText: 'Last seen recently',
+    );
   }
 }
 

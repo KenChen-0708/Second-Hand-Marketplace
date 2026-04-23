@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/chat/chat_service.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/presence_helper.dart';
 import '../../state/state.dart';
 import 'chat_models.dart';
 
@@ -20,15 +23,22 @@ class _ChatInboxPageState extends State<ChatInboxPage> {
   String _query = '';
   bool _isLoading = true;
   String? _error;
+  Timer? _presenceRefreshTimer;
 
   @override
   void initState() {
     super.initState();
+    _presenceRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     _loadConversations();
   }
 
   @override
   void dispose() {
+    _presenceRefreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -270,7 +280,8 @@ class _ConversationTile extends StatelessWidget {
   }
 
   Widget _buildAvatar(ColorScheme colorScheme, String? productImageUrl) {
-    final presenceColor = bundle.otherUser.isOnline
+    final isOnline = PresenceHelper.isUserOnline(bundle.otherUser);
+    final presenceColor = isOnline
         ? const Color(0xFF10B981)
         : colorScheme.outline;
 
@@ -283,7 +294,7 @@ class _ConversationTile extends StatelessWidget {
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: bundle.otherUser.isOnline
+              color: isOnline
                   ? const Color(0xFF10B981).withValues(alpha: 0.10)
                   : colorScheme.surfaceContainerHighest,
               border: Border.all(
@@ -358,7 +369,7 @@ class _ConversationTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
-                  color: bundle.otherUser.isOnline
+                  color: PresenceHelper.isUserOnline(bundle.otherUser)
                       ? const Color(0xFF10B981)
                       : colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -440,29 +451,9 @@ class _ConversationTile extends StatelessWidget {
   }
 
   String _buildPresenceText() {
-    if (bundle.otherUser.isOnline) {
-      return 'Online now';
-    }
-
-    final lastSeen = bundle.otherUser.lastSeenAt;
-    if (lastSeen == null) {
-      return 'Offline';
-    }
-
-    final difference = DateTime.now().difference(lastSeen.toLocal());
-    if (difference.inMinutes < 1) {
-      return 'Last seen just now';
-    }
-    if (difference.inMinutes < 60) {
-      return 'Last seen ${difference.inMinutes}m ago';
-    }
-    if (difference.inHours < 24) {
-      return 'Last seen ${difference.inHours}h ago';
-    }
-    if (difference.inDays < 7) {
-      return 'Last seen ${difference.inDays}d ago';
-    }
-
-    return 'Last seen ${lastSeen.day}/${lastSeen.month}/${lastSeen.year}';
+    return PresenceHelper.buildPresenceText(
+      bundle.otherUser,
+      onlineText: 'Online now',
+    );
   }
 }
