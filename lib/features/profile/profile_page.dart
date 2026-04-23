@@ -131,6 +131,25 @@ class _ProfilePageState extends State<ProfilePage> {
                         fontSize: 14,
                       ),
                     ),
+                    
+                    if (user.bio != null && user.bio!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 48),
+                        child: Text(
+                          user.bio!,
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.8),
+                            fontSize: 14,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 24),
 
                     // Seller Stats Row

@@ -24,6 +24,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
   late TextEditingController _cityController;
   late TextEditingController _postalController;
   String? _selectedCountry;
+  String _selectedCountryCode = '+60';
   
   XFile? _pickedImage;
   final ImagePicker _picker = ImagePicker();
@@ -42,13 +43,38 @@ class _MyAccountPageState extends State<MyAccountPage> {
     'Other'
   ];
 
+  final Map<String, String> _countryCodes = {
+    'Malaysia': '+60',
+    'Singapore': '+65',
+    'Indonesia': '+62',
+    'Thailand': '+66',
+    'Vietnam': '+84',
+    'Philippines': '+63',
+    'China': '+86',
+    'India': '+91',
+    'Other': '+1',
+  };
+
   @override
   void initState() {
     super.initState();
     final user = context.read<UserState>().currentUser;
 
     _nameController = TextEditingController(text: user?.name ?? '');
-    _phoneController = TextEditingController(text: user?.phoneNumber ?? '');
+    
+    // Parse country code and number if possible
+    String fullPhone = user?.phoneNumber ?? '';
+    if (fullPhone.startsWith('+')) {
+      for (var entry in _countryCodes.entries) {
+        if (fullPhone.startsWith(entry.value)) {
+          _selectedCountryCode = entry.value;
+          fullPhone = fullPhone.substring(entry.value.length);
+          break;
+        }
+      }
+    }
+    _phoneController = TextEditingController(text: fullPhone);
+    
     _bioController = TextEditingController(text: user?.bio ?? '');
     _addressController = TextEditingController(text: user?.address ?? '');
     _cityController = TextEditingController(text: user?.city ?? '');
@@ -119,9 +145,11 @@ class _MyAccountPageState extends State<MyAccountPage> {
         }
       }
 
+      final fullPhoneNumber = '$_selectedCountryCode${_phoneController.text.trim()}';
+
       await userState.updateProfile(
         name: _nameController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
+        phoneNumber: fullPhoneNumber,
         bio: _bioController.text.trim(),
         address: _addressController.text.trim(),
         city: _cityController.text.trim(),
@@ -219,18 +247,16 @@ class _MyAccountPageState extends State<MyAccountPage> {
                 'Full Name',
                 _nameController,
                 enabled: !_isLoading,
-                validator: (v) => v!.trim().isEmpty ? 'Name is required' : null,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Name is required';
+                  if (v.trim().length < 2) return 'Name is too short';
+                  if (v.trim().length > 50) return 'Name is too long';
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
-              _buildTextField(
-                context,
-                'Phone Number',
-                _phoneController,
-                enabled: !_isLoading,
-                hintText: 'e.g. +60123456789',
-                keyboardType: TextInputType.phone,
-              ),
+              _buildPhoneField(context),
               const SizedBox(height: 16),
 
               _buildTextField(
@@ -240,18 +266,42 @@ class _MyAccountPageState extends State<MyAccountPage> {
                 enabled: !_isLoading,
                 hintText: 'Tell other students about yourself...',
                 maxLines: 3,
+                validator: (v) {
+                  if (v != null && v.length > 200) return 'Bio must be less than 200 characters';
+                  return null;
+                },
               ),
 
               const SizedBox(height: 32),
               _buildSectionTitle(context, 'Address Details'),
 
-              _buildTextField(context, 'Street Address', _addressController, enabled: !_isLoading),
+              _buildTextField(
+                context, 
+                'Street Address', 
+                _addressController, 
+                enabled: !_isLoading,
+                validator: (v) {
+                  if (v != null && v.isNotEmpty && v.length < 5) return 'Address is too short';
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
 
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _buildTextField(context, 'City', _cityController, enabled: !_isLoading)),
+                  Expanded(
+                    child: _buildTextField(
+                      context, 
+                      'City', 
+                      _cityController, 
+                      enabled: !_isLoading,
+                      validator: (v) {
+                        if (v != null && v.isNotEmpty && v.length < 2) return 'Invalid city';
+                        return null;
+                      },
+                    )
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildTextField(
@@ -260,6 +310,14 @@ class _MyAccountPageState extends State<MyAccountPage> {
                       _postalController,
                       enabled: !_isLoading,
                       keyboardType: TextInputType.number,
+                      validator: (v) {
+                        if (v != null && v.isNotEmpty) {
+                          if (!RegExp(r'^[0-9]{5,10}$').hasMatch(v)) {
+                            return 'Invalid postal code';
+                          }
+                        }
+                        return null;
+                      },
                     )
                   ),
                 ],
@@ -289,6 +347,67 @@ class _MyAccountPageState extends State<MyAccountPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPhoneField(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Phone Number',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 100,
+              decoration: BoxDecoration(
+                border: Border.all(color: Theme.of(context).dividerColor),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              height: 50,
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedCountryCode,
+                  isExpanded: true,
+                  onChanged: _isLoading ? null : (val) => setState(() => _selectedCountryCode = val!),
+                  items: _countryCodes.values.toSet().map((code) {
+                    return DropdownMenuItem(value: code, child: Text(code));
+                  }).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: _phoneController,
+                enabled: !_isLoading,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  hintText: 'e.g. 123456789',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                validator: (v) {
+                  if (v != null && v.isNotEmpty) {
+                    if (!RegExp(r'^[0-9]{7,12}$').hasMatch(v.replaceAll(' ', ''))) {
+                      return 'Invalid number';
+                    }
+                  }
+                  return null;
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -392,6 +511,10 @@ class _MyAccountPageState extends State<MyAccountPage> {
           onChanged: _isLoading ? null : (String? newValue) {
             setState(() {
               _selectedCountry = newValue;
+              // Sync country code
+              if (newValue != null && _countryCodes.containsKey(newValue)) {
+                _selectedCountryCode = _countryCodes[newValue]!;
+              }
             });
           },
           validator: (value) => value == null ? 'Please select a country' : null,

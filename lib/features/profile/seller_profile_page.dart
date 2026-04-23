@@ -473,6 +473,24 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                   ),
                 ],
               ),
+              
+            if (seller.bio != null && seller.bio!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 48),
+                child: Text(
+                  seller.bio!,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.8),
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
 
