@@ -17,11 +17,56 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  double _strengthValue = 0;
+  String _strengthLabel = '';
+  Color _strengthColor = Colors.grey;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(_checkPasswordStrength);
+  }
+
   @override
   void dispose() {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _checkPasswordStrength() {
+    final password = _passwordController.text;
+    if (password.isEmpty) {
+      setState(() {
+        _strengthValue = 0;
+        _strengthLabel = '';
+        _strengthColor = Colors.grey;
+      });
+      return;
+    }
+
+    double score = 0;
+    if (password.length >= 8) score += 0.25;
+    if (RegExp(r'[A-Z]').hasMatch(password)) score += 0.25;
+    if (RegExp(r'[0-9]').hasMatch(password)) score += 0.25;
+    if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) score += 0.25;
+
+    setState(() {
+      _strengthValue = score;
+      if (score <= 0.25) {
+        _strengthLabel = 'Weak';
+        _strengthColor = Colors.red;
+      } else if (score <= 0.5) {
+        _strengthLabel = 'Fair';
+        _strengthColor = Colors.orange;
+      } else if (score <= 0.75) {
+        _strengthLabel = 'Good';
+        _strengthColor = Colors.blue;
+      } else {
+        _strengthLabel = 'Strong';
+        _strengthColor = Colors.green;
+      }
+    });
   }
 
   Future<void> _handleReset() async {
@@ -51,8 +96,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Reset Password')),
       body: Padding(
@@ -84,6 +127,36 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   return null;
                 },
               ),
+              
+              // Password Strength Indicator
+              if (_passwordController.text.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: LinearProgressIndicator(
+                          value: _strengthValue,
+                          backgroundColor: Colors.grey[200],
+                          color: _strengthColor,
+                          minHeight: 6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _strengthLabel,
+                      style: TextStyle(
+                        color: _strengthColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
               const SizedBox(height: 16),
               TextFormField(
                 controller: _confirmPasswordController,
