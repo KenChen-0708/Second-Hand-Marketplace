@@ -4,6 +4,8 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PresenceService with WidgetsBindingObserver {
+  static const Duration _heartbeatInterval = Duration(seconds: 45);
+
   PresenceService._();
 
   static final PresenceService instance = PresenceService._();
@@ -12,6 +14,7 @@ class PresenceService with WidgetsBindingObserver {
   String? _currentUserId;
   bool _isInitialized = false;
   bool _lastOnlineValue = false;
+  Timer? _heartbeatTimer;
 
   void initialize() {
     if (_isInitialized) {
@@ -30,11 +33,13 @@ class PresenceService with WidgetsBindingObserver {
     _currentUserId = userId;
 
     if (previousUserId != null && previousUserId.isNotEmpty) {
+      _stopHeartbeat();
       await _writePresence(previousUserId, isOnline: false);
     }
 
     if (userId != null && userId.isNotEmpty) {
       await _writePresence(userId, isOnline: true);
+      _startHeartbeat();
     }
   }
 
@@ -44,6 +49,7 @@ class PresenceService with WidgetsBindingObserver {
       return;
     }
     await _writePresence(userId, isOnline: true);
+    _startHeartbeat();
   }
 
   Future<void> markOffline() async {
@@ -51,6 +57,7 @@ class PresenceService with WidgetsBindingObserver {
     if (userId == null || userId.isEmpty) {
       return;
     }
+    _stopHeartbeat();
     await _writePresence(userId, isOnline: false);
   }
 
@@ -72,6 +79,22 @@ class PresenceService with WidgetsBindingObserver {
     }
   }
 
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
+      final userId = _currentUserId;
+      if (userId == null || userId.isEmpty) {
+        return;
+      }
+      unawaited(_writePresence(userId, isOnline: true));
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
@@ -89,6 +112,7 @@ class PresenceService with WidgetsBindingObserver {
   }
 
   Future<void> disposeService() async {
+    _stopHeartbeat();
     if (_isInitialized) {
       WidgetsBinding.instance.removeObserver(this);
       _isInitialized = false;

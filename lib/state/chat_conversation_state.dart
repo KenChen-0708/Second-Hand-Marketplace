@@ -27,6 +27,8 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
   
   StreamSubscription? _buyerSubscription;
   StreamSubscription? _sellerSubscription;
+  final Map<String, StreamSubscription<List<Map<String, dynamic>>>>
+      _presenceSubscriptions = {};
   
   List<ChatConversationBundle> _bundles = [];
 
@@ -57,6 +59,7 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       _hasActiveSubscriptions = false;
       _buyerSubscription?.cancel();
       _sellerSubscription?.cancel();
+      _cancelPresenceSubscriptions();
       _bundles = [];
       setItems(const []);
       return;
@@ -91,6 +94,7 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       final bundles = await _chatService.fetchUserConversations(userId: userId);
       _bundles = bundles;
       setItems(bundles.map((bundle) => bundle.conversation).toList());
+      _syncPresenceSubscriptions();
       
       // Start listening for real-time conversation updates
       _subscribeToConversations(userId);
@@ -135,6 +139,7 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       scheduleMicrotask(() {
         _bundles = updatedBundles;
         setItems(updatedBundles.map((b) => b.conversation).toList());
+        _syncPresenceSubscriptions();
         notifyListeners();
       });
     } catch (e) {
@@ -258,7 +263,67 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       }
       return b.conversation.id.compareTo(a.conversation.id);
     });
+    _syncPresenceSubscriptions();
     upsertItem(bundle.conversation);
+  }
+
+  void _syncPresenceSubscriptions() {
+    final desiredUserIds = _bundles
+        .map((bundle) => bundle.otherUser.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final staleUserIds = _presenceSubscriptions.keys
+        .where((id) => !desiredUserIds.contains(id))
+        .toList();
+    for (final userId in staleUserIds) {
+      _presenceSubscriptions.remove(userId)?.cancel();
+    }
+
+    for (final userId in desiredUserIds) {
+      if (_presenceSubscriptions.containsKey(userId)) {
+        continue;
+      }
+
+      _presenceSubscriptions[userId] = Supabase.instance.client
+          .from('users')
+          .stream(primaryKey: ['id'])
+          .eq('id', userId)
+          .listen((rows) {
+        if (rows.isEmpty) {
+          return;
+        }
+        final updatedUser = UserModel.fromMap(
+          Map<String, dynamic>.from(rows.first),
+        );
+        _applyPresenceUpdate(updatedUser);
+      });
+    }
+  }
+
+  void _applyPresenceUpdate(UserModel updatedUser) {
+    var didChange = false;
+    final updatedBundles = _bundles.map((bundle) {
+      if (bundle.otherUser.id != updatedUser.id) {
+        return bundle;
+      }
+      didChange = true;
+      return bundle.copyWith(otherUser: updatedUser);
+    }).toList();
+
+    if (!didChange) {
+      return;
+    }
+
+    _bundles = updatedBundles;
+    notifyListeners();
+  }
+
+  void _cancelPresenceSubscriptions() {
+    for (final subscription in _presenceSubscriptions.values) {
+      subscription.cancel();
+    }
+    _presenceSubscriptions.clear();
   }
 
   @override
@@ -266,6 +331,7 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
     _connectivitySubscription.cancel();
     _buyerSubscription?.cancel();
     _sellerSubscription?.cancel();
+    _cancelPresenceSubscriptions();
     super.dispose();
   }
 }
