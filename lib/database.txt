@@ -95,12 +95,14 @@ CREATE TABLE users (
   role VARCHAR(20) NOT NULL DEFAULT 'user'
     CHECK (role IN ('user','seller','admin')),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  is_online BOOLEAN NOT NULL DEFAULT FALSE,
   phone_number VARCHAR(20),
   address TEXT,
   city VARCHAR(100),
   postal_code VARCHAR(20),
   country VARCHAR(100),
   bio TEXT,
+  last_seen_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

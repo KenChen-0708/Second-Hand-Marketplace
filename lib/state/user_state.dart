@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/auth/biometric_service.dart';
+import '../../services/auth/presence_service.dart';
 import '../../services/notification/push_notification_service.dart';
 
 class UserState extends ChangeNotifier {
@@ -37,6 +38,7 @@ class UserState extends ChangeNotifier {
     }
 
     await PushNotificationService.instance.registerSignedInUser(_currentUser?.id);
+    await PresenceService.instance.setCurrentUser(_currentUser?.id);
     
     // Load local preference immediately on boot
     await syncPushPreference();
@@ -68,6 +70,7 @@ class UserState extends ChangeNotifier {
   Future<void> login(String email, String password) async {
     _currentUser = await _authService.loginUser(email, password);
     await PushNotificationService.instance.registerSignedInUser(_currentUser?.id);
+    await PresenceService.instance.setCurrentUser(_currentUser?.id);
     await syncPushPreference();
     notifyListeners();
   }
@@ -84,6 +87,7 @@ class UserState extends ChangeNotifier {
       name: name,
     );
     await PushNotificationService.instance.registerSignedInUser(_currentUser?.id);
+    await PresenceService.instance.setCurrentUser(_currentUser?.id);
     await syncPushPreference();
     notifyListeners();
   }
@@ -142,7 +146,9 @@ class UserState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await PresenceService.instance.markOffline();
     await _authService.logout();
+    await PresenceService.instance.setCurrentUser(null);
     await PushNotificationService.instance.unregisterSignedInUser();
     _currentUser = null;
     notifyListeners();
