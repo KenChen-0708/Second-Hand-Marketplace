@@ -11,6 +11,7 @@ import 'state/state.dart';
 import 'models/models.dart';
 import 'services/local/local_database_service.dart';
 import 'services/payment/stripe_service.dart';
+import 'services/auth/presence_service.dart';
 import 'services/notification/local_notification_manager.dart';
 import 'services/notification/push_notification_service.dart';
 
@@ -85,6 +86,7 @@ Future<void> main() async {
 
   await LocalNotificationManager.instance.initialize();
   await PushNotificationService.instance.initialize();
+  PresenceService.instance.initialize();
 
   runApp(const MyApp());
 }

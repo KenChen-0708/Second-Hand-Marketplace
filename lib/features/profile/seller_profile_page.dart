@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/seller/seller_service.dart';
@@ -23,6 +26,7 @@ class SellerProfilePage extends StatefulWidget {
 class _SellerProfilePageState extends State<SellerProfilePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  StreamSubscription<List<Map<String, dynamic>>>? _presenceSubscription;
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -73,6 +77,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           _sellerStats = results[4] as SellerStats;
           _isLoading = false;
         });
+        _subscribeToSellerPresence();
       }
     } catch (e) {
       if (mounted) {
@@ -260,9 +265,26 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
   @override
   void dispose() {
+    _presenceSubscription?.cancel();
     _tabController.removeListener(_handleTabSelection);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _subscribeToSellerPresence() {
+    _presenceSubscription?.cancel();
+    _presenceSubscription = Supabase.instance.client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.sellerId)
+        .listen((rows) {
+      if (!mounted || rows.isEmpty || _sellerUser == null) {
+        return;
+      }
+      setState(() {
+        _sellerUser = UserModel.fromMap(Map<String, dynamic>.from(rows.first));
+      });
+    });
   }
 
   @override
@@ -351,7 +373,6 @@ class _SellerProfilePageState extends State<SellerProfilePage>
   ) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final String avatarUrl = ImageHelper.resolveProfileImageUrl(seller.avatarUrl, name: seller.name);
 
     // Use live calculation if profile data is missing or zero
     final double rating = stats?.averageRating ?? (profile != null && profile.averageRating > 0 
@@ -430,26 +451,63 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
             Hero(
               tag: 'seller_avatar_${seller.id}',
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: cs.primary.withOpacity(0.2),
-                    width: 2,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: seller.isOnline
+                          ? const Color(0xFF10B981).withValues(alpha: 0.10)
+                          : cs.surfaceContainerHighest,
+                      border: Border.all(
+                        color: _presenceColor(seller.isOnline, cs),
+                        width: 3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _presenceColor(
+                            seller.isOnline,
+                            cs,
+                          ).withValues(alpha: 0.20),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ImageHelper.avatar(
+                      seller.avatarUrl,
+                      name: seller.name,
+                      radius: 50,
+                    ),
                   ),
-                ),
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundImage: NetworkImage(avatarUrl),
-                ),
+                  Positioned(
+                    bottom: -12,
+                    child: _buildPresenceChip(
+                      context,
+                      isOnline: seller.isOnline,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
             Text(
               seller.name,
               style: textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _buildPresenceSubtitle(seller),
+              style: textTheme.bodyMedium?.copyWith(
+                color: seller.isOnline
+                    ? const Color(0xFF047857)
+                    : cs.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
@@ -611,6 +669,85 @@ class _SellerProfilePageState extends State<SellerProfilePage>
         }, childCount: reviews.length),
       ),
     );
+  }
+
+  Widget _buildPresenceChip(
+    BuildContext context, {
+    required bool isOnline,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final Color color = _presenceColor(isOnline, cs);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: color.withValues(alpha: 0.45),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            isOnline ? 'Online' : 'Offline',
+            style: TextStyle(
+              color: isOnline ? const Color(0xFF047857) : cs.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _presenceColor(bool isOnline, ColorScheme colorScheme) {
+    return isOnline ? const Color(0xFF10B981) : colorScheme.outline;
+  }
+
+  String _buildPresenceSubtitle(UserModel seller) {
+    if (seller.isOnline) {
+      return 'Active now';
+    }
+
+    final lastSeen = seller.lastSeenAt;
+    if (lastSeen == null) {
+      return 'Last seen recently';
+    }
+
+    final difference = DateTime.now().difference(lastSeen.toLocal());
+    if (difference.inMinutes < 1) {
+      return 'Last seen just now';
+    }
+    if (difference.inMinutes < 60) {
+      return 'Last seen ${difference.inMinutes}m ago';
+    }
+    if (difference.inHours < 24) {
+      return 'Last seen ${difference.inHours}h ago';
+    }
+    if (difference.inDays < 7) {
+      return 'Last seen ${difference.inDays}d ago';
+    }
+
+    return 'Last seen ${lastSeen.day}/${lastSeen.month}/${lastSeen.year}';
   }
 }
 
