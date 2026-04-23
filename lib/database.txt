@@ -330,7 +330,7 @@ CREATE TABLE notifications (
   title VARCHAR(255) NOT NULL,
   message TEXT NOT NULL,
   notification_type VARCHAR(30)
-    CHECK (notification_type IS NULL OR notification_type IN ('order','message','system','item_sold','item_bought')),
+    CHECK (notification_type IS NULL OR notification_type IN ('order','message','system','item_sold','item_bought','follow')),
   related_order_id VARCHAR(20) REFERENCES orders(id) ON DELETE SET NULL,
   related_product_id VARCHAR(20) REFERENCES products(id) ON DELETE SET NULL,
   related_conversation_id VARCHAR(20) REFERENCES chat_conversations(id) ON DELETE SET NULL,
@@ -475,6 +475,7 @@ ALTER TABLE seller_follows ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public can view seller follows" ON seller_follows;
 DROP POLICY IF EXISTS "Users can follow sellers as themselves" ON seller_follows;
 DROP POLICY IF EXISTS "Users can unfollow sellers as themselves" ON seller_follows;
+DROP POLICY IF EXISTS "Users can update seller follows as themselves" ON seller_follows;
 
 CREATE POLICY "Public can view seller follows"
 ON seller_follows
@@ -497,6 +498,26 @@ CREATE POLICY "Users can unfollow sellers as themselves"
 ON seller_follows
 FOR DELETE
 USING (
+  EXISTS (
+    SELECT 1
+    FROM users
+    WHERE users.id = seller_follows.user_id
+      AND users.email = auth.email()
+  )
+);
+
+CREATE POLICY "Users can update seller follows as themselves"
+ON seller_follows
+FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1
+    FROM users
+    WHERE users.id = seller_follows.user_id
+      AND users.email = auth.email()
+  )
+)
+WITH CHECK (
   EXISTS (
     SELECT 1
     FROM users

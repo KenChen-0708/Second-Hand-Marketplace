@@ -628,7 +628,10 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                                 try {
                                   final message = await context
                                       .read<SellerFollowState>()
-                                      .toggleFollow(seller.id);
+                                      .toggleFollow(
+                                        seller.id,
+                                        followerName: userState.currentUser?.name,
+                                      );
                                   if (context.mounted) {
                                     SnackbarHelper.showTopMessage(context, message);
                                   }
