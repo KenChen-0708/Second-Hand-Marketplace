@@ -65,9 +65,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
       }
     } else if (note.relatedProductId != null && note.relatedProductId!.isNotEmpty) {
       context.push('/product/${note.relatedProductId}');
+    } else if (_isFollowNotification(note)) {
+      context.push('/profile/followers');
     } else if (note.notificationType == 'message') {
       context.push('/messages');
     }
+  }
+
+  bool _isFollowNotification(AppNotificationModel note) {
+    if (note.notificationType == 'follow') {
+      return true;
+    }
+
+    return note.notificationType == 'system' &&
+        (note.title == 'New follower' || note.title == 'New followers');
   }
 
   @override
@@ -274,6 +285,21 @@ class _NotificationCard extends StatelessWidget {
     IconData iconData;
     Color iconColor = Theme.of(context).colorScheme.primary;
 
+    if (notification.notificationType == 'system' &&
+        (notification.title == 'New follower' ||
+            notification.title == 'New followers')) {
+      iconData = Icons.people_alt_outlined;
+      iconColor = Colors.pink;
+      return Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(iconData, color: iconColor, size: 24),
+      );
+    }
+
     switch (notification.notificationType) {
       case 'order':
       case 'item_bought':
@@ -289,6 +315,10 @@ class _NotificationCard extends StatelessWidget {
         break;
       case 'message':
         iconData = Icons.chat_bubble_outline_rounded;
+        break;
+      case 'follow':
+        iconData = Icons.people_alt_outlined;
+        iconColor = Colors.pink;
         break;
       default:
         iconData = Icons.notifications_active_outlined;
