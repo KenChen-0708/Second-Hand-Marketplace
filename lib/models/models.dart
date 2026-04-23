@@ -14,6 +14,7 @@ export 'order_item_model.dart';
 export 'payment_model.dart';
 export 'chat_conversation_model.dart';
 export 'chat_message_model.dart';
+export 'support_chat_message_model.dart';
 export 'app_notification_model.dart';
 export 'review_model.dart';
 export 'seller_profile_model.dart';
