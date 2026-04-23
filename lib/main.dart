@@ -500,10 +500,11 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => AdminLogState()),
         ChangeNotifierProvider(create: (_) => AdminUserState()),
       ],
-      child: Consumer2<UserState, AppNotificationState>(
-        builder: (context, userState, noteState, child) {
+      child: Consumer3<UserState, AppNotificationState, ChatConversationState>(
+        builder: (context, userState, noteState, chatState, child) {
           // ENSURE NOTIFICATION STATE HAS THE LATEST USER DATA
           noteState.updateCurrentUser(userState.currentUser);
+          chatState.updateCurrentUser(userState.currentUser);
 
           return MaterialApp.router(
             scaffoldMessengerKey: LocalNotificationManager.instance.messengerKey,

@@ -73,7 +73,7 @@ class OrderService {
         userId: buyerId,
         title: 'Order Placed!',
         message: 'Your order $orderNumber has been placed successfully.',
-        type: 'order',
+        type: 'item_bought',
         relatedOrderId: order.id,
       );
 
@@ -111,16 +111,39 @@ class OrderService {
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', orderId)
-          .select('*, buyer_id')
+          .select(
+            '*, '
+            'buyer:users!orders_buyer_id_fkey(*), '
+            'order_items(*, products(*, seller:users(*)), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
           .single();
 
+      final order = OrderModel.fromMap(
+        _resolveOrderImageFields(Map<String, dynamic>.from(response)),
+      );
       await _notificationService.createNotification(
-        userId: response['buyer_id'],
-        title: 'Order Updated',
-        message: 'Your order status has been updated to: ${status.toUpperCase()}.',
+        userId: order.buyerId,
+        title: _buyerStatusTitle(status),
+        message: _buyerStatusMessage(status, order.orderNumber),
         type: 'order',
         relatedOrderId: orderId,
+        relatedProductId: order.primaryProductId,
       );
+
+      final sellerIds = order.orderItems
+          .map((item) => item.product?.sellerId)
+          .whereType<String>()
+          .toSet();
+      for (final sellerId in sellerIds) {
+        await _notificationService.createNotification(
+          userId: sellerId,
+          title: _sellerStatusTitle(status),
+          message: _sellerStatusMessage(status, order.orderNumber),
+          type: status.toLowerCase() == 'completed' ? 'item_sold' : 'order',
+          relatedOrderId: orderId,
+          relatedProductId: order.primaryProductId,
+        );
+      }
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
@@ -140,16 +163,42 @@ class OrderService {
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', orderId)
-          .select('*, buyer_id')
+          .select(
+            '*, '
+            'buyer:users!orders_buyer_id_fkey(*), '
+            'order_items(*, products(*, seller:users(*)), variant:product_variants(*, attributes:product_variant_attributes(*)))',
+          )
           .single();
 
+      final order = OrderModel.fromMap(
+        _resolveOrderImageFields(Map<String, dynamic>.from(response)),
+      );
       await _notificationService.createNotification(
-        userId: response['buyer_id'],
+        userId: order.buyerId,
         title: 'Handover Scheduled',
         message: 'Your handover date and time has been updated.',
         type: 'order',
         relatedOrderId: orderId,
+        relatedProductId: order.primaryProductId,
       );
+
+      final sellerIds = order.orderItems
+          .map((item) => item.product?.sellerId)
+          .whereType<String>()
+          .toSet();
+      for (final sellerId in sellerIds) {
+        if (sellerId == order.buyerId) {
+          continue;
+        }
+        await _notificationService.createNotification(
+          userId: sellerId,
+          title: 'Handover Scheduled',
+          message: 'A handover date was set for order ${order.orderNumber}.',
+          type: 'order',
+          relatedOrderId: orderId,
+          relatedProductId: order.primaryProductId,
+        );
+      }
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
@@ -309,6 +358,66 @@ class OrderService {
   String _generateOrderNumber() {
     final now = DateTime.now().millisecondsSinceEpoch;
     return 'ORD-$now';
+  }
+
+  String _buyerStatusTitle(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending_handover':
+        return 'Order Confirmed';
+      case 'completed':
+        return 'Order Completed';
+      case 'cancelled':
+        return 'Order Cancelled';
+      case 'disputed':
+        return 'Order Under Review';
+      default:
+        return 'Order Updated';
+    }
+  }
+
+  String _buyerStatusMessage(String status, String orderNumber) {
+    switch (status.toLowerCase()) {
+      case 'pending_handover':
+        return 'Your order $orderNumber was confirmed. Arrange the handover details next.';
+      case 'completed':
+        return 'Your order $orderNumber has been completed successfully.';
+      case 'cancelled':
+        return 'Your order $orderNumber was cancelled.';
+      case 'disputed':
+        return 'Your order $orderNumber is now under dispute review.';
+      default:
+        return 'Your order $orderNumber status has been updated to ${status.toUpperCase()}.';
+    }
+  }
+
+  String _sellerStatusTitle(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending_handover':
+        return 'Prepare for Handover';
+      case 'completed':
+        return 'Sale Completed';
+      case 'cancelled':
+        return 'Order Cancelled';
+      case 'disputed':
+        return 'Dispute Opened';
+      default:
+        return 'Order Updated';
+    }
+  }
+
+  String _sellerStatusMessage(String status, String orderNumber) {
+    switch (status.toLowerCase()) {
+      case 'pending_handover':
+        return 'Order $orderNumber is confirmed. Coordinate the handover with the buyer.';
+      case 'completed':
+        return 'Order $orderNumber is completed. Payment can now be considered finalized.';
+      case 'cancelled':
+        return 'Order $orderNumber was cancelled.';
+      case 'disputed':
+        return 'Order $orderNumber has been reported and is under dispute review.';
+      default:
+        return 'Order $orderNumber status changed to ${status.toUpperCase()}.';
+    }
   }
 
   Map<String, dynamic> _resolveOrderImageFields(Map<String, dynamic> order) {

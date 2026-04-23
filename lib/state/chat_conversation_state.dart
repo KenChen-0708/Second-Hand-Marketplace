@@ -44,6 +44,36 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
   }
 
   String? _lastUserId;
+  bool _hasActiveSubscriptions = false;
+
+  void updateCurrentUser(UserModel? user) {
+    final userId = user?.id;
+    if (_lastUserId == userId && (userId == null || _hasActiveSubscriptions)) {
+      return;
+    }
+
+    if (userId == null || userId.isEmpty) {
+      _lastUserId = null;
+      _hasActiveSubscriptions = false;
+      _buyerSubscription?.cancel();
+      _sellerSubscription?.cancel();
+      _bundles = [];
+      setItems(const []);
+      return;
+    }
+
+    _lastUserId = userId;
+    _subscribeToConversations(userId);
+    _hasActiveSubscriptions = true;
+
+    if (_bundles.isEmpty) {
+      scheduleMicrotask(() {
+        if (_lastUserId == userId) {
+          fetchUserConversations();
+        }
+      });
+    }
+  }
 
   Future<List<ChatConversationBundle>> fetchUserConversations() async {
     final userId = await _authService.getCurrentUserId();
@@ -64,6 +94,7 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
       
       // Start listening for real-time conversation updates
       _subscribeToConversations(userId);
+      _hasActiveSubscriptions = true;
       
       return bundles;
     } catch (e) {
@@ -92,6 +123,8 @@ class ChatConversationState extends EntityState<ChatConversationModel> {
         .stream(primaryKey: ['id'])
         .eq('seller_id', userId)
         .listen((_) => _refreshInbox(userId));
+
+    _hasActiveSubscriptions = true;
   }
 
   Future<void> _refreshInbox(String userId) async {

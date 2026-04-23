@@ -11,6 +11,7 @@ class AppNotificationModel implements AppModel {
   final String? notificationType;
   final String? relatedOrderId;
   final String? relatedProductId;
+  final String? relatedConversationId;
   final bool isRead;
   final DateTime? createdAt;
 
@@ -22,6 +23,7 @@ class AppNotificationModel implements AppModel {
     this.notificationType,
     this.relatedOrderId,
     this.relatedProductId,
+    this.relatedConversationId,
     this.isRead = false,
     this.createdAt,
   });
@@ -34,6 +36,7 @@ class AppNotificationModel implements AppModel {
     String? notificationType,
     String? relatedOrderId,
     String? relatedProductId,
+    String? relatedConversationId,
     bool? isRead,
     DateTime? createdAt,
   }) {
@@ -45,6 +48,8 @@ class AppNotificationModel implements AppModel {
       notificationType: notificationType ?? this.notificationType,
       relatedOrderId: relatedOrderId ?? this.relatedOrderId,
       relatedProductId: relatedProductId ?? this.relatedProductId,
+      relatedConversationId:
+          relatedConversationId ?? this.relatedConversationId,
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -59,6 +64,7 @@ class AppNotificationModel implements AppModel {
       notificationType: JsonUtils.asString(map['notification_type']),
       relatedOrderId: JsonUtils.asString(map['related_order_id']),
       relatedProductId: JsonUtils.asString(map['related_product_id']),
+      relatedConversationId: JsonUtils.asString(map['related_conversation_id']),
       isRead: JsonUtils.asBool(map['is_read']) ?? false,
       createdAt: JsonUtils.asDateTime(map['created_at']),
     );
@@ -73,6 +79,7 @@ class AppNotificationModel implements AppModel {
       'notification_type': notificationType,
       'related_order_id': relatedOrderId,
       'related_product_id': relatedProductId,
+      'related_conversation_id': relatedConversationId,
       'is_read': isRead,
       'created_at': createdAt?.toIso8601String(),
     };

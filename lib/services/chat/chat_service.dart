@@ -125,7 +125,7 @@ class ChatService {
           .from('chat_conversations')
           .select(
         '*, '
-            'product:products(*, variations:product_variations(*)), '
+            'product:products(*, variations:product_variants(*, attributes:product_variant_attributes(*))), '
             'buyer:users!chat_conversations_buyer_id_fkey(*), '
             'seller:users!chat_conversations_seller_id_fkey(*)',
       )
@@ -283,11 +283,24 @@ class ChatService {
       // Get conversation to find recipient
       final conv = await _supabase
           .from('chat_conversations')
-          .select('buyer_id, seller_id')
+          .select(
+            'buyer_id, '
+            'seller_id, '
+            'product_id, '
+            'product:products(title), '
+            'buyer:users!chat_conversations_buyer_id_fkey(id, name), '
+            'seller:users!chat_conversations_seller_id_fkey(id, name)',
+          )
           .eq('id', conversationId)
           .single();
 
       final recipientId = conv['buyer_id'] == senderId ? conv['seller_id'] : conv['buyer_id'];
+      final buyer = Map<String, dynamic>.from((conv['buyer'] as Map?) ?? const {});
+      final seller = Map<String, dynamic>.from((conv['seller'] as Map?) ?? const {});
+      final senderName = conv['buyer_id'] == senderId
+          ? (buyer['name']?.toString() ?? 'Buyer')
+          : (seller['name']?.toString() ?? 'Seller');
+      final preview = ChatService.previewText(message);
 
       await _supabase
           .from('chat_conversations')
@@ -297,10 +310,11 @@ class ChatService {
       // TRIGGER NOTIFICATION FOR RECIPIENT
       await _notificationService.createNotification(
         userId: recipientId,
-        title: 'New Message',
-        message: isImage ? 'Sent a photo' : messageText,
+        title: 'New message from $senderName',
+        message: preview,
         type: 'message',
-        relatedOrderId: conversationId, // Using relatedOrderId to store conversationId for messages
+        relatedProductId: conv['product_id']?.toString(),
+        relatedConversationId: conversationId,
       );
 
       await _localDatabase.upsertChatMessage(message, syncStatus: 'synced');
