@@ -300,6 +300,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     const Divider(height: 1),
                     _buildMenuItem(
                       context,
+                      icon: Icons.support_agent_rounded,
+                      title: 'AI Support',
+                      onTap: () => context.push('/support'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
                       icon: Icons.settings_outlined,
                       title: 'Settings',
                       onTap: () => context.push('/profile/settings'),

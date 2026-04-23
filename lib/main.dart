@@ -35,6 +35,7 @@ import 'features/profile/followers_page.dart';
 import 'features/profile/following_sellers_page.dart';
 import 'features/chat/chat_inbox_page.dart';
 import 'features/chat/chat_room_page.dart';
+import 'features/support/ai_support_chat_page.dart';
 import 'features/profile/seller_review_page.dart';
 import 'features/profile/seller_profile_page.dart';
 import 'features/sell/my_listings_page.dart';
@@ -231,6 +232,27 @@ final _router = GoRouter(
           },
         );
       },
+    ),
+    GoRoute(
+      path: '/support',
+      parentNavigatorKey: _rootNavigatorKey,
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: const AiSupportChatPage(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          final tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: Curves.easeInOutCubic));
+
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
     ),
     GoRoute(
       path: '/seller/:id',
@@ -506,6 +528,7 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => PaymentState()),
         ChangeNotifierProvider(create: (_) => ChatConversationState()),
         ChangeNotifierProvider(create: (_) => ChatMessageState()),
+        ChangeNotifierProvider(create: (_) => AiSupportState()),
         ChangeNotifierProvider(create: (_) => AppNotificationState()),
         ChangeNotifierProvider(create: (_) => ReviewState()),
         ChangeNotifierProvider(create: (_) => SellerProfileState()),

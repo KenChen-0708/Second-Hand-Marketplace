@@ -169,6 +169,14 @@ class _SettingsPageState extends State<SettingsPage> {
             contentPadding: EdgeInsets.zero,
             onTap: () => context.push('/profile/edit'),
           ),
+          ListTile(
+            title: const Text('AI Support'),
+            subtitle: const Text('Chat with the help assistant'),
+            leading: const Icon(Icons.support_agent_rounded),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            contentPadding: EdgeInsets.zero,
+            onTap: () => context.push('/support'),
+          ),
           const Divider(),
           const SizedBox(height: 24),
 
