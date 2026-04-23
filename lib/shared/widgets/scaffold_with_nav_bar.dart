@@ -237,6 +237,6 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> {
 
   static bool _orderNeedsAction(OrderModel order) {
     final status = order.status.toLowerCase();
-    return status == 'paid' || status == 'pending_handover';
+    return status == 'pending' || status == 'pending_handover';
   }
 }
