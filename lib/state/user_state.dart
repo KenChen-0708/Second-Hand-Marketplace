@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/auth/biometric_service.dart';
 import '../../services/notification/push_notification_service.dart';
 
 class UserState extends ChangeNotifier {
@@ -126,6 +127,7 @@ class UserState extends ChangeNotifier {
   Future<void> changePassword(String newPassword) async {
     try {
       await _authService.changePassword(newPassword);
+      await BiometricService().clearCredentials();
     } catch (e) {
       rethrow;
     }

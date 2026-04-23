@@ -17,6 +17,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _biometricEnabled = false;
   bool _biometricHardwareAvailable = false;
   bool _pushNotifs = false;
+  String _biometricLabel = 'Biometrics';
   
   final _biometricService = BiometricService();
   final _pushNotificationService = PushNotificationService.instance;
@@ -42,10 +43,12 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final available = await _biometricService.isBiometricAvailable();
       final enabled = await _biometricService.isBiometricEnabled();
+      final label = await _biometricService.getBiometricLabel();
       if (mounted) {
         setState(() {
           _biometricHardwareAvailable = available;
           _biometricEnabled = enabled;
+          _biometricLabel = label;
         });
       }
     } catch (e) {
@@ -91,13 +94,21 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _toggleBiometrics(bool value) async {
     try {
       if (value) {
-        final authenticated = await _biometricService.authenticate();
+        final authenticated =
+            await _biometricService.authenticateWithDeviceSecurity();
         if (authenticated) {
-          await _biometricService.saveCredentials("", ""); 
+          await _biometricService.enableBiometrics();
+          final hasCredentials = await _biometricService.hasStoredCredentials();
           setState(() => _biometricEnabled = true);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Biometrics enabled. Please login manually once to save credentials.')),
+              SnackBar(
+                content: Text(
+                  hasCredentials
+                      ? '$_biometricLabel login enabled.'
+                      : '$_biometricLabel enabled. Please log in once to save your credentials.',
+                ),
+              ),
             );
           }
         }
@@ -320,7 +331,7 @@ class _SettingsPageState extends State<SettingsPage> {
           if (_biometricHardwareAvailable)
             SwitchListTile(
               title: const Text('Biometric Login'),
-              subtitle: const Text('Use fingerprint or face ID to log in'),
+              subtitle: Text('Use $_biometricLabel to log in'),
               secondary: const Icon(Icons.fingerprint),
               value: _biometricEnabled,
               onChanged: _toggleBiometrics,

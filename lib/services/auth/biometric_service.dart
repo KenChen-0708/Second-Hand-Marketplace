@@ -29,13 +29,44 @@ class BiometricService {
     }
   }
 
+  Future<List<BiometricType>> getAvailableBiometrics() async {
+    try {
+      if (!await isBiometricAvailable()) {
+        return const [];
+      }
+      return await _auth.getAvailableBiometrics();
+    } catch (e) {
+      debugPrint("getAvailableBiometrics error: $e");
+      return const [];
+    }
+  }
+
+  Future<String> getBiometricLabel() async {
+    final biometrics = await getAvailableBiometrics();
+    if (biometrics.contains(BiometricType.face)) {
+      return 'Face ID';
+    }
+    if (biometrics.contains(BiometricType.fingerprint) ||
+        biometrics.contains(BiometricType.strong) ||
+        biometrics.contains(BiometricType.weak)) {
+      return 'Fingerprint';
+    }
+    return 'Biometrics';
+  }
+
   Future<bool> authenticate() async {
+    return authenticateWithDeviceSecurity();
+  }
+
+  Future<bool> authenticateWithDeviceSecurity({
+    bool biometricOnly = false,
+  }) async {
     try {
       return await _auth.authenticate(
         localizedReason: 'Please authenticate to log in',
-        options: const AuthenticationOptions(
+        options: AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: true,
+          biometricOnly: biometricOnly,
           useErrorDialogs: true,
         ),
       );
@@ -45,11 +76,27 @@ class BiometricService {
     }
   }
 
+  Future<void> enableBiometrics() async {
+    try {
+      await _storage.write(key: _keyEnabled, value: 'true');
+    } catch (e) {
+      debugPrint("enableBiometrics error: $e");
+    }
+  }
+
+  Future<void> disableBiometrics() async {
+    try {
+      await _storage.write(key: _keyEnabled, value: 'false');
+    } catch (e) {
+      debugPrint("disableBiometrics error: $e");
+    }
+  }
+
   Future<void> saveCredentials(String email, String password) async {
     try {
       await _storage.write(key: _keyEmail, value: email);
       await _storage.write(key: _keyPassword, value: password);
-      await _storage.write(key: _keyEnabled, value: 'true');
+      await enableBiometrics();
     } catch (e) {
       debugPrint("saveCredentials error: $e");
     }
@@ -68,11 +115,16 @@ class BiometricService {
     return null;
   }
 
+  Future<bool> hasStoredCredentials() async {
+    final credentials = await getCredentials();
+    return credentials != null;
+  }
+
   Future<void> clearCredentials() async {
     try {
       await _storage.delete(key: _keyEmail);
       await _storage.delete(key: _keyPassword);
-      await _storage.write(key: _keyEnabled, value: 'false');
+      await disableBiometrics();
     } catch (e) {
       debugPrint("clearCredentials error: $e");
     }
@@ -85,6 +137,15 @@ class BiometricService {
     } catch (e) {
       debugPrint("isBiometricEnabled error: $e");
       return false;
+    }
+  }
+
+  Future<void> clearStoredCredentialsOnly() async {
+    try {
+      await _storage.delete(key: _keyEmail);
+      await _storage.delete(key: _keyPassword);
+    } catch (e) {
+      debugPrint("clearStoredCredentialsOnly error: $e");
     }
   }
 }
