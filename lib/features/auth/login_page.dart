@@ -22,6 +22,9 @@ class _LoginPageState extends State<LoginPage> {
   String? _errorMessage;
   bool _obscurePassword = true;
   bool _isBiometricAvailable = false;
+  String _biometricLabel = 'Biometrics';
+  bool _hasAttemptedAutoBiometric = false;
+  bool _showBiometricOptInPrompt = false;
 
   @override
   void initState() {
@@ -35,18 +38,19 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final available = await _biometricService.isBiometricAvailable();
       final enabled = await _biometricService.isBiometricEnabled();
+      final hasCredentials = await _biometricService.hasStoredCredentials();
+      final biometricLabel = await _biometricService.getBiometricLabel();
       
       if (mounted) {
         setState(() {
           _isBiometricAvailable = available && enabled;
+          _biometricLabel = biometricLabel;
         });
       }
       
-      if (available && enabled) {
-        final credentials = await _biometricService.getCredentials();
-        if (credentials != null) {
-          _handleBiometricLogin();
-        }
+      if (available && enabled && hasCredentials && !_hasAttemptedAutoBiometric) {
+        _hasAttemptedAutoBiometric = true;
+        _handleBiometricLogin(autoTriggered: true);
       }
     } catch (e) {
       debugPrint("Biometric check failed: $e");
@@ -90,12 +94,19 @@ class _LoginPageState extends State<LoginPage> {
       try {
         if (await _biometricService.isBiometricEnabled()) {
           await _biometricService.saveCredentials(email, password);
+        } else if (await _biometricService.isBiometricAvailable()) {
+          _showBiometricOptInPrompt = true;
         }
       } catch (e) {
         debugPrint("Failed to save biometric credentials: $e");
       }
 
       if (!mounted) return;
+      if (_showBiometricOptInPrompt) {
+        _showBiometricOptInPrompt = false;
+        await _promptToEnableBiometrics(email, password);
+        if (!mounted) return;
+      }
       context.go('/home');
 
     } catch (e) {
@@ -112,21 +123,25 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _handleBiometricLogin() async {
+  Future<void> _handleBiometricLogin({bool autoTriggered = false}) async {
     if (_isLoading) return;
 
     try {
       final credentials = await _biometricService.getCredentials();
       if (credentials == null) {
-        if (mounted) {
+        if (mounted && !autoTriggered) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No biometric credentials saved. Please login manually once.')),
+            SnackBar(
+              content: Text(
+                'Biometric login is enabled, but no saved credentials were found. Please log in manually once.',
+              ),
+            ),
           );
         }
         return;
       }
 
-      final authenticated = await _biometricService.authenticate();
+      final authenticated = await _biometricService.authenticateWithDeviceSecurity();
       if (authenticated) {
         setState(() {
           _isLoading = true;
@@ -144,6 +159,8 @@ class _LoginPageState extends State<LoginPage> {
           throw Exception('Admins must use the Admin Login portal.');
         }
 
+        _emailController.text = credentials['email'] ?? '';
+
         if (!mounted) return;
         context.go('/home');
       }
@@ -158,6 +175,45 @@ class _LoginPageState extends State<LoginPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _promptToEnableBiometrics(String email, String password) async {
+    final shouldEnable = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Enable $_biometricLabel?'),
+        content: Text(
+          'Use $_biometricLabel or your device passcode to log in faster next time on this device?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not Now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldEnable != true || !mounted) {
+      return;
+    }
+
+    final authenticated = await _biometricService.authenticateWithDeviceSecurity();
+    if (!authenticated || !mounted) {
+      return;
+    }
+
+    await _biometricService.saveCredentials(email, password);
+    await _checkBiometrics();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$_biometricLabel login enabled for this device.')),
+      );
     }
   }
 
@@ -480,10 +536,10 @@ class _LoginPageState extends State<LoginPage> {
 
                           if (_isBiometricAvailable)
                             OutlinedButton.icon(
-                              onPressed: _isLoading ? null : _handleBiometricLogin,
+                              onPressed: _isLoading ? null : () => _handleBiometricLogin(),
                               icon: const Icon(Icons.fingerprint, size: 24),
-                              label: const Text(
-                                'Login with Biometrics',
+                              label: Text(
+                                'Login with $_biometricLabel',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
