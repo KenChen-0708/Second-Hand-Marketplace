@@ -1,15 +1,36 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
+import '../notification/notification_service.dart';
 
 class ReviewService {
   ReviewService({SupabaseClient? client})
-      : _supabase = client ?? Supabase.instance.client;
+      : _supabase = client ?? Supabase.instance.client,
+        _notificationService = NotificationService(
+          client: client ?? Supabase.instance.client,
+        );
 
   final SupabaseClient _supabase;
+  final NotificationService _notificationService;
 
   Future<void> submitReview(ReviewModel review) async {
     try {
       await _supabase.from('reviews').insert(review.toMap());
+
+      final productResponse = await _supabase
+          .from('products')
+          .select('title')
+          .eq('id', review.productId)
+          .maybeSingle();
+
+      await _notificationService.createNotification(
+        userId: review.revieweeId,
+        title: 'New Seller Review',
+        message:
+            'You received a new ${review.rating}-star review${productResponse == null ? '.' : ' for ${productResponse['title']}.'}',
+        type: 'system',
+        relatedOrderId: review.orderId,
+        relatedProductId: review.productId,
+      );
       
       // The seller's average rating is typically updated via a Database Trigger in Supabase
       // to ensure consistency.

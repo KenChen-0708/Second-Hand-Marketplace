@@ -34,6 +34,8 @@ class UserState extends ChangeNotifier {
         }
       }
     }
+
+    await PushNotificationService.instance.registerSignedInUser(_currentUser?.id);
     
     // Load local preference immediately on boot
     await syncPushPreference();
@@ -64,6 +66,7 @@ class UserState extends ChangeNotifier {
   /// Standard Login
   Future<void> login(String email, String password) async {
     _currentUser = await _authService.loginUser(email, password);
+    await PushNotificationService.instance.registerSignedInUser(_currentUser?.id);
     await syncPushPreference();
     notifyListeners();
   }
@@ -79,6 +82,7 @@ class UserState extends ChangeNotifier {
       password: password,
       name: name,
     );
+    await PushNotificationService.instance.registerSignedInUser(_currentUser?.id);
     await syncPushPreference();
     notifyListeners();
   }
@@ -137,6 +141,7 @@ class UserState extends ChangeNotifier {
 
   Future<void> logout() async {
     await _authService.logout();
+    await PushNotificationService.instance.unregisterSignedInUser();
     _currentUser = null;
     notifyListeners();
   }

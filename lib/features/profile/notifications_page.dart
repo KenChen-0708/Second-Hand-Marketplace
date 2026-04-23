@@ -39,9 +39,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     // Navigation logic based on notification type and related IDs
+    if (note.notificationType == 'message' &&
+        note.relatedConversationId != null &&
+        note.relatedConversationId!.isNotEmpty) {
+      if (mounted) context.push('/chat/${note.relatedConversationId}');
+      return;
+    }
+
     if (note.relatedOrderId != null && note.relatedOrderId!.isNotEmpty) {
       if (note.notificationType == 'message') {
-        // If it's a message, relatedOrderId stores the conversation ID
         if (mounted) context.push('/chat/${note.relatedOrderId}');
       } else {
         // It's likely an order notification

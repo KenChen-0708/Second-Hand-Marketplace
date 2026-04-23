@@ -67,6 +67,8 @@ class NotificationService {
     String? type,
     String? relatedOrderId,
     String? relatedProductId,
+    String? relatedConversationId,
+    bool sendPush = true,
   }) async {
     try {
       // Ensure type is valid for the DB constraint
@@ -80,10 +82,50 @@ class NotificationService {
         'notification_type': finalType,
         'related_order_id': relatedOrderId,
         'related_product_id': relatedProductId,
+        'related_conversation_id': relatedConversationId,
         'is_read': false,
       });
+
+      if (sendPush) {
+        await _dispatchRemotePush(
+          userId: userId,
+          title: title,
+          message: message,
+          type: finalType ?? 'system',
+          relatedOrderId: relatedOrderId,
+          relatedProductId: relatedProductId,
+          relatedConversationId: relatedConversationId,
+        );
+      }
     } catch (e) {
       print('Silent failure creating notification: $e');
+    }
+  }
+
+  Future<void> _dispatchRemotePush({
+    required String userId,
+    required String title,
+    required String message,
+    required String type,
+    String? relatedOrderId,
+    String? relatedProductId,
+    String? relatedConversationId,
+  }) async {
+    try {
+      await _supabase.functions.invoke(
+        'send-chat-message-push',
+        body: {
+          'recipientId': userId,
+          'title': title,
+          'body': message,
+          'type': type,
+          'orderId': relatedOrderId,
+          'productId': relatedProductId,
+          'conversationId': relatedConversationId,
+        },
+      );
+    } catch (e) {
+      print('Silent failure sending push notification: $e');
     }
   }
 

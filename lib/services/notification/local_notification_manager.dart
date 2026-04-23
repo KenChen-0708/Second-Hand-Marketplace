@@ -8,6 +8,7 @@ class LocalNotificationManager {
 
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   final GlobalKey<ScaffoldMessengerState> messengerKey = GlobalKey<ScaffoldMessengerState>();
+  final Map<String, DateTime> _recentNotificationKeys = {};
 
   bool _isInitialized = false;
   static const String _channelId = 'marketplace_alerts_v3';
@@ -68,6 +69,10 @@ class LocalNotificationManager {
     String? payload,
   }) async {
     try {
+      if (_isDuplicate(title: title, body: body, payload: payload)) {
+        return;
+      }
+
       print("!!! NOTIFICATION TRIGGER: Showing banner: [$title]");
 
       const AndroidNotificationDetails androidPlatformChannelSpecifics =
@@ -104,5 +109,27 @@ class LocalNotificationManager {
     } catch (e) {
       print("!!! NOTIFICATION SEND FAILED: $e");
     }
+  }
+
+  bool _isDuplicate({
+    required String title,
+    required String body,
+    String? payload,
+  }) {
+    final now = DateTime.now();
+    final key = '$title|$body|${payload ?? ''}';
+
+    _recentNotificationKeys.removeWhere(
+      (_, timestamp) => now.difference(timestamp).inSeconds > 5,
+    );
+
+    final previous = _recentNotificationKeys[key];
+    if (previous != null && now.difference(previous).inSeconds <= 5) {
+      print("!!! NOTIFICATION SKIPPED: Duplicate banner suppressed.");
+      return true;
+    }
+
+    _recentNotificationKeys[key] = now;
+    return false;
   }
 }

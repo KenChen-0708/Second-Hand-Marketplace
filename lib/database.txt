@@ -328,6 +328,7 @@ CREATE TABLE notifications (
     CHECK (notification_type IS NULL OR notification_type IN ('order','message','system','item_sold','item_bought')),
   related_order_id VARCHAR(20) REFERENCES orders(id) ON DELETE SET NULL,
   related_product_id VARCHAR(20) REFERENCES products(id) ON DELETE SET NULL,
+  related_conversation_id VARCHAR(20) REFERENCES chat_conversations(id) ON DELETE SET NULL,
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

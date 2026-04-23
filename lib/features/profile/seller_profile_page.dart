@@ -147,7 +147,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
       if (mounted) {
         SnackbarHelper.showError(
           context,
-          'Unable to open chat. Please try again.',
+          e.toString().replaceFirst('Exception: ', ''),
         );
       }
     }
