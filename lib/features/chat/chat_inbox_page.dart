@@ -270,16 +270,46 @@ class _ConversationTile extends StatelessWidget {
   }
 
   Widget _buildAvatar(ColorScheme colorScheme, String? productImageUrl) {
+    final presenceColor = bundle.otherUser.isOnline
+        ? const Color(0xFF10B981)
+        : colorScheme.outline;
+
     return SizedBox(
       width: 60,
       height: 60,
       child: Stack(
         children: [
-          ImageHelper.avatar(
-            bundle.otherUser.avatarUrl,
-            name: bundle.otherUser.name,
-            radius: 28,
-            backgroundColor: colorScheme.surfaceContainerHighest,
+          Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: bundle.otherUser.isOnline
+                  ? const Color(0xFF10B981).withValues(alpha: 0.10)
+                  : colorScheme.surfaceContainerHighest,
+              border: Border.all(
+                color: presenceColor,
+                width: 2,
+              ),
+            ),
+            child: ImageHelper.avatar(
+              bundle.otherUser.avatarUrl,
+              name: bundle.otherUser.name,
+              radius: 28,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+            ),
+          ),
+          Positioned(
+            right: 2,
+            top: 2,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: presenceColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: colorScheme.surface, width: 2),
+              ),
+            ),
           ),
           Positioned(
             right: 0,
@@ -307,26 +337,48 @@ class _ConversationTile extends StatelessWidget {
 
   Widget _buildNameRow(ColorScheme colorScheme, bool hasUnread, ChatMessageModel? lastMessage) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Text(
-            bundle.otherUser.name.isEmpty ? "Unknown User" : bundle.otherUser.name,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
-              fontSize: 15,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                bundle.otherUser.name.isEmpty ? "Unknown User" : bundle.otherUser.name,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _buildPresenceText(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: bundle.otherUser.isOnline
+                      ? const Color(0xFF10B981)
+                      : colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
         if (lastMessage != null) ...[
           const SizedBox(width: 8),
-          Text(
-            relativeTime(lastMessage.createdAt),
-            style: TextStyle(
-              fontSize: 11,
-              color: hasUnread
-                  ? colorScheme.primary
-                  : colorScheme.onSurface.withValues(alpha: 0.45),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              relativeTime(lastMessage.createdAt),
+              style: TextStyle(
+                fontSize: 11,
+                color: hasUnread
+                    ? colorScheme.primary
+                    : colorScheme.onSurface.withValues(alpha: 0.45),
+              ),
             ),
           ),
         ],
@@ -385,5 +437,32 @@ class _ConversationTile extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  String _buildPresenceText() {
+    if (bundle.otherUser.isOnline) {
+      return 'Online now';
+    }
+
+    final lastSeen = bundle.otherUser.lastSeenAt;
+    if (lastSeen == null) {
+      return 'Offline';
+    }
+
+    final difference = DateTime.now().difference(lastSeen.toLocal());
+    if (difference.inMinutes < 1) {
+      return 'Last seen just now';
+    }
+    if (difference.inMinutes < 60) {
+      return 'Last seen ${difference.inMinutes}m ago';
+    }
+    if (difference.inHours < 24) {
+      return 'Last seen ${difference.inHours}h ago';
+    }
+    if (difference.inDays < 7) {
+      return 'Last seen ${difference.inDays}d ago';
+    }
+
+    return 'Last seen ${lastSeen.day}/${lastSeen.month}/${lastSeen.year}';
   }
 }
