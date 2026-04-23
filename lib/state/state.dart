@@ -11,6 +11,7 @@ export 'chat_message_state.dart';
 export 'app_notification_state.dart';
 export 'review_state.dart';
 export 'seller_profile_state.dart';
+export 'seller_follow_state.dart';
 export 'favorite_state.dart';
 export 'dispute_state.dart';
 export 'admin_log_state.dart';

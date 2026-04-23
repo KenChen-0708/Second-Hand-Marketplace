@@ -31,6 +31,8 @@ import 'features/checkout/checkout_page.dart';
 import 'features/profile/order_detail_page.dart';
 import 'features/profile/order_history_page.dart';
 import 'features/profile/wishlist_page.dart';
+import 'features/profile/followers_page.dart';
+import 'features/profile/following_sellers_page.dart';
 import 'features/chat/chat_inbox_page.dart';
 import 'features/chat/chat_room_page.dart';
 import 'features/profile/seller_review_page.dart';
@@ -385,6 +387,16 @@ final _router = GoRouter(
                   builder: (context, state) => const WishlistPage(),
                 ),
                 GoRoute(
+                  path: 'followers',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const FollowersPage(),
+                ),
+                GoRoute(
+                  path: 'following-sellers',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const FollowingSellersPage(),
+                ),
+                GoRoute(
                   path: 'settings',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const SettingsPage(),
@@ -497,16 +509,18 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => AppNotificationState()),
         ChangeNotifierProvider(create: (_) => ReviewState()),
         ChangeNotifierProvider(create: (_) => SellerProfileState()),
+        ChangeNotifierProvider(create: (_) => SellerFollowState()),
         ChangeNotifierProvider(create: (_) => FavoriteState()),
         ChangeNotifierProvider(create: (_) => DisputeState()),
         ChangeNotifierProvider(create: (_) => AdminLogState()),
         ChangeNotifierProvider(create: (_) => AdminUserState()),
       ],
-      child: Consumer3<UserState, AppNotificationState, ChatConversationState>(
-        builder: (context, userState, noteState, chatState, child) {
+      child: Consumer4<UserState, AppNotificationState, ChatConversationState, SellerFollowState>(
+        builder: (context, userState, noteState, chatState, sellerFollowState, child) {
           // ENSURE NOTIFICATION STATE HAS THE LATEST USER DATA
           noteState.updateCurrentUser(userState.currentUser);
           chatState.updateCurrentUser(userState.currentUser);
+          sellerFollowState.updateCurrentUser(userState.currentUser);
 
           return MaterialApp.router(
             scaffoldMessengerKey: LocalNotificationManager.instance.messengerKey,

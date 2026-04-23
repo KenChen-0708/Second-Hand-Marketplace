@@ -77,6 +77,12 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           _sellerStats = results[4] as SellerStats;
           _isLoading = false;
         });
+        unawaited(
+          context.read<SellerFollowState>().refreshFollowerCount(widget.sellerId),
+        );
+        unawaited(
+          context.read<SellerFollowState>().syncFollowStatus(widget.sellerId),
+        );
         _subscribeToSellerPresence();
       }
     } catch (e) {
@@ -373,6 +379,11 @@ class _SellerProfilePageState extends State<SellerProfilePage>
   ) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final currentUserId = context.watch<UserState>().currentUser?.id;
+    final followState = context.watch<SellerFollowState>();
+    final isOwnProfile = currentUserId == seller.id;
+    final isFollowing = followState.isFollowing(seller.id);
+    final followerCount = followState.followerCountFor(seller.id);
 
     // Use live calculation if profile data is missing or zero
     final double rating = stats?.averageRating ?? (profile != null && profile.averageRating > 0 
@@ -571,6 +582,11 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                   reviewCount.toString(),
                   'Reviews',
                 ),
+                _buildStatItem(
+                  context,
+                  followerCount.toString(),
+                  'Followers',
+                ),
               ],
             ),
 
@@ -578,16 +594,70 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: FilledButton.icon(
-                onPressed: _openSellerChat,
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
-                label: const Text('Message Seller'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _openSellerChat,
+                      icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
+                      label: const Text('Message Seller'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  if (!isOwnProfile) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: followState.isLoading
+                            ? null
+                            : () async {
+                                final userState = context.read<UserState>();
+                                if (userState.currentUser == null) {
+                                  SnackbarHelper.showTopMessage(
+                                    context,
+                                    'Please log in to follow sellers.',
+                                  );
+                                  return;
+                                }
+
+                                try {
+                                  final message = await context
+                                      .read<SellerFollowState>()
+                                      .toggleFollow(seller.id);
+                                  if (context.mounted) {
+                                    SnackbarHelper.showTopMessage(context, message);
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    SnackbarHelper.showError(
+                                      context,
+                                      e.toString().replaceFirst('Exception: ', ''),
+                                    );
+                                  }
+                                }
+                              },
+                        icon: Icon(
+                          isFollowing
+                              ? Icons.person_remove_outlined
+                              : Icons.person_add_alt_1_rounded,
+                          size: 20,
+                        ),
+                        label: Text(isFollowing ? 'Following' : 'Follow'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
 

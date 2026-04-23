@@ -137,6 +137,14 @@ class UserState extends ChangeNotifier {
     }
   }
 
+  Future<void> verifyCurrentPassword(String currentPassword) async {
+    try {
+      await _authService.verifyCurrentPassword(currentPassword);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<void> resetPassword(String email) async {
     try {
       await _authService.resetPassword(email);
