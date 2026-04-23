@@ -91,9 +91,36 @@ class AiSupportService {
         isFallback: data['source']?.toString() == 'fallback',
       );
     } on FunctionException catch (e) {
+      final detailsText = e.details?.toString() ?? '';
       debugPrint(
         'AI support function failed: status=${e.status} details=${e.details} reason=${e.reasonPhrase}',
       );
+      if (_isBusyOrUnavailableError(detailsText, e.reasonPhrase)) {
+        return _assistantReply(
+          text:
+              'The AI assistant is busy right now due to high demand. Please try again in a moment.',
+          suggestions: const [
+            'Try again',
+            'How do refunds work?',
+            'Where is my order?',
+          ],
+          isFallback: false,
+        );
+      }
+
+      if (_isConfigurationError(detailsText)) {
+        return _assistantReply(
+          text:
+              'The AI assistant is temporarily unavailable right now. Please try again later.',
+          suggestions: const [
+            'Try again later',
+            'How do refunds work?',
+            'I need help with payments',
+          ],
+          isFallback: false,
+        );
+      }
+
       return _buildFallbackReply(
         trimmed,
         debugReason:
@@ -209,6 +236,7 @@ class AiSupportService {
     required String text,
     List<String> suggestions = const [],
     String? debugReason,
+    bool isFallback = true,
   }) {
     final resolvedText = kDebugMode && debugReason != null
         ? '$text\n\n[Debug: $debugReason]'
@@ -219,12 +247,33 @@ class AiSupportService {
       text: resolvedText,
       createdAt: DateTime.now(),
       suggestedReplies: suggestions,
-      isFallback: true,
+      isFallback: isFallback,
     );
   }
 
   bool _matchesAny(String text, List<String> terms) {
     return terms.any(text.contains);
+  }
+
+  bool _isBusyOrUnavailableError(String details, String? reasonPhrase) {
+    final normalizedDetails = details.toLowerCase();
+    final normalizedReason = (reasonPhrase ?? '').toLowerCase();
+
+    return normalizedDetails.contains('currently experiencing high demand') ||
+        normalizedDetails.contains('"code": 503') ||
+        normalizedDetails.contains('"status": "unavailable"') ||
+        normalizedDetails.contains('"status":"unavailable"') ||
+        normalizedDetails.contains('try again later') ||
+        normalizedReason.contains('service unavailable');
+  }
+
+  bool _isConfigurationError(String details) {
+    final normalizedDetails = details.toLowerCase();
+    return normalizedDetails.contains('"code": 404') ||
+        normalizedDetails.contains('"status": "not_found"') ||
+        normalizedDetails.contains('"status":"not_found"') ||
+        normalizedDetails.contains('is not found for api version') ||
+        normalizedDetails.contains('not supported for generatecontent');
   }
 
   String? _firstName(String? name) {
