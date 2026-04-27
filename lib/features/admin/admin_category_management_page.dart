@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/category_state.dart';
 import '../../models/models.dart';
+import '../../services/local/admin_search_preferences_service.dart';
+import '../../shared/widgets/admin_search_history_section.dart';
 
 class AdminCategoryManagementPage extends StatefulWidget {
   const AdminCategoryManagementPage({super.key});
@@ -15,10 +19,18 @@ class _AdminCategoryManagementPageState
     extends State<AdminCategoryManagementPage> {
   final TextEditingController _categoryController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  List<String> _searchHistory = [];
+  StreamSubscription<String?>? _clearSearchSubscription;
 
   @override
   void initState() {
     super.initState();
+    _searchFocusNode.addListener(_handleSearchFocusChange);
+    _clearSearchSubscription = AdminSearchPreferencesService.instance
+        .clearCurrentSearchStream
+        .listen(_handleClearSearchRequest);
+    _restoreSearchHistory();
     _refresh();
   }
 
@@ -28,8 +40,103 @@ class _AdminCategoryManagementPageState
     });
   }
 
+  void _restoreSearchHistory() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final history = await AdminSearchPreferencesService.instance
+          .readSearchHistory(AdminSearchPreferenceKeys.categoryManagement);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() => _searchHistory = history);
+    });
+  }
+
+  void _handleSearchChanged(String value, CategoryState state) {
+    state.setSearchQuery(value);
+  }
+
+  void _handleSearchFocusChange() {
+    if (!_searchFocusNode.hasFocus) {
+      _persistSearchToHistory();
+    }
+  }
+
+  void _persistSearchToHistory() {
+    final value = _searchController.text.trim();
+    if (value.isEmpty) {
+      return;
+    }
+
+    unawaited(_saveSearchHistoryEntry(value));
+  }
+
+  Future<void> _saveSearchHistoryEntry(String value) async {
+    final history = await AdminSearchPreferencesService.instance
+        .addSearchHistoryEntry(
+          AdminSearchPreferenceKeys.categoryManagement,
+          value,
+        );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = history);
+  }
+
+  Future<void> _selectSearchHistoryEntry(
+    String value,
+    CategoryState state,
+  ) async {
+    _searchController.text = value;
+    _handleSearchChanged(value, state);
+    await _saveSearchHistoryEntry(value);
+  }
+
+  Future<void> _removeSearchHistoryEntry(String value) async {
+    final history = await AdminSearchPreferencesService.instance
+        .removeSearchHistoryEntry(
+          AdminSearchPreferenceKeys.categoryManagement,
+          value,
+        );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = history);
+  }
+
+  Future<void> _clearSearchHistory() async {
+    await AdminSearchPreferencesService.instance.clearSearchHistory(
+      AdminSearchPreferenceKeys.categoryManagement,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = []);
+  }
+
+  void _handleClearSearchRequest(String? key) {
+    if (key != null && key != AdminSearchPreferenceKeys.categoryManagement) {
+      return;
+    }
+
+    _persistSearchToHistory();
+    if (!mounted) {
+      return;
+    }
+
+    _searchController.clear();
+    context.read<CategoryState>().setSearchQuery('');
+  }
+
   @override
   void dispose() {
+    _persistSearchToHistory();
+    _clearSearchSubscription?.cancel();
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
+    _searchFocusNode.dispose();
     _categoryController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -133,95 +240,115 @@ class _AdminCategoryManagementPageState
   Widget _buildSearchAndSortBar() {
     return Consumer<CategoryState>(
       builder: (context, state, child) {
-        return Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                onChanged: (val) => state.setSearchQuery(val),
-                decoration: InputDecoration(
-                  hintText: 'Search categories...',
-                  prefixIcon: const Icon(Icons.search),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.black12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.black12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    textInputAction: TextInputAction.search,
+                    onChanged: (val) => _handleSearchChanged(val, state),
+                    onSubmitted: _saveSearchHistoryEntry,
+                    decoration: InputDecoration(
+                      hintText: 'Search categories...',
+                      prefixIcon: const Icon(Icons.search),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 0,
+                        horizontal: 16,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.black12),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.black12),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: PopupMenuButton<CategorySortMode>(
+                    initialValue: state.sortMode,
+                    onSelected: (mode) => state.setSortMode(mode),
+                    icon: const Icon(Icons.sort_rounded),
+                    tooltip: 'Sort Options',
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: CategorySortMode.custom,
+                        child: Row(
+                          children: [
+                            Icon(Icons.drag_handle, size: 20),
+                            SizedBox(width: 8),
+                            Text('Custom (Manual)'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: CategorySortMode.nameAsc,
+                        child: Row(
+                          children: [
+                            Icon(Icons.sort_by_alpha, size: 20),
+                            SizedBox(width: 8),
+                            Text('Name (A-Z)'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: CategorySortMode.nameDesc,
+                        child: Row(
+                          children: [
+                            Icon(Icons.sort_by_alpha, size: 20),
+                            SizedBox(width: 8),
+                            Text('Name (Z-A)'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: CategorySortMode.countDesc,
+                        child: Row(
+                          children: [
+                            Icon(Icons.trending_up, size: 20),
+                            SizedBox(width: 8),
+                            Text('Most Products'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: CategorySortMode.countAsc,
+                        child: Row(
+                          children: [
+                            Icon(Icons.trending_down, size: 20),
+                            SizedBox(width: 8),
+                            Text('Least Products'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black12),
+            if (_searchHistory.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              AdminSearchHistorySection(
+                history: _searchHistory,
+                onSelected: (value) => _selectSearchHistoryEntry(value, state),
+                onDeleted: _removeSearchHistoryEntry,
+                onClearAll: _clearSearchHistory,
               ),
-              child: PopupMenuButton<CategorySortMode>(
-                initialValue: state.sortMode,
-                onSelected: (mode) => state.setSortMode(mode),
-                icon: const Icon(Icons.sort_rounded),
-                tooltip: 'Sort Options',
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: CategorySortMode.custom,
-                    child: Row(
-                      children: [
-                        Icon(Icons.drag_handle, size: 20),
-                        SizedBox(width: 8),
-                        Text('Custom (Manual)'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: CategorySortMode.nameAsc,
-                    child: Row(
-                      children: [
-                        Icon(Icons.sort_by_alpha, size: 20),
-                        SizedBox(width: 8),
-                        Text('Name (A-Z)'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: CategorySortMode.nameDesc,
-                    child: Row(
-                      children: [
-                        Icon(Icons.sort_by_alpha, size: 20),
-                        SizedBox(width: 8),
-                        Text('Name (Z-A)'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: CategorySortMode.countDesc,
-                    child: Row(
-                      children: [
-                        Icon(Icons.trending_up, size: 20),
-                        SizedBox(width: 8),
-                        Text('Most Products'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: CategorySortMode.countAsc,
-                    child: Row(
-                      children: [
-                        Icon(Icons.trending_down, size: 20),
-                        SizedBox(width: 8),
-                        Text('Least Products'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ],
           ],
         );
       },
