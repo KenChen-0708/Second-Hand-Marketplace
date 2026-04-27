@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
@@ -115,12 +114,15 @@ class ProductService {
       final imagePathsInBucket = <String>[];
       for (var index = 0; index < imagePaths.length; index++) {
         final path = imagePaths[index];
-        final file = File(path);
-        final fileExt = path.split('.').last;
         final fileName =
-            '${DateTime.now().millisecondsSinceEpoch}_${userId}_$index.$fileExt';
+            '${DateTime.now().millisecondsSinceEpoch}_${userId}_$index.webp';
+        final webpBytes = await ImageHelper.convertFileToWebp(path);
 
-        await _supabase.storage.from(_productImageBucket).upload(fileName, file);
+        await _supabase.storage.from(_productImageBucket).uploadBinary(
+          fileName,
+          webpBytes,
+          fileOptions: const FileOptions(contentType: ImageHelper.webpMimeType),
+        );
         imagePathsInBucket.add(fileName);
       }
       return imagePathsInBucket;

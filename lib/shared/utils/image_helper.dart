@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/local/connectivity_service.dart';
 
@@ -10,6 +12,8 @@ class ImageHelper {
   
   static const String defaultProductImageUrl =
       'https://yqvgeownycvbzelukmfp.supabase.co/storage/v1/object/public/product_images/default.png';
+
+  static const String webpMimeType = 'image/webp';
   
   static String getDefaultAvatarUrl(String? name) {
     final displayName = (name == null || name.isEmpty) ? 'User' : Uri.encodeComponent(name);
@@ -33,10 +37,43 @@ class ImageHelper {
     return '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
   }
 
-  /// Uploads profile image bytes to Supabase Storage.
-  static Future<String?> uploadProfileImage(Uint8List bytes, String userId, String mimeType) async {
-    final extension = mimeType.split('/').last;
-    final fileName = 'avatar_$userId.$extension';
+  static Future<Uint8List> convertFileToWebp(
+    String path, {
+    int quality = 80,
+  }) async {
+    final convertedBytes = await FlutterImageCompress.compressWithFile(
+      path,
+      format: CompressFormat.webp,
+      quality: quality,
+    );
+
+    if (convertedBytes == null || convertedBytes.isEmpty) {
+      throw Exception('Failed to convert image to WebP.');
+    }
+
+    return convertedBytes;
+  }
+
+  static Future<Uint8List> convertBytesToWebp(
+    Uint8List bytes, {
+    int quality = 80,
+  }) async {
+    final convertedBytes = await FlutterImageCompress.compressWithList(
+      bytes,
+      format: CompressFormat.webp,
+      quality: quality,
+    );
+
+    if (convertedBytes.isEmpty) {
+      throw Exception('Failed to convert image to WebP.');
+    }
+
+    return convertedBytes;
+  }
+
+  /// Uploads a WebP profile image to Supabase Storage.
+  static Future<String?> uploadProfileImage(Uint8List bytes, String userId) async {
+    final fileName = 'avatar_$userId.webp';
     try {
       await Supabase.instance.client.storage
           .from(profileImageBucket)
@@ -45,7 +82,7 @@ class ImageHelper {
             bytes, 
             fileOptions: FileOptions(
               upsert: true, 
-              contentType: mimeType
+              contentType: webpMimeType,
             )
           );
       return fileName;
