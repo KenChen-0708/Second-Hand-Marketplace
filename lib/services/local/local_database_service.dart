@@ -9,7 +9,7 @@ class LocalDatabaseService {
   static final LocalDatabaseService instance = LocalDatabaseService._();
 
   static const _databaseName = 'marketplace_cache.db';
-  static const _databaseVersion = 3;
+  static const _databaseVersion = 5;
 
   Database? _database;
 
@@ -37,6 +37,7 @@ class LocalDatabaseService {
     await _createWishlistItemsTable(db);
     await _createChatConversationsTable(db);
     await _createChatMessagesTable(db);
+    await _createOrdersTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -57,7 +58,17 @@ class LocalDatabaseService {
     await _createWishlistItemsTable(db);
     await _createChatConversationsTable(db);
     await _createChatMessagesTable(db);
+    await _createOrdersTable(db);
     await _ensureCartVariantColumn(db);
+    await _ensureOrderSellerIdsColumn(db);
+  }
+
+  Future<void> _ensureOrderSellerIdsColumn(Database db) async {
+    try {
+      await db.execute('ALTER TABLE orders ADD COLUMN seller_ids TEXT');
+    } catch (_) {
+      // Column might already exist
+    }
   }
 
   Future<void> _ensureCartVariantColumn(Database db) async {
@@ -181,6 +192,27 @@ class LocalDatabaseService {
     );
   }
 
+  Future<void> _createOrdersTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY,
+        buyer_id TEXT NOT NULL,
+        seller_ids TEXT,
+        order_number TEXT NOT NULL,
+        status TEXT NOT NULL,
+        data TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_orders_buyer ON orders(buyer_id, created_at)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_orders_sellers ON orders(seller_ids, created_at)',
+    );
+  }
+
   Future<void> cacheProducts(List<ProductModel> products) async {
     final db = await database;
     final batch = db.batch();
@@ -255,6 +287,48 @@ class LocalDatabaseService {
       return null;
     }
     return UserModel.fromJson(rows.first['data'] as String);
+  }
+
+  Future<void> cacheOrders(List<OrderModel> orders) async {
+    final db = await database;
+    final batch = db.batch();
+    for (final order in orders) {
+      final sellerIds = order.orderItems
+          .map((item) => item.product?.sellerId)
+          .whereType<String>()
+          .toSet()
+          .join(',');
+
+      batch.insert(
+        'orders',
+        {
+          'id': order.id,
+          'buyer_id': order.buyerId,
+          'seller_ids': sellerIds,
+          'order_number': order.orderNumber,
+          'status': order.status,
+          'data': order.toJson(),
+          'created_at': (order.createdAt ?? DateTime.now()).toIso8601String(),
+          'updated_at': (order.updatedAt ?? DateTime.now()).toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<List<OrderModel>> getCachedOrders(
+    String userId, {
+    bool asSeller = false,
+  }) async {
+    final db = await database;
+    final rows = await db.query(
+      'orders',
+      where: asSeller ? 'seller_ids LIKE ?' : 'buyer_id = ?',
+      whereArgs: [asSeller ? '%$userId%' : userId],
+      orderBy: 'datetime(created_at) DESC',
+    );
+    return rows.map((row) => OrderModel.fromJson(row['data'] as String)).toList();
   }
 
   Future<List<ProductModel>> getCachedProducts({
