@@ -120,17 +120,16 @@ class _MyAccountPageState extends State<MyAccountPage> {
       final currentUser = userState.currentUser;
       String? avatarUrl = currentUser?.avatarUrl;
 
-      if (_pickedImage != null && currentUser != null) {
-        try {
-          final bytes = await _pickedImage!.readAsBytes();
-          final mimeType = _pickedImage!.mimeType ?? 'image/jpeg';
-          
-          final uploadedFileName = await ImageHelper.uploadProfileImage(
-            bytes, 
-            currentUser.id,
-            mimeType,
-          );
-          if (uploadedFileName != null) {
+        if (_pickedImage != null && currentUser != null) {
+          try {
+            final bytes = await _pickedImage!.readAsBytes();
+            final webpBytes = await ImageHelper.convertBytesToWebp(bytes, quality: 80);
+
+            final uploadedFileName = await ImageHelper.uploadProfileImage(
+              webpBytes,
+              currentUser.id,
+            );
+            if (uploadedFileName != null) {
             avatarUrl = uploadedFileName;
           }
         } catch (e) {
