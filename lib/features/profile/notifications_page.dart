@@ -39,9 +39,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     // Navigation logic based on notification type and related IDs
+    if (note.notificationType == 'message' &&
+        note.relatedConversationId != null &&
+        note.relatedConversationId!.isNotEmpty) {
+      if (mounted) context.push('/chat/${note.relatedConversationId}');
+      return;
+    }
+
     if (note.relatedOrderId != null && note.relatedOrderId!.isNotEmpty) {
       if (note.notificationType == 'message') {
-        // If it's a message, relatedOrderId stores the conversation ID
         if (mounted) context.push('/chat/${note.relatedOrderId}');
       } else {
         // It's likely an order notification
@@ -59,9 +65,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
       }
     } else if (note.relatedProductId != null && note.relatedProductId!.isNotEmpty) {
       context.push('/product/${note.relatedProductId}');
+    } else if (_isFollowNotification(note)) {
+      context.push('/profile/followers');
     } else if (note.notificationType == 'message') {
       context.push('/messages');
     }
+  }
+
+  bool _isFollowNotification(AppNotificationModel note) {
+    if (note.notificationType == 'follow') {
+      return true;
+    }
+
+    return note.notificationType == 'system' &&
+        (note.title == 'New follower' || note.title == 'New followers');
   }
 
   @override
@@ -103,22 +120,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
         child: notificationState.isLoading && notifications.isEmpty
             ? const Center(child: CircularProgressIndicator())
             : notifications.isEmpty
-                ? _buildEmptyState(context)
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16.0),
-                    itemCount: notifications.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final note = notifications[index];
-                      return _NotificationCard(
-                        notification: note,
-                        onTap: () => _handleNotificationTap(note),
-                        onDelete: () {
-                          notificationState.deleteNotification(note.id);
-                        },
-                      );
-                    },
-                  ),
+            ? _buildEmptyState(context)
+            : ListView.separated(
+          padding: const EdgeInsets.all(16.0),
+          itemCount: notifications.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final note = notifications[index];
+            return _NotificationCard(
+              notification: note,
+              onTap: () => _handleNotificationTap(note),
+              onDelete: () {
+                notificationState.deleteNotification(note.id);
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -268,6 +285,21 @@ class _NotificationCard extends StatelessWidget {
     IconData iconData;
     Color iconColor = Theme.of(context).colorScheme.primary;
 
+    if (notification.notificationType == 'system' &&
+        (notification.title == 'New follower' ||
+            notification.title == 'New followers')) {
+      iconData = Icons.people_alt_outlined;
+      iconColor = Colors.pink;
+      return Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(iconData, color: iconColor, size: 24),
+      );
+    }
+
     switch (notification.notificationType) {
       case 'order':
       case 'item_bought':
@@ -283,6 +315,10 @@ class _NotificationCard extends StatelessWidget {
         break;
       case 'message':
         iconData = Icons.chat_bubble_outline_rounded;
+        break;
+      case 'follow':
+        iconData = Icons.people_alt_outlined;
+        iconColor = Colors.pink;
         break;
       default:
         iconData = Icons.notifications_active_outlined;

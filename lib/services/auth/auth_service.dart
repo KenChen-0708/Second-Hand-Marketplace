@@ -189,6 +189,24 @@ class AuthService {
     }
   }
 
+  Future<void> verifyCurrentPassword(String currentPassword) async {
+    final currentUser = supabase.auth.currentUser;
+    final email = currentUser?.email;
+
+    if (currentUser == null || email == null || email.isEmpty) {
+      throw Exception('You must be logged in to change your password.');
+    }
+
+    try {
+      await supabase.auth.signInWithPassword(
+        email: email,
+        password: currentPassword,
+      );
+    } on AuthException catch (e) {
+      throw Exception(e.message);
+    }
+  }
+
   /// Reset Password (Forgot Password)
   Future<void> resetPassword(String email) async {
     try {

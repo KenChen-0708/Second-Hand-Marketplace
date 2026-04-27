@@ -43,6 +43,22 @@ class AppNotificationState extends EntityState<AppNotificationModel> {
 
   Future<void> fetchNotifications(UserModel user) async {
     updateCurrentUser(user);
+    setLoading(true);
+    setError(null);
+    try {
+      final notifications = await _notificationService.fetchNotifications(user.id);
+      notifications.sort(
+        (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+          a.createdAt ?? DateTime.now(),
+        ),
+      );
+      setItems(notifications);
+    } catch (e) {
+      setError(e.toString().replaceFirst('Exception: ', ''));
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
   }
 
   void _subscribeToNotifications(String userId) {

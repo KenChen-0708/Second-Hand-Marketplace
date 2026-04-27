@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
 import '../../services/chat/chat_service.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/presence_helper.dart';
 import '../../shared/utils/snackbar_helper.dart';
 import '../../state/state.dart';
 import 'chat_models.dart';
@@ -26,15 +30,24 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   bool _isLoading = true;
   bool _isSending = false;
   String? _error;
+  StreamSubscription<List<Map<String, dynamic>>>? _presenceSubscription;
+  Timer? _presenceRefreshTimer;
 
   @override
   void initState() {
     super.initState();
+    _presenceRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadConversation());
   }
 
   @override
   void dispose() {
+    _presenceRefreshTimer?.cancel();
+    _presenceSubscription?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -62,6 +75,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           messages: context.read<ChatMessageState>().items,
         ),
       );
+      _subscribeToOtherUserPresence(_bundle!.otherUser.id);
       context.read<ChatConversationState>().updateBundle(_bundle!);
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
@@ -71,6 +85,25 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _subscribeToOtherUserPresence(String userId) {
+    _presenceSubscription?.cancel();
+    _presenceSubscription = Supabase.instance.client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('id', userId)
+        .listen((rows) {
+      final bundle = _bundle;
+      if (!mounted || bundle == null || rows.isEmpty) {
+        return;
+      }
+
+      final refreshedUser = UserModel.fromMap(Map<String, dynamic>.from(rows.first));
+      final updatedBundle = bundle.copyWith(otherUser: refreshedUser);
+      setState(() => _bundle = updatedBundle);
+      context.read<ChatConversationState>().updateBundle(updatedBundle);
+    });
   }
 
   void _scrollToBottom() {
@@ -229,6 +262,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
     final bundle = _bundle!;
     final messages = bundle.messages;
+    final isOtherUserOnline = PresenceHelper.isUserOnline(bundle.otherUser);
     
     // Resolve profile image with initials fallback for the header
     return Scaffold(
@@ -243,20 +277,74 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         ),
         title: Row(
           children: [
-            ImageHelper.avatar(
-              bundle.otherUser.avatarUrl,
-              name: bundle.otherUser.name,
-              radius: 18,
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isOtherUserOnline
+                    ? const Color(0xFF10B981).withValues(alpha: 0.10)
+                    : colorScheme.surfaceContainerHighest,
+                border: Border.all(
+                  color: isOtherUserOnline
+                      ? const Color(0xFF10B981)
+                      : colorScheme.outline,
+                  width: 2,
+                ),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ImageHelper.avatar(
+                    bundle.otherUser.avatarUrl,
+                    name: bundle.otherUser.name,
+                    radius: 18,
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: isOtherUserOnline
+                            ? const Color(0xFF10B981)
+                            : colorScheme.outline,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colorScheme.surface,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                bundle.otherUser.name,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    bundle.otherUser.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    _buildPresenceText(bundle.otherUser),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isOtherUserOnline
+                          ? const Color(0xFF10B981)
+                          : colorScheme.outline,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -342,6 +430,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       return false;
     }
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _buildPresenceText(UserModel user) {
+    return PresenceHelper.buildPresenceText(user);
   }
 }
 

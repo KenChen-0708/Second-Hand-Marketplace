@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/seller/seller_service.dart';
@@ -10,6 +13,7 @@ import '../../services/product/product_service.dart';
 import '../../state/state.dart';
 import '../../shared/utils/snackbar_helper.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../shared/utils/presence_helper.dart';
 
 class SellerProfilePage extends StatefulWidget {
   final String sellerId;
@@ -23,6 +27,8 @@ class SellerProfilePage extends StatefulWidget {
 class _SellerProfilePageState extends State<SellerProfilePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  StreamSubscription<List<Map<String, dynamic>>>? _presenceSubscription;
+  Timer? _presenceRefreshTimer;
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -42,6 +48,11 @@ class _SellerProfilePageState extends State<SellerProfilePage>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabSelection);
+    _presenceRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     _loadSellerData();
   }
 
@@ -73,6 +84,13 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           _sellerStats = results[4] as SellerStats;
           _isLoading = false;
         });
+        unawaited(
+          context.read<SellerFollowState>().refreshFollowerCount(widget.sellerId),
+        );
+        unawaited(
+          context.read<SellerFollowState>().syncFollowStatus(widget.sellerId),
+        );
+        _subscribeToSellerPresence();
       }
     } catch (e) {
       if (mounted) {
@@ -147,7 +165,7 @@ class _SellerProfilePageState extends State<SellerProfilePage>
       if (mounted) {
         SnackbarHelper.showError(
           context,
-          'Unable to open chat. Please try again.',
+          e.toString().replaceFirst('Exception: ', ''),
         );
       }
     }
@@ -260,9 +278,27 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
   @override
   void dispose() {
+    _presenceRefreshTimer?.cancel();
+    _presenceSubscription?.cancel();
     _tabController.removeListener(_handleTabSelection);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _subscribeToSellerPresence() {
+    _presenceSubscription?.cancel();
+    _presenceSubscription = Supabase.instance.client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.sellerId)
+        .listen((rows) {
+      if (!mounted || rows.isEmpty || _sellerUser == null) {
+        return;
+      }
+      setState(() {
+        _sellerUser = UserModel.fromMap(Map<String, dynamic>.from(rows.first));
+      });
+    });
   }
 
   @override
@@ -351,7 +387,12 @@ class _SellerProfilePageState extends State<SellerProfilePage>
   ) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final String avatarUrl = ImageHelper.resolveProfileImageUrl(seller.avatarUrl, name: seller.name);
+    final currentUserId = context.watch<UserState>().currentUser?.id;
+    final followState = context.watch<SellerFollowState>();
+    final isOwnProfile = currentUserId == seller.id;
+    final isFollowing = followState.isFollowing(seller.id);
+    final followerCount = followState.followerCountFor(seller.id);
+    final isSellerOnline = PresenceHelper.isUserOnline(seller);
 
     // Use live calculation if profile data is missing or zero
     final double rating = stats?.averageRating ?? (profile != null && profile.averageRating > 0 
@@ -430,26 +471,63 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
             Hero(
               tag: 'seller_avatar_${seller.id}',
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: cs.primary.withOpacity(0.2),
-                    width: 2,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isSellerOnline
+                          ? const Color(0xFF10B981).withValues(alpha: 0.10)
+                          : cs.surfaceContainerHighest,
+                      border: Border.all(
+                        color: _presenceColor(isSellerOnline, cs),
+                        width: 3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _presenceColor(
+                            isSellerOnline,
+                            cs,
+                          ).withValues(alpha: 0.20),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ImageHelper.avatar(
+                      seller.avatarUrl,
+                      name: seller.name,
+                      radius: 50,
+                    ),
                   ),
-                ),
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundImage: NetworkImage(avatarUrl),
-                ),
+                  Positioned(
+                    bottom: -12,
+                    child: _buildPresenceChip(
+                      context,
+                      isOnline: isSellerOnline,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
             Text(
               seller.name,
               style: textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _buildPresenceSubtitle(seller),
+              style: textTheme.bodyMedium?.copyWith(
+                color: isSellerOnline
+                    ? const Color(0xFF047857)
+                    : cs.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
@@ -473,6 +551,24 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                   ),
                 ],
               ),
+              
+            if (seller.bio != null && seller.bio!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 48),
+                child: Text(
+                  seller.bio!,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.8),
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -495,6 +591,11 @@ class _SellerProfilePageState extends State<SellerProfilePage>
                   reviewCount.toString(),
                   'Reviews',
                 ),
+                _buildStatItem(
+                  context,
+                  followerCount.toString(),
+                  'Followers',
+                ),
               ],
             ),
 
@@ -502,16 +603,73 @@ class _SellerProfilePageState extends State<SellerProfilePage>
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: FilledButton.icon(
-                onPressed: _openSellerChat,
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
-                label: const Text('Message Seller'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _openSellerChat,
+                      icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
+                      label: const Text('Message Seller'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  if (!isOwnProfile) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: followState.isLoading
+                            ? null
+                            : () async {
+                                final userState = context.read<UserState>();
+                                if (userState.currentUser == null) {
+                                  SnackbarHelper.showTopMessage(
+                                    context,
+                                    'Please log in to follow sellers.',
+                                  );
+                                  return;
+                                }
+
+                                try {
+                                  final message = await context
+                                      .read<SellerFollowState>()
+                                      .toggleFollow(
+                                        seller.id,
+                                        followerName: userState.currentUser?.name,
+                                      );
+                                  if (context.mounted) {
+                                    SnackbarHelper.showTopMessage(context, message);
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    SnackbarHelper.showError(
+                                      context,
+                                      e.toString().replaceFirst('Exception: ', ''),
+                                    );
+                                  }
+                                }
+                              },
+                        icon: Icon(
+                          isFollowing
+                              ? Icons.person_remove_outlined
+                              : Icons.person_add_alt_1_rounded,
+                          size: 20,
+                        ),
+                        label: Text(isFollowing ? 'Following' : 'Follow'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
 
@@ -592,6 +750,66 @@ class _SellerProfilePageState extends State<SellerProfilePage>
           return _ReviewTile(review: review);
         }, childCount: reviews.length),
       ),
+    );
+  }
+
+  Widget _buildPresenceChip(
+    BuildContext context, {
+    required bool isOnline,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final Color color = _presenceColor(isOnline, cs);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: color.withValues(alpha: 0.45),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            isOnline ? 'Online' : 'Offline',
+            style: TextStyle(
+              color: isOnline ? const Color(0xFF047857) : cs.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _presenceColor(bool isOnline, ColorScheme colorScheme) {
+    return isOnline ? const Color(0xFF10B981) : colorScheme.outline;
+  }
+
+  String _buildPresenceSubtitle(UserModel seller) {
+    return PresenceHelper.buildPresenceText(
+      seller,
+      onlineText: 'Active now',
+      offlineText: 'Last seen recently',
     );
   }
 }

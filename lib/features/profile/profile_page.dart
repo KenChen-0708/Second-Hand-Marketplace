@@ -31,14 +31,17 @@ class _ProfilePageState extends State<ProfilePage> {
     if (user == null) return;
 
     try {
+      final sellerFollowState = context.read<SellerFollowState>();
       final sellerService = SellerService();
       final orderService = OrderService();
       final statsFuture = sellerService.getSellerStats(user.id);
       final buyerOrdersFuture = orderService.getBuyerOrders(user.id);
       final sellerOrdersFuture = orderService.getSellerOrders(user.id);
+      final followerCountFuture = sellerFollowState.refreshFollowerCount(user.id);
       final stats = await statsFuture;
       final buyerOrders = await buyerOrdersFuture;
       final sellerOrders = await sellerOrdersFuture;
+      await followerCountFuture;
       if (mounted) {
         setState(() {
           _sellerStats = stats;
@@ -69,6 +72,9 @@ class _ProfilePageState extends State<ProfilePage> {
         .watch<AppNotificationState>()
         .unreadCount;
     final unreadChats = context.watch<ChatConversationState>().unreadCount;
+    final followerCount = context.watch<SellerFollowState>().followerCountFor(
+      user.id,
+    );
 
     final avatarUrl = ImageHelper.resolveProfileImageUrl(
       user.avatarUrl,
@@ -131,6 +137,25 @@ class _ProfilePageState extends State<ProfilePage> {
                         fontSize: 14,
                       ),
                     ),
+                    
+                    if (user.bio != null && user.bio!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 48),
+                        child: Text(
+                          user.bio!,
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.8),
+                            fontSize: 14,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 24),
 
                     // Seller Stats Row
@@ -155,6 +180,11 @@ class _ProfilePageState extends State<ProfilePage> {
                             context,
                             _sellerStats?.totalReviews.toString() ?? '0',
                             'Reviews',
+                          ),
+                          _buildStatItem(
+                            context,
+                            followerCount.toString(),
+                            'Followers',
                           ),
                         ],
                       ),
@@ -241,6 +271,20 @@ class _ProfilePageState extends State<ProfilePage> {
                     const Divider(height: 1),
                     _buildMenuItem(
                       context,
+                      icon: Icons.group_outlined,
+                      title: 'Followers',
+                      onTap: () => context.push('/profile/followers'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.people_alt_outlined,
+                      title: 'Following Sellers',
+                      onTap: () => context.push('/profile/following-sellers'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
                       icon: Icons.notifications_none_rounded,
                       title: 'Notifications',
                       onTap: () => context.push('/profile/notifications'),
@@ -252,6 +296,13 @@ class _ProfilePageState extends State<ProfilePage> {
                       icon: Icons.favorite_border_rounded,
                       title: 'Wishlist',
                       onTap: () => context.push('/profile/wishlist'),
+                    ),
+                    const Divider(height: 1),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.support_agent_rounded,
+                      title: 'AI Support',
+                      onTap: () => context.push('/support'),
                     ),
                     const Divider(height: 1),
                     _buildMenuItem(
@@ -453,11 +504,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
   static bool _buyerOrderNeedsAction(OrderModel order) {
     final status = order.status.toLowerCase();
-    return status == 'paid' || status == 'pending_handover';
+    return status == 'pending' || status == 'pending_handover';
   }
 
   static bool _sellerOrderNeedsAction(OrderModel order) {
     final status = order.status.toLowerCase();
-    return status == 'paid' || status == 'pending_handover';
+    return status == 'pending' || status == 'pending_handover';
   }
 }

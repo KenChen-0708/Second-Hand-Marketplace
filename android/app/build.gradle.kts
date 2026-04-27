@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.app"
+    namespace = "com.secondhand.marketplace"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 

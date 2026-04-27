@@ -11,12 +11,14 @@ class UserModel implements AppModel {
   final String role;
   final bool isActive;
   final bool pushEnabled; // Added this
+  final bool isOnline;
   final String? phoneNumber;
   final String? address;
   final String? city;
   final String? postalCode;
   final String? country;
   final String? bio;
+  final DateTime? lastSeenAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -28,12 +30,14 @@ class UserModel implements AppModel {
     this.role = 'user',
     this.isActive = true,
     this.pushEnabled = false, // Default to false
+    this.isOnline = false,
     this.phoneNumber,
     this.address,
     this.city,
     this.postalCode,
     this.country,
     this.bio,
+    this.lastSeenAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -46,12 +50,14 @@ class UserModel implements AppModel {
     String? role,
     bool? isActive,
     bool? pushEnabled,
+    bool? isOnline,
     String? phoneNumber,
     String? address,
     String? city,
     String? postalCode,
     String? country,
     String? bio,
+    DateTime? lastSeenAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -63,12 +69,14 @@ class UserModel implements AppModel {
       role: role ?? this.role,
       isActive: isActive ?? this.isActive,
       pushEnabled: pushEnabled ?? this.pushEnabled,
+      isOnline: isOnline ?? this.isOnline,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       address: address ?? this.address,
       city: city ?? this.city,
       postalCode: postalCode ?? this.postalCode,
       country: country ?? this.country,
       bio: bio ?? this.bio,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -83,12 +91,14 @@ class UserModel implements AppModel {
       role: JsonUtils.asString(map['role']) ?? 'user',
       isActive: JsonUtils.asBool(map['is_active']) ?? true,
       pushEnabled: JsonUtils.asBool(map['push_enabled']) ?? false,
+      isOnline: JsonUtils.asBool(map['is_online']) ?? false,
       phoneNumber: JsonUtils.asString(map['phone_number']),
       address: JsonUtils.asString(map['address']),
       city: JsonUtils.asString(map['city']),
       postalCode: JsonUtils.asString(map['postal_code']),
       country: JsonUtils.asString(map['country']),
       bio: JsonUtils.asString(map['bio']),
+      lastSeenAt: JsonUtils.asDateTime(map['last_seen_at']),
       createdAt: JsonUtils.asDateTime(map['created_at']),
       updatedAt: JsonUtils.asDateTime(map['updated_at']),
     );
@@ -103,12 +113,14 @@ class UserModel implements AppModel {
       'role': role,
       'is_active': isActive,
       'push_enabled': pushEnabled,
+      'is_online': isOnline,
       'phone_number': phoneNumber,
       'address': address,
       'city': city,
       'postal_code': postalCode,
       'country': country,
       'bio': bio,
+      'last_seen_at': lastSeenAt?.toIso8601String(),
     };
   }
 

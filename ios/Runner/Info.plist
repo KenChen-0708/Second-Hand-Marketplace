@@ -51,5 +51,9 @@
 	<string>Allow photo library access so you can choose listing images.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Allow saving photos you capture while using the app.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

@@ -14,8 +14,8 @@ class ChatService {
   static const String _productSharePrefix = '[product_share]';
 
   ChatService({SupabaseClient? client})
-    : _supabase = client ?? Supabase.instance.client,
-      _notificationService = NotificationService(client: client ?? Supabase.instance.client);
+      : _supabase = client ?? Supabase.instance.client,
+        _notificationService = NotificationService(client: client ?? Supabase.instance.client);
 
   final SupabaseClient _supabase;
   final NotificationService _notificationService;
@@ -44,21 +44,21 @@ class ChatService {
       final conversationsData = await _supabase
           .from('chat_conversations')
           .select(
-            '*, '
+        '*, '
             'product:products(*), '
             'buyer:users!chat_conversations_buyer_id_fkey(*), '
             'seller:users!chat_conversations_seller_id_fkey(*)',
-          )
+      )
           .or('buyer_id.eq.$userId,seller_id.eq.$userId')
           .order('last_message_at', ascending: false);
 
       final bundles = (conversationsData as List)
           .map(
             (item) => ChatConversationBundle.fromConversationMap(
-              Map<String, dynamic>.from(item as Map),
-              currentUserId: userId,
-            ),
-          )
+          Map<String, dynamic>.from(item as Map),
+          currentUserId: userId,
+        ),
+      )
           .toList();
 
       if (bundles.isEmpty) {
@@ -83,11 +83,11 @@ class ChatService {
       final hydratedBundles = bundles
           .map(
             (bundle) => bundle.copyWith(
-              messages: _sortMessages(
-                messagesByConversation[bundle.conversation.id] ?? const [],
-              ),
-            ),
-          )
+          messages: _sortMessages(
+            messagesByConversation[bundle.conversation.id] ?? const [],
+          ),
+        ),
+      )
           .toList();
 
       await _cacheBundles(userId, hydratedBundles);
@@ -124,11 +124,11 @@ class ChatService {
       final conversationData = await _supabase
           .from('chat_conversations')
           .select(
-            '*, '
+        '*, '
             'product:products(*, variations:product_variants(*, attributes:product_variant_attributes(*))), '
             'buyer:users!chat_conversations_buyer_id_fkey(*), '
             'seller:users!chat_conversations_seller_id_fkey(*)',
-          )
+      )
           .eq('id', conversationId)
           .single();
 
@@ -146,9 +146,9 @@ class ChatService {
           (messagesData as List)
               .map(
                 (item) => ChatMessageModel.fromMap(
-                  Map<String, dynamic>.from(item as Map),
-                ),
-              )
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
               .toList(),
         ),
       );
@@ -164,42 +164,6 @@ class ChatService {
         return cachedBundle;
       }
       throw Exception('Unable to load this conversation.');
-    }
-  }
-
-  /// Admin specific: Fetch chat history for an order dispute monitoring
-  Future<List<ChatMessageModel>> fetchDisputeChatHistory({
-    required String productId,
-    required String buyerId,
-    required String sellerId,
-  }) async {
-    try {
-      // 1. Find the conversation ID
-      final conv = await _supabase
-          .from('chat_conversations')
-          .select('id')
-          .eq('product_id', productId)
-          .eq('buyer_id', buyerId)
-          .eq('seller_id', sellerId)
-          .maybeSingle();
-
-      if (conv == null) return [];
-
-      final conversationId = conv['id'] as String;
-
-      // 2. Fetch all messages for that ID
-      final messagesData = await _supabase
-          .from('chat_messages')
-          .select()
-          .eq('conversation_id', conversationId)
-          .order('created_at');
-
-      return (messagesData as List)
-          .map((m) => ChatMessageModel.fromMap(Map<String, dynamic>.from(m)))
-          .toList();
-    } catch (e) {
-      if (kDebugMode) print('Error fetching dispute chat: $e');
-      return [];
     }
   }
 
@@ -252,10 +216,10 @@ class ChatService {
       final inserted = await _supabase
           .from('chat_conversations')
           .insert({
-            'product_id': productId,
-            'buyer_id': buyerId,
-            'seller_id': sellerId,
-          })
+        'product_id': productId,
+        'buyer_id': buyerId,
+        'seller_id': sellerId,
+      })
           .select('id')
           .single();
       return inserted['id'] as String;
@@ -301,29 +265,42 @@ class ChatService {
       final inserted = await _supabase
           .from('chat_messages')
           .insert({
-            'conversation_id': conversationId,
-            'sender_id': senderId,
-            'message_text': messageText,
-            'is_image': isImage,
-            'image_url': imageUrl,
-            'is_read': false,
-          })
+        'conversation_id': conversationId,
+        'sender_id': senderId,
+        'message_text': messageText,
+        'is_image': isImage,
+        'image_url': imageUrl,
+        'is_read': false,
+      })
           .select()
           .single();
 
       final message = ChatMessageModel.fromMap(Map<String, dynamic>.from(inserted));
       final lastMessageAt =
           message.createdAt?.toUtc().toIso8601String() ??
-          DateTime.now().toUtc().toIso8601String();
+              DateTime.now().toUtc().toIso8601String();
 
       // Get conversation to find recipient
       final conv = await _supabase
           .from('chat_conversations')
-          .select('buyer_id, seller_id')
+          .select(
+            'buyer_id, '
+            'seller_id, '
+            'product_id, '
+            'product:products(title), '
+            'buyer:users!chat_conversations_buyer_id_fkey(id, name), '
+            'seller:users!chat_conversations_seller_id_fkey(id, name)',
+          )
           .eq('id', conversationId)
           .single();
 
       final recipientId = conv['buyer_id'] == senderId ? conv['seller_id'] : conv['buyer_id'];
+      final buyer = Map<String, dynamic>.from((conv['buyer'] as Map?) ?? const {});
+      final seller = Map<String, dynamic>.from((conv['seller'] as Map?) ?? const {});
+      final senderName = conv['buyer_id'] == senderId
+          ? (buyer['name']?.toString() ?? 'Buyer')
+          : (seller['name']?.toString() ?? 'Seller');
+      final preview = ChatService.previewText(message);
 
       await _supabase
           .from('chat_conversations')
@@ -333,10 +310,11 @@ class ChatService {
       // TRIGGER NOTIFICATION FOR RECIPIENT
       await _notificationService.createNotification(
         userId: recipientId,
-        title: 'New Message',
-        message: isImage ? 'Sent a photo' : messageText,
+        title: 'New message from $senderName',
+        message: preview,
         type: 'message',
-        relatedOrderId: conversationId, // Using relatedOrderId to store conversationId for messages
+        relatedProductId: conv['product_id']?.toString(),
+        relatedConversationId: conversationId,
       );
 
       await _localDatabase.upsertChatMessage(message, syncStatus: 'synced');
@@ -413,24 +391,24 @@ class ChatService {
   }
 
   Future<void> _cacheBundles(
-    String currentUserId,
-    List<ChatConversationBundle> bundles,
-  ) async {
+      String currentUserId,
+      List<ChatConversationBundle> bundles,
+      ) async {
     await _localDatabase.replaceConversationBundles(
       currentUserId,
       bundles
           .map(
             (bundle) => {
-              'conversation_id': bundle.conversation.id,
-              'product_id': bundle.product.id,
-              'other_user_id': bundle.otherUser.id,
-              'other_user_name': bundle.otherUser.name,
-              'conversation_data': jsonEncode(bundle.conversation.toMap()),
-              'product_data': bundle.product.toJson(),
-              'other_user_data': bundle.otherUser.toJson(),
-              'last_message_at': bundle.conversation.lastMessageAt?.toIso8601String(),
-            },
-          )
+          'conversation_id': bundle.conversation.id,
+          'product_id': bundle.product.id,
+          'other_user_id': bundle.otherUser.id,
+          'other_user_name': bundle.otherUser.name,
+          'conversation_data': jsonEncode(bundle.conversation.toMap()),
+          'product_data': bundle.product.toJson(),
+          'other_user_data': bundle.otherUser.toJson(),
+          'last_message_at': bundle.conversation.lastMessageAt?.toIso8601String(),
+        },
+      )
           .toList(),
     );
 
@@ -472,9 +450,9 @@ class ChatService {
   }
 
   Future<ChatConversationBundle?> _bundleFromCacheRow(
-    Map<String, dynamic> row, {
-    required String currentUserId,
-  }) async {
+      Map<String, dynamic> row, {
+        required String currentUserId,
+      }) async {
     try {
       final conversation = ChatConversationModel.fromMap(
         Map<String, dynamic>.from(
@@ -513,14 +491,14 @@ class ChatService {
     bundles.sort((a, b) {
       final aTime =
           a.lastMessage?.createdAt ??
-          a.conversation.lastMessageAt ??
-          a.conversation.createdAt ??
-          DateTime.fromMillisecondsSinceEpoch(0);
+              a.conversation.lastMessageAt ??
+              a.conversation.createdAt ??
+              DateTime.fromMillisecondsSinceEpoch(0);
       final bTime =
           b.lastMessage?.createdAt ??
-          b.conversation.lastMessageAt ??
-          b.conversation.createdAt ??
-          DateTime.fromMillisecondsSinceEpoch(0);
+              b.conversation.lastMessageAt ??
+              b.conversation.createdAt ??
+              DateTime.fromMillisecondsSinceEpoch(0);
       final comparison = bTime.compareTo(aTime);
       if (comparison != 0) {
         return comparison;
@@ -610,9 +588,9 @@ class ChatConversationBundle {
   }
 
   factory ChatConversationBundle.fromConversationMap(
-    Map<String, dynamic> map, {
-    required String currentUserId,
-  }) {
+      Map<String, dynamic> map, {
+        required String currentUserId,
+      }) {
     final conversation = ChatConversationModel.fromMap(map);
 
     // Resolve product with safety defaults if data is missing
@@ -648,9 +626,9 @@ class ChatConversationBundle {
           productMap['image_url']?.toString(),
           fallbackToDefault: false,
         ) ??
-        (resolvedImages.isNotEmpty
-            ? resolvedImages.first
-            : ImageHelper.defaultProductImageUrl);
+            (resolvedImages.isNotEmpty
+                ? resolvedImages.first
+                : ImageHelper.defaultProductImageUrl);
 
     return {
       ...productMap,

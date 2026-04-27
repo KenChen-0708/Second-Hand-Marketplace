@@ -5,6 +5,7 @@
 DROP TABLE IF EXISTS admin_logs CASCADE;
 DROP TABLE IF EXISTS disputes CASCADE;
 DROP TABLE IF EXISTS favorites CASCADE;
+DROP TABLE IF EXISTS seller_follows CASCADE;
 DROP TABLE IF EXISTS seller_profiles CASCADE;
 DROP TABLE IF EXISTS reviews CASCADE;
 DROP TABLE IF EXISTS notifications CASCADE;
@@ -37,6 +38,7 @@ DROP SEQUENCE IF EXISTS notifications_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS reviews_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS seller_profiles_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS favorites_id_seq CASCADE;
+DROP SEQUENCE IF EXISTS seller_follows_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS disputes_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS admin_logs_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS product_variants_id_seq CASCADE;
@@ -79,6 +81,7 @@ CREATE SEQUENCE notifications_id_seq START 1;
 CREATE SEQUENCE reviews_id_seq START 1;
 CREATE SEQUENCE seller_profiles_id_seq START 1;
 CREATE SEQUENCE favorites_id_seq START 1;
+CREATE SEQUENCE seller_follows_id_seq START 1;
 CREATE SEQUENCE disputes_id_seq START 1;
 CREATE SEQUENCE admin_logs_id_seq START 1;
 CREATE SEQUENCE product_variants_id_seq START 1;
@@ -95,12 +98,14 @@ CREATE TABLE users (
   role VARCHAR(20) NOT NULL DEFAULT 'user'
     CHECK (role IN ('user','seller','admin')),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  is_online BOOLEAN NOT NULL DEFAULT FALSE,
   phone_number VARCHAR(20),
   address TEXT,
   city VARCHAR(100),
   postal_code VARCHAR(20),
   country VARCHAR(100),
   bio TEXT,
+  last_seen_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -325,9 +330,10 @@ CREATE TABLE notifications (
   title VARCHAR(255) NOT NULL,
   message TEXT NOT NULL,
   notification_type VARCHAR(30)
-    CHECK (notification_type IS NULL OR notification_type IN ('order','message','system','item_sold','item_bought')),
+    CHECK (notification_type IS NULL OR notification_type IN ('order','message','system','item_sold','item_bought','follow')),
   related_order_id VARCHAR(20) REFERENCES orders(id) ON DELETE SET NULL,
   related_product_id VARCHAR(20) REFERENCES products(id) ON DELETE SET NULL,
+  related_conversation_id VARCHAR(20) REFERENCES chat_conversations(id) ON DELETE SET NULL,
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -376,6 +382,19 @@ CREATE TABLE favorites (
   product_id VARCHAR(20) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_id, product_id)
+);
+
+
+-- =========================
+-- SELLER FOLLOWS
+-- =========================
+CREATE TABLE seller_follows (
+  id VARCHAR(20) PRIMARY KEY DEFAULT generate_prefixed_id('seller_follows_id_seq','SF',4),
+  user_id VARCHAR(20) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  seller_id VARCHAR(20) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, seller_id),
+  CHECK (user_id <> seller_id)
 );
 
 
@@ -430,6 +449,8 @@ CREATE INDEX IF NOT EXISTS idx_cart_items_product_id ON cart_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_seller_follows_user_id ON seller_follows(user_id);
+CREATE INDEX IF NOT EXISTS idx_seller_follows_seller_id ON seller_follows(seller_id);
 CREATE INDEX IF NOT EXISTS idx_chat_conversations_product_id ON chat_conversations(product_id);
 CREATE INDEX IF NOT EXISTS idx_chat_conversations_buyer_id ON chat_conversations(buyer_id);
 CREATE INDEX IF NOT EXISTS idx_chat_conversations_seller_id ON chat_conversations(seller_id);
@@ -444,3 +465,63 @@ CREATE INDEX IF NOT EXISTS idx_products_subcategory_id ON products(subcategory_i
 //product image
 Bucket = product_images
 https://yqvgeownycvbzelukmfp.supabase.co/storage/v1/object/public/product_images/example.jpg
+
+
+-- =========================
+-- RLS FOR SELLER_FOLLOWS
+-- =========================
+ALTER TABLE seller_follows ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view seller follows" ON seller_follows;
+DROP POLICY IF EXISTS "Users can follow sellers as themselves" ON seller_follows;
+DROP POLICY IF EXISTS "Users can unfollow sellers as themselves" ON seller_follows;
+DROP POLICY IF EXISTS "Users can update seller follows as themselves" ON seller_follows;
+
+CREATE POLICY "Public can view seller follows"
+ON seller_follows
+FOR SELECT
+USING (true);
+
+CREATE POLICY "Users can follow sellers as themselves"
+ON seller_follows
+FOR INSERT
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM users
+    WHERE users.id = seller_follows.user_id
+      AND users.email = auth.email()
+  )
+);
+
+CREATE POLICY "Users can unfollow sellers as themselves"
+ON seller_follows
+FOR DELETE
+USING (
+  EXISTS (
+    SELECT 1
+    FROM users
+    WHERE users.id = seller_follows.user_id
+      AND users.email = auth.email()
+  )
+);
+
+CREATE POLICY "Users can update seller follows as themselves"
+ON seller_follows
+FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1
+    FROM users
+    WHERE users.id = seller_follows.user_id
+      AND users.email = auth.email()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM users
+    WHERE users.id = seller_follows.user_id
+      AND users.email = auth.email()
+  )
+);
