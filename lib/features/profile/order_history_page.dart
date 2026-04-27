@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
+import '../../services/local/connectivity_service.dart';
 import '../../state/state.dart';
 
 class OrderHistoryPage extends StatefulWidget {
@@ -99,6 +100,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       ),
       body: Column(
         children: [
+          _buildOfflineBanner(),
           _buildSearchAndFilters(),
           Expanded(
             child: orderState.isLoading
@@ -215,6 +217,36 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOfflineBanner() {
+    return StreamBuilder<bool>(
+      stream: ConnectivityService.instance.onlineChanges,
+      builder: (context, snapshot) {
+        final isOnline = snapshot.data ?? true;
+        if (isOnline) return const SizedBox.shrink();
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          color: Colors.orange.withValues(alpha: 0.1),
+          child: Row(
+            children: [
+              const Icon(Icons.cloud_off_rounded, size: 16, color: Colors.orange),
+              const SizedBox(width: 8),
+              Text(
+                'Offline Mode · Showing cached history',
+                style: TextStyle(
+                  color: Colors.orange[800],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
