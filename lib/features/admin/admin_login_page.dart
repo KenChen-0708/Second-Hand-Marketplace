@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/auth/admin_biometric_service.dart';
 import '../../state/state.dart';
 
 class AdminLoginPage extends StatefulWidget {
@@ -15,10 +16,12 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final _biometricService = AdminBiometricService();
 
   bool _isLoading = false;
   String? _errorMessage;
   bool _obscurePassword = true;
+  bool _didLoadAdminSecurityDefaults = false;
 
   @override
   void dispose() {
@@ -32,6 +35,9 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     if (!isValid) return;
 
     FocusScope.of(context).unfocus();
+
+    final adminSecurityState = context.read<AdminSecurityState>();
+    adminSecurityState.clearStatusMessage();
 
     setState(() {
       _isLoading = true;
@@ -64,10 +70,69 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
         return;
       }
 
+      adminSecurityState.cacheAdminCredentials(
+        email: email,
+        password: password,
+      );
+      adminSecurityState.beginAdminSession(adminEmail: email);
+
       // Successfully logged in as admin
       if (!mounted) return;
       context.go('/admin/dashboard');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
 
+  Future<void> _handleBiometricUnlock() async {
+    final adminSecurityState = context.read<AdminSecurityState>();
+    final userState = context.read<UserState>();
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final credentials = await _biometricService.getCredentials();
+      if (credentials == null) {
+        throw Exception(
+          'No saved admin biometric credentials were found. Sign in with your password once and enable biometric login from Admin Settings.',
+        );
+      }
+
+      final unlocked = await adminSecurityState.unlockAdminSession();
+      if (!unlocked) {
+        throw Exception(
+          adminSecurityState.statusMessage ?? 'Biometric verification failed.',
+        );
+      }
+
+      await userState.login(
+        credentials['email']!,
+        credentials['password']!,
+      );
+
+      if (userState.currentUser?.role != 'admin') {
+        await userState.logout();
+        throw Exception('Saved biometric credentials do not belong to an admin account.');
+      }
+
+      adminSecurityState.cacheAdminCredentials(
+        email: credentials['email']!,
+        password: credentials['password']!,
+      );
+      adminSecurityState.beginAdminSession(
+        adminEmail: credentials['email']!,
+      );
+      _emailController.text = credentials['email']!;
+
+      if (!mounted) return;
+      context.go('/admin/dashboard');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -78,7 +143,28 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final adminSecurityState = context.read<AdminSecurityState>();
+    if (_didLoadAdminSecurityDefaults || !adminSecurityState.isInitialized) {
+      return;
+    }
+
+    if (_emailController.text.isEmpty &&
+        (adminSecurityState.rememberedAdminEmail?.isNotEmpty ?? false)) {
+      _emailController.text = adminSecurityState.rememberedAdminEmail!;
+    }
+    _didLoadAdminSecurityDefaults = true;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final adminSecurityState = context.watch<AdminSecurityState>();
+    final statusMessage = _errorMessage ?? adminSecurityState.statusMessage;
+    final statusColor =
+        _errorMessage != null ? Colors.red : const Color(0xFF1D4ED8);
+    final canShowBiometricUnlock = adminSecurityState.canUseBiometricUnlock;
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
@@ -135,20 +221,20 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                 const SizedBox(height: 48),
 
                 // Error Message
-                if (_errorMessage != null)
+                if (statusMessage != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.1),
-                        border: Border.all(color: Colors.red),
+                        color: statusColor.withValues(alpha: 0.1),
+                        border: Border.all(color: statusColor),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(
-                          color: Colors.red,
+                        statusMessage,
+                        style: TextStyle(
+                          color: statusColor,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -212,6 +298,52 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                   },
                 ),
                 const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.timer_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Admin sessions lock after 10 minutes of inactivity.',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.settings_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Biometric login can be enabled from the admin Settings tab.',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
 
                 // Login Button
                 FilledButton(
@@ -238,6 +370,20 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                 ),
+                if (canShowBiometricUnlock) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _handleBiometricUnlock,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    icon: const Icon(Icons.fingerprint),
+                    label: const Text('Login with Biometrics'),
+                  ),
+                ],
               ],
             ),
           ),

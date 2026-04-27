@@ -52,10 +52,11 @@ import 'features/admin/admin_category_management_page.dart';
 import 'features/admin/admin_listing_moderation_page.dart';
 import 'features/admin/admin_order_management_page.dart';
 import 'features/admin/admin_notification_center_page.dart';
+import 'features/admin/admin_settings_page.dart';
 
-const String supabaseUrl = 'https://yqvgeownycvbzelukmfp.supabase.co';
+const String supabaseUrl = 'https://rzmubhazanjjpflekxzl.supabase.co';
 const String supabaseKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxdmdlb3dueWN2YnplbHVrbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzc2MjcsImV4cCI6MjA4NzgxMzYyN30.1OOTEJnPr7qXWLGdSUNmydvK6_UFSB38mkJbQnv1Qp0';
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6bXViaGF6YW5qanBmbGVreHpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMDQ2MzgsImV4cCI6MjA5Mjc4MDYzOH0.Is_KRac7c-MgqMbHHVBO2jZUatgEp6U2osdT7CAYgP8';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -123,41 +124,64 @@ final _shellNavigatorAdminOrdersKey = GlobalKey<NavigatorState>(
 final _shellNavigatorAdminNotificationsKey = GlobalKey<NavigatorState>(
   debugLabel: 'adminNotifications',
 );
+final _shellNavigatorAdminSettingsKey = GlobalKey<NavigatorState>(
+  debugLabel: 'adminSettings',
+);
 
 final _router = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/',
   redirect: (context, state) async {
     final userState = context.read<UserState>();
+    final adminSecurityState = context.read<AdminSecurityState>();
     final user = userState.currentUser;
     final bool isAuthenticated = userState.isAuthenticated;
+    final bool isAdminLoginPage = state.matchedLocation == '/admin/login';
+    final bool isAdminRoute = state.matchedLocation.startsWith('/admin');
 
     // Pages that are accessible without login
     final bool isPublicPage = state.matchedLocation == '/' ||
         state.matchedLocation == '/register' ||
         state.matchedLocation == '/reset-password' ||
-        state.matchedLocation == '/admin/login' ||
+        isAdminLoginPage ||
         state.matchedLocation == '/home' ||
         state.matchedLocation.startsWith('/product/') ||
         state.matchedLocation.startsWith('/seller/');
 
     if (!isAuthenticated && !isPublicPage) {
+      if (isAdminRoute) {
+        return '/admin/login';
+      }
       return '/'; // Send to login if trying to access private page without login
     }
 
     if (isAuthenticated) {
-      if (state.matchedLocation.startsWith('/admin') && state.matchedLocation != '/admin/login') {
-        if (user != null && user.role != 'admin') {
+      if (isAdminRoute && !isAdminLoginPage) {
+        if (user == null || user.role != 'admin') {
           return '/home'; // Kick users back to marketplace
+        }
+        if (!adminSecurityState.isAdminSessionActive) {
+          return '/admin/login';
         }
       }
 
       // If already logged in and at auth pages, go home
       final bool isAuthPage = state.matchedLocation == '/' ||
           state.matchedLocation == '/register' ||
-          state.matchedLocation == '/admin/login';
+          isAdminLoginPage;
       if (isAuthPage && state.matchedLocation != '/reset-password') {
-        if (user?.role == 'admin') return '/admin/dashboard';
+        if (user?.role == 'admin') {
+          if (adminSecurityState.isAdminSessionActive) {
+            return '/admin/dashboard';
+          }
+          if (!isAdminLoginPage) {
+            return '/admin/login';
+          }
+          return null;
+        }
+        if (isAdminLoginPage) {
+          return '/home';
+        }
         return '/home';
       }
     }
@@ -354,6 +378,15 @@ final _router = GoRouter(
             ),
           ],
         ),
+        StatefulShellBranch(
+          navigatorKey: _shellNavigatorAdminSettingsKey,
+          routes: [
+            GoRoute(
+              path: '/admin/settings',
+              builder: (context, state) => const AdminSettingsPage(),
+            ),
+          ],
+        ),
       ],
     ),
 
@@ -488,12 +521,15 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late final UserState _userState;
+  late final AdminSecurityState _adminSecurityState;
 
   @override
   void initState() {
     super.initState();
     _userState = UserState();
+    _adminSecurityState = AdminSecurityState();
     _userState.initialize(); // Auto-login on start
+    _adminSecurityState.initialize();
     _setupAuthListener();
   }
 
@@ -505,10 +541,20 @@ class _MyAppState extends State<MyApp> {
       }
 
       // Update isAuthenticated state whenever auth changes
+      if (event == AuthChangeEvent.signedOut) {
+        _adminSecurityState.clearAdminSession();
+      }
       if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
         setState(() {});
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _adminSecurityState.dispose();
+    _userState.dispose();
+    super.dispose();
   }
 
   @override
@@ -537,6 +583,7 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => DisputeState()),
         ChangeNotifierProvider(create: (_) => AdminLogState()),
         ChangeNotifierProvider(create: (_) => AdminUserState()),
+        ChangeNotifierProvider.value(value: _adminSecurityState),
       ],
       child: Consumer4<UserState, AppNotificationState, ChatConversationState, SellerFollowState>(
         builder: (context, userState, noteState, chatState, sellerFollowState, child) {
