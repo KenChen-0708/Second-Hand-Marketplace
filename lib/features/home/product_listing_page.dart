@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
-import '../../models/mock_data.dart';
 import '../../shared/utils/camera_capture_helper.dart';
 import '../../shared/utils/currency_helper.dart';
 import '../../shared/utils/image_helper.dart';
@@ -124,13 +123,7 @@ class _ProductListingPageState extends State<ProductListingPage> {
     }
 
     final categoryState = context.read<CategoryState>();
-    final category = categoryState.items.cast<CategoryModel?>().firstWhere(
-      (c) => c?.id == categoryId,
-      orElse: () => mockCategories.cast<CategoryModel?>().firstWhere(
-        (c) => c?.id == categoryId,
-        orElse: () => null,
-      ),
-    );
+    final category = categoryState.getById(categoryId);
     return category?.name ?? 'Uncategorized';
   }
 
