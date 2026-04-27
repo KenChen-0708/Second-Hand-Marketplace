@@ -21,6 +21,8 @@ DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS subcategories CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS product_meetup_locations CASCADE;
+
 
 DROP FUNCTION IF EXISTS generate_prefixed_id(TEXT, TEXT, INTEGER) CASCADE;
 
@@ -100,12 +102,19 @@ CREATE TABLE users (
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   is_online BOOLEAN NOT NULL DEFAULT FALSE,
   phone_number VARCHAR(20),
+  is_phone_verified BOOLEAN DEFAULT FALSE,
+
   address TEXT,
   city VARCHAR(100),
   postal_code VARCHAR(20),
   country VARCHAR(100),
   bio TEXT,
+
+  fcm_token TEXT,
+  push_enabled BOOLEAN DEFAULT FALSE,
+
   last_seen_at TIMESTAMPTZ,
+
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
