@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
 import '../../shared/utils/image_helper.dart';
+import '../local/connectivity_service.dart';
+import '../local/local_database_service.dart';
 import '../notification/notification_service.dart';
 
 class OrderService {
@@ -10,6 +12,8 @@ class OrderService {
 
   final SupabaseClient _supabase;
   final NotificationService _notificationService;
+  final LocalDatabaseService _localDatabase = LocalDatabaseService.instance;
+  final ConnectivityService _connectivityService = ConnectivityService.instance;
 
   Future<List<OrderModel>> createOrder({
     required String buyerId,
@@ -94,6 +98,7 @@ class OrderService {
         }
       }
 
+      await _localDatabase.cacheOrders([order]);
       return [order];
     } on PostgrestException catch (e) {
       throw Exception(e.message);
@@ -144,6 +149,7 @@ class OrderService {
           relatedProductId: order.primaryProductId,
         );
       }
+      await _localDatabase.cacheOrders([order]);
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
@@ -199,6 +205,7 @@ class OrderService {
           relatedProductId: order.primaryProductId,
         );
       }
+      await _localDatabase.cacheOrders([order]);
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
@@ -207,6 +214,22 @@ class OrderService {
   }
 
   Future<List<OrderModel>> getUserOrders(String userId) async {
+    final buyerCached = await _localDatabase.getCachedOrders(userId);
+    final sellerCached = await _localDatabase.getCachedOrders(userId, asSeller: true);
+    final Map<String, OrderModel> combinedCached = {};
+    for (var o in buyerCached) {
+      combinedCached[o.id] = o;
+    }
+    for (var o in sellerCached) {
+      combinedCached[o.id] = o;
+    }
+    final List<OrderModel> cachedOrders = combinedCached.values.toList()
+      ..sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+
+    if (!await _connectivityService.isOnline()) {
+      return cachedOrders;
+    }
+
     try {
       final buyerResponse = await _supabase
           .from('orders')
@@ -224,7 +247,10 @@ class OrderService {
           .eq('order_items.products.seller_id', userId)
           .order('created_at', ascending: false);
 
-      final List<dynamic> combinedRaw = [...(buyerResponse as List), ...(sellerResponse as List)];
+      final List<dynamic> combinedRaw = [
+        ...(buyerResponse as List),
+        ...(sellerResponse as List)
+      ];
       final Map<String, dynamic> uniqueOrders = {};
       for (var o in combinedRaw) {
         uniqueOrders[o['id'].toString()] = o;
@@ -237,15 +263,23 @@ class OrderService {
           .toList();
 
       orders.sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
+      await _localDatabase.cacheOrders(orders);
       return orders;
     } on PostgrestException catch (e) {
+      if (cachedOrders.isNotEmpty) return cachedOrders;
       throw Exception(e.message);
     } catch (e) {
+      if (cachedOrders.isNotEmpty) return cachedOrders;
       throw Exception('Failed to fetch orders: $e');
     }
   }
 
   Future<List<OrderModel>> getBuyerOrders(String userId) async {
+    final cached = await _localDatabase.getCachedOrders(userId);
+    if (!await _connectivityService.isOnline()) {
+      return cached;
+    }
+
     try {
       final response = await _supabase
           .from('orders')
@@ -255,19 +289,27 @@ class OrderService {
           .eq('buyer_id', userId)
           .order('created_at', ascending: false);
 
-      return (response as List)
+      final orders = (response as List)
           .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
                 Map<String, dynamic>.from(order as Map),
               )))
           .toList();
+      
+      await _localDatabase.cacheOrders(orders);
+      return orders;
     } on PostgrestException catch (e) {
+      if (cached.isNotEmpty) return cached;
       throw Exception(e.message);
     } catch (e) {
+      if (cached.isNotEmpty) return cached;
       throw Exception('Failed to fetch purchase history: $e');
     }
   }
 
   Future<OrderModel> getOrderById(String orderId) async {
+    // Note: We don't have a specific getCachedOrderById yet, 
+    // but maybe we can just query the full list if needed.
+    // For now we rely on online fetch with optional cache update.
     try {
       final response = await _supabase
           .from('orders')
@@ -277,9 +319,11 @@ class OrderService {
           .eq('id', orderId)
           .single();
 
-      return OrderModel.fromMap(
+      final order = OrderModel.fromMap(
         _resolveOrderImageFields(Map<String, dynamic>.from(response)),
       );
+      await _localDatabase.cacheOrders([order]);
+      return order;
     } on PostgrestException catch (e) {
       throw Exception(e.message);
     } catch (e) {
@@ -288,6 +332,11 @@ class OrderService {
   }
 
   Future<List<OrderModel>> getSellerOrders(String sellerId) async {
+    final cached = await _localDatabase.getCachedOrders(sellerId, asSeller: true);
+    if (!await _connectivityService.isOnline()) {
+      return cached;
+    }
+
     try {
       final response = await _supabase
           .from('orders')
@@ -297,14 +346,19 @@ class OrderService {
           .eq('order_items.products.seller_id', sellerId)
           .order('created_at', ascending: false);
 
-      return (response as List)
+      final orders = (response as List)
           .map((order) => OrderModel.fromMap(_resolveOrderImageFields(
                 Map<String, dynamic>.from(order as Map),
               )))
           .toList();
+
+      await _localDatabase.cacheOrders(orders);
+      return orders;
     } on PostgrestException catch (e) {
+      if (cached.isNotEmpty) return cached;
       throw Exception(e.message);
     } catch (e) {
+      if (cached.isNotEmpty) return cached;
       throw Exception('Failed to fetch seller orders: $e');
     }
   }

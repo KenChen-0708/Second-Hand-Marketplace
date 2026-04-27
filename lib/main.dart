@@ -140,7 +140,8 @@ final _router = GoRouter(
     final bool isAdminRoute = state.matchedLocation.startsWith('/admin');
 
     // Pages that are accessible without login
-    final bool isPublicPage = state.matchedLocation == '/' ||
+    final bool isPublicPage =
+        state.matchedLocation == '/' ||
         state.matchedLocation == '/register' ||
         state.matchedLocation == '/reset-password' ||
         isAdminLoginPage ||
@@ -156,8 +157,9 @@ final _router = GoRouter(
     }
 
     if (isAuthenticated) {
-      if (isAdminRoute && !isAdminLoginPage) {
-        if (user == null || user.role != 'admin') {
+      if (state.matchedLocation.startsWith('/admin') &&
+          state.matchedLocation != '/admin/login') {
+        if (user != null && user.role != 'admin') {
           return '/home'; // Kick users back to marketplace
         }
         if (!adminSecurityState.isAdminSessionActive) {
@@ -166,7 +168,8 @@ final _router = GoRouter(
       }
 
       // If already logged in and at auth pages, go home
-      final bool isAuthPage = state.matchedLocation == '/' ||
+      final bool isAuthPage =
+          state.matchedLocation == '/' ||
           state.matchedLocation == '/register' ||
           isAdminLoginPage;
       if (isAuthPage && state.matchedLocation != '/reset-password') {
@@ -500,7 +503,8 @@ final _router = GoRouter(
                       );
                     }
                     return SellerReviewPage(
-                        product: state.extra as ProductModel?);
+                      product: state.extra as ProductModel?,
+                    );
                   },
                 ),
               ],
@@ -541,10 +545,8 @@ class _MyAppState extends State<MyApp> {
       }
 
       // Update isAuthenticated state whenever auth changes
-      if (event == AuthChangeEvent.signedOut) {
-        _adminSecurityState.clearAdminSession();
-      }
-      if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
+      if (event == AuthChangeEvent.signedIn ||
+          event == AuthChangeEvent.signedOut) {
         setState(() {});
       }
     });
@@ -585,87 +587,109 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => AdminUserState()),
         ChangeNotifierProvider.value(value: _adminSecurityState),
       ],
-      child: Consumer4<UserState, AppNotificationState, ChatConversationState, SellerFollowState>(
-        builder: (context, userState, noteState, chatState, sellerFollowState, child) {
-          // ENSURE NOTIFICATION STATE HAS THE LATEST USER DATA
-          noteState.updateCurrentUser(userState.currentUser);
-          chatState.updateCurrentUser(userState.currentUser);
-          sellerFollowState.updateCurrentUser(userState.currentUser);
+      child:
+          Consumer4<
+            UserState,
+            AppNotificationState,
+            ChatConversationState,
+            SellerFollowState
+          >(
+            builder:
+                (
+                  context,
+                  userState,
+                  noteState,
+                  chatState,
+                  sellerFollowState,
+                  child,
+                ) {
+                  // ENSURE NOTIFICATION STATE HAS THE LATEST USER DATA
+                  noteState.updateCurrentUser(userState.currentUser);
+                  chatState.updateCurrentUser(userState.currentUser);
+                  sellerFollowState.updateCurrentUser(userState.currentUser);
 
-          return MaterialApp.router(
-            scaffoldMessengerKey: LocalNotificationManager.instance.messengerKey,
-            debugShowCheckedModeBanner: false,
-            title: 'CampusSell',
-            routerConfig: _router,
-            themeMode: context.watch<ThemeState>().themeMode,
-            theme: ThemeData(
-              useMaterial3: true,
-              colorScheme:
-              ColorScheme.fromSeed(
-                seedColor: primaryColor,
-                primary: primaryColor,
-                surface: surfaceColor,
-                brightness: Brightness.light,
-                primaryContainer: primaryColor.withValues(alpha: 0.1),
-                onPrimaryContainer: primaryColor,
-              ).copyWith(
-                surface: surfaceColor,
-                onSurface: const Color(0xFF1F2937),
-                surfaceContainerHighest: const Color(0xFFF3F4F6),
-                outlineVariant: const Color(0xFFD1D5DB),
-              ),
-              scaffoldBackgroundColor: scaffoldBgColor,
-              fontFamily: 'Roboto',
-              textTheme: const TextTheme(
-                headlineSmall: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
-                ),
-                titleLarge: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
-                ),
-                bodyLarge: TextStyle(color: Color(0xFF374151)),
-                bodyMedium: TextStyle(color: Color(0xFF4B5563)),
-              ),
-              filledButtonTheme: FilledButtonThemeData(
-                style: FilledButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-              inputDecorationTheme: InputDecorationTheme(
-                filled: true,
-                fillColor: const Color(0xFFF3F4F6),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const Color(0xFF10B981) == primaryColor ? const BorderSide(color: Color(0xFF10B981), width: 2) : const BorderSide(color: primaryColor, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
-              ),
-            ),
-            darkTheme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: primaryColor,
-                primary: primaryColor,
-                brightness: Brightness.dark,
-              ),
-              fontFamily: 'Roboto',
-            ),
-          );
-        },
-      ),
+                  return MaterialApp.router(
+                    scaffoldMessengerKey:
+                        LocalNotificationManager.instance.messengerKey,
+                    debugShowCheckedModeBanner: false,
+                    title: 'CampusSell',
+                    routerConfig: _router,
+                    themeMode: context.watch<ThemeState>().themeMode,
+                    theme: ThemeData(
+                      useMaterial3: true,
+                      colorScheme:
+                          ColorScheme.fromSeed(
+                            seedColor: primaryColor,
+                            primary: primaryColor,
+                            surface: surfaceColor,
+                            brightness: Brightness.light,
+                            primaryContainer: primaryColor.withValues(
+                              alpha: 0.1,
+                            ),
+                            onPrimaryContainer: primaryColor,
+                          ).copyWith(
+                            surface: surfaceColor,
+                            onSurface: const Color(0xFF1F2937),
+                            surfaceContainerHighest: const Color(0xFFF3F4F6),
+                            outlineVariant: const Color(0xFFD1D5DB),
+                          ),
+                      scaffoldBackgroundColor: scaffoldBgColor,
+                      fontFamily: 'Roboto',
+                      textTheme: const TextTheme(
+                        headlineSmall: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF111827),
+                        ),
+                        titleLarge: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF111827),
+                        ),
+                        bodyLarge: TextStyle(color: Color(0xFF374151)),
+                        bodyMedium: TextStyle(color: Color(0xFF4B5563)),
+                      ),
+                      filledButtonTheme: FilledButtonThemeData(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                      inputDecorationTheme: InputDecorationTheme(
+                        filled: true,
+                        fillColor: const Color(0xFFF3F4F6),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const Color(0xFF10B981) == primaryColor
+                              ? const BorderSide(
+                                  color: Color(0xFF10B981),
+                                  width: 2,
+                                )
+                              : const BorderSide(color: primaryColor, width: 2),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                      ),
+                    ),
+                    darkTheme: ThemeData(
+                      useMaterial3: true,
+                      colorScheme: ColorScheme.fromSeed(
+                        seedColor: primaryColor,
+                        primary: primaryColor,
+                        brightness: Brightness.dark,
+                      ),
+                      fontFamily: 'Roboto',
+                    ),
+                  );
+                },
+          ),
     );
   }
 }
