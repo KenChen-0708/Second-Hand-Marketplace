@@ -30,6 +30,14 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     super.dispose();
   }
 
+  void _handleBackToUserLogin() {
+    if (Navigator.of(context).canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/');
+  }
+
   Future<void> _handleAdminLogin() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
@@ -178,7 +186,7 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () => context.pop(),
+                      onPressed: _handleBackToUserLogin,
                       icon: const Icon(Icons.arrow_back),
                     ),
                   ],

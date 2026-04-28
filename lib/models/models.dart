@@ -25,4 +25,5 @@ export 'favorite_model.dart';
 export 'wishlist_item_model.dart';
 export 'dispute_model.dart';
 export 'admin_log_model.dart';
+export 'fraud_flag_model.dart';
 export 'mock_data.dart';

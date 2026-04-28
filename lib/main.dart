@@ -47,6 +47,7 @@ import 'shared/widgets/scaffold_with_nav_bar.dart';
 import 'features/admin/admin_login_page.dart';
 import 'features/admin/admin_scaffold.dart';
 import 'features/admin/admin_dashboard_page.dart';
+import 'features/admin/admin_fraud_detection_page.dart';
 import 'features/admin/admin_user_management_page.dart';
 import 'features/admin/admin_category_management_page.dart';
 import 'features/admin/admin_listing_moderation_page.dart';
@@ -108,6 +109,9 @@ final _shellNavigatorProfileKey = GlobalKey<NavigatorState>(
 
 final _shellNavigatorAdminDashboardKey = GlobalKey<NavigatorState>(
   debugLabel: 'adminDashboard',
+);
+final _shellNavigatorAdminFraudKey = GlobalKey<NavigatorState>(
+  debugLabel: 'adminFraud',
 );
 final _shellNavigatorAdminUsersKey = GlobalKey<NavigatorState>(
   debugLabel: 'adminUsers',
@@ -333,6 +337,15 @@ final _router = GoRouter(
             GoRoute(
               path: '/admin/dashboard',
               builder: (context, state) => const AdminDashboardPage(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _shellNavigatorAdminFraudKey,
+          routes: [
+            GoRoute(
+              path: '/admin/fraud',
+              builder: (context, state) => const AdminFraudDetectionPage(),
             ),
           ],
         ),
@@ -588,6 +601,7 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => FavoriteState()),
         ChangeNotifierProvider(create: (_) => DisputeState()),
         ChangeNotifierProvider(create: (_) => AdminLogState()),
+        ChangeNotifierProvider(create: (_) => AdminFraudState()),
         ChangeNotifierProvider(create: (_) => AdminUserState()),
         ChangeNotifierProvider.value(value: _adminSecurityState),
       ],

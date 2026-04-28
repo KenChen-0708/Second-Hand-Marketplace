@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -9,6 +8,7 @@ import '../../models/models.dart';
 import '../../services/local/admin_search_preferences_service.dart';
 import '../../shared/widgets/admin_search_history_section.dart';
 import '../../state/state.dart';
+import 'widgets/admin_cached_product_image.dart';
 
 class AdminListingModerationPage extends StatefulWidget {
   const AdminListingModerationPage({super.key});
@@ -32,7 +32,8 @@ class _AdminListingModerationPageState
   void initState() {
     super.initState();
     _searchFocusNode.addListener(_handleSearchFocusChange);
-    _clearSearchSubscription = AdminSearchPreferencesService.instance
+    _clearSearchSubscription = AdminSearchPreferencesService
+        .instance
         .clearCurrentSearchStream
         .listen(_handleClearSearchRequest);
     _restoreSearchHistory();
@@ -166,9 +167,7 @@ class _AdminListingModerationPageState
                     builder: (context, productState, child) {
                       if (productState.isLoading &&
                           productState.items.isEmpty) {
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        );
+                        return const Center(child: CircularProgressIndicator());
                       }
 
                       final filteredListings = productState.items.where((p) {
@@ -232,10 +231,10 @@ class _AdminListingModerationPageState
         ),
         const SizedBox(height: 8),
         Text(
-          'Manage platform listings. Tap to view full details or share with staff.',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Colors.black54,
-          ),
+          'Manage platform listings and share them with staff for moderation.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: Colors.black54),
         ),
       ],
     );
@@ -277,14 +276,8 @@ class _AdminListingModerationPageState
                 child: DropdownButton<String>(
                   value: _selectedStatus,
                   items: const [
-                    DropdownMenuItem(
-                      value: 'all',
-                      child: Text('All Status'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'active',
-                      child: Text('Active'),
-                    ),
+                    DropdownMenuItem(value: 'all', child: Text('All Status')),
+                    DropdownMenuItem(value: 'active', child: Text('Active')),
                     DropdownMenuItem(
                       value: 'inactive',
                       child: Text('Inactive'),
@@ -317,156 +310,142 @@ class _AdminListingModerationPageState
   Widget _buildListingCard(ProductModel product) {
     final isInactive = product.status.toLowerCase() == 'inactive';
 
-    return InkWell(
-      onTap: () => context.push('/product/${product.id}'),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.black12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              offset: const Offset(0, 4),
-              blurRadius: 10,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, 4),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: AdminCachedProductImage(
+                    imageUrl: product.imageUrl,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: _buildStatusChip(product.status),
+                ),
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      onPressed: () => Share.share(
+                        _buildListingShareMessage(product),
+                      ),
+                      icon: const Icon(
+                        Icons.share_rounded,
+                        size: 20,
+                        color: Colors.blueAccent,
+                      ),
+                      tooltip: 'Share Listing',
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                    child: Image.network(
-                      product.imageUrl ?? 'https://via.placeholder.com/400',
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: const Color(0xFFF3F4F6),
-                        child: const Center(
-                          child: Icon(
-                            Icons.image_rounded,
-                            size: 64,
-                            color: Colors.black26,
-                          ),
-                        ),
-                      ),
-                    ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: _buildStatusChip(product.status),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'RM ${product.price.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                    fontSize: 14,
                   ),
-                  Positioned(
-                    bottom: 8,
-                    right: 8,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        onPressed: () => Share.share(
-                          'Check this listing for moderation: ${product.title} \n ID: ${product.id}',
-                        ),
-                        icon: const Icon(
-                          Icons.share_rounded,
-                          size: 20,
-                          color: Colors.blueAccent,
-                        ),
-                        tooltip: 'Share Listing',
-                      ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.photo_library_outlined,
+                      size: 16,
+                      color: Colors.black54,
                     ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'RM ${product.price.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.photo_library_outlined,
-                        size: 16,
+                    const SizedBox(width: 6),
+                    Text(
+                      '${_productImages(product).length} photo${_productImages(product).length == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                        fontSize: 12,
                         color: Colors.black54,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${_productImages(product).length} photo${_productImages(product).length == 1 ? '' : 's'}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black54,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => _toggleStatus(product),
-                          style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            foregroundColor:
-                                isInactive ? Colors.green : Colors.orange,
-                            side: BorderSide(
-                              color:
-                                  isInactive ? Colors.green : Colors.orange,
-                            ),
-                          ),
-                          child: Text(
-                            isInactive ? 'Activate' : 'Deactivate',
-                            style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => _toggleStatus(product),
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          foregroundColor: isInactive
+                              ? Colors.green
+                              : Colors.orange,
+                          side: BorderSide(
+                            color: isInactive ? Colors.green : Colors.orange,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: () => _confirmDelete(product),
-                        icon: const Icon(
-                          Icons.delete_rounded,
-                          color: Colors.red,
-                          size: 20,
+                        child: Text(
+                          isInactive ? 'Activate' : 'Deactivate',
+                          style: const TextStyle(fontSize: 12),
                         ),
-                        tooltip: 'Delete Permanently',
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: () => _confirmDelete(product),
+                      icon: const Icon(
+                        Icons.delete_rounded,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                      tooltip: 'Delete Permanently',
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -515,9 +494,26 @@ class _AdminListingModerationPageState
     return images;
   }
 
+  String _buildListingShareMessage(ProductModel product) {
+    final photoCount = _productImages(product).length;
+    final sellerName = product.sellerName?.trim();
+
+    return [
+      'Listing moderation review',
+      'Title: ${product.title}',
+      'Listing ID: ${product.id}',
+      'Status: ${product.status.toUpperCase()}',
+      'Price: RM ${product.price.toStringAsFixed(2)}',
+      if (sellerName != null && sellerName.isNotEmpty) 'Seller: $sellerName',
+      'Photos: $photoCount',
+      'Please review this listing for moderation.',
+    ].join('\n');
+  }
+
   Future<void> _toggleStatus(ProductModel product) async {
-    final newStatus =
-        product.status.toLowerCase() == 'active' ? 'inactive' : 'active';
+    final newStatus = product.status.toLowerCase() == 'active'
+        ? 'inactive'
+        : 'active';
     try {
       await context.read<ProductState>().updateProduct(product.id, {
         'status': newStatus,
