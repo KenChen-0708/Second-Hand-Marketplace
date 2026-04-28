@@ -44,7 +44,7 @@ DROP SEQUENCE IF EXISTS seller_follows_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS disputes_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS admin_logs_id_seq CASCADE;
 DROP SEQUENCE IF EXISTS product_variants_id_seq CASCADE;
-
+DROP SEQUENCE IF EXISTS product_meetup_locations_id_seq CASCADE;
 
 -- =========================
 -- GENERIC ID GENERATOR
@@ -87,7 +87,7 @@ CREATE SEQUENCE seller_follows_id_seq START 1;
 CREATE SEQUENCE disputes_id_seq START 1;
 CREATE SEQUENCE admin_logs_id_seq START 1;
 CREATE SEQUENCE product_variants_id_seq START 1;
-
+CREATE SEQUENCE product_meetup_locations_id_seq START 1;
 
 -- =========================
 -- USERS

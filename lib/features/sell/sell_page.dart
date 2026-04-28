@@ -1,12 +1,37 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'MapSelectionScreen.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/product/product_service.dart';
+
+Future<String> _convertImageToWebp(String imagePath) async {
+  final source = File(imagePath);
+  final sourceName = source.uri.pathSegments.isNotEmpty
+      ? source.uri.pathSegments.last.split('.').first
+      : 'listing_image';
+  final outputDirectory = Directory.systemTemp.createTempSync('listing_webp_');
+  final outputPath =
+      '${outputDirectory.path}${Platform.pathSeparator}'
+      '${sourceName}_${DateTime.now().microsecondsSinceEpoch}.webp';
+  final compressedImage = await FlutterImageCompress.compressAndGetFile(
+    imagePath,
+    outputPath,
+    quality: 82,
+    format: CompressFormat.webp,
+    keepExif: false,
+  );
+
+  if (compressedImage == null) {
+    throw const FormatException('Unable to convert image to WebP');
+  }
+
+  return compressedImage.path;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry screen – shown as the /sell shell branch
@@ -154,6 +179,7 @@ class _SellWizardState extends State<_SellWizard> {
 
   // ── Shared state ──
   final List<String> _selectedImages = [];
+  final List<String> _selectedImageSources = [];
   final ImagePicker _picker = ImagePicker();
 
   String? _selectedCategory;
@@ -471,15 +497,39 @@ class _SellWizardState extends State<_SellWizard> {
   }
 
   // ── Hardware Integration: Camera & Gallery ──
+  Future<void> _addImage(String imagePath) async {
+    if (_selectedImages.length >= 10 ||
+        _selectedImageSources.contains(imagePath)) {
+      return;
+    }
+
+    final webpPath = await _convertImageToWebp(imagePath);
+    if (!mounted ||
+        _selectedImages.length >= 10 ||
+        _selectedImageSources.contains(imagePath)) {
+      return;
+    }
+
+    setState(() {
+      _selectedImages.add(webpPath);
+      _selectedImageSources.add(imagePath);
+    });
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+      _selectedImageSources.removeAt(index);
+    });
+  }
+
   Future<void> _takePhoto() async {
     try {
       final XFile? photo = await _picker.pickImage(
         source: ImageSource.camera,
         imageQuality: 80,
       );
-      if (photo != null && _selectedImages.length < 10) {
-        setState(() => _selectedImages.add(photo.path));
-      }
+      if (photo != null) await _addImage(photo.path);
     } catch (e) {
       debugPrint("Error taking photo: $e");
     }
@@ -489,14 +539,12 @@ class _SellWizardState extends State<_SellWizard> {
     try {
       final List<XFile> images = await _picker.pickMultiImage(imageQuality: 80);
       if (images.isNotEmpty) {
-        setState(() {
-          for (var img in images) {
-            if (_selectedImages.length < 10 &&
-                !_selectedImages.contains(img.path)) {
-              _selectedImages.add(img.path);
-            }
+        for (final image in images) {
+          if (_selectedImages.length >= 10) {
+            break;
           }
-        });
+          await _addImage(image.path);
+        }
       }
     } catch (e) {
       debugPrint("Error picking from gallery: $e");
@@ -817,8 +865,7 @@ class _SellWizardState extends State<_SellWizard> {
                     images: _selectedImages,
                     onPickGallery: _pickFromGallery,
                     onTakePhoto: _takePhoto,
-                    onRemove: (i) =>
-                        setState(() => _selectedImages.removeAt(i)),
+                    onRemove: _removeImage,
                   ),
                   _Step1Category(
                     selectedCategory: _selectedCategory,
@@ -894,7 +941,7 @@ class _SellWizardState extends State<_SellWizard> {
                     onTakePhoto: _takePhoto,
                     onRemoveImage: (idx) {
                       if (_selectedImages.length > 1) {
-                        setState(() => _selectedImages.removeAt(idx));
+                        _removeImage(idx);
                       }
                     },
                     onUpdateField: (field, value) {
