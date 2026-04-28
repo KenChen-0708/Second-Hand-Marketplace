@@ -526,12 +526,15 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   late final UserState _userState;
   late final AdminSecurityState _adminSecurityState;
+  late final ThemeState _themeState;
 
   @override
   void initState() {
     super.initState();
     _userState = UserState();
     _adminSecurityState = AdminSecurityState();
+    _themeState = ThemeState();
+    _themeState.initialize();
     _userState.initialize(); // Auto-login on start
     _adminSecurityState.initialize();
     _setupAuthListener();
@@ -554,6 +557,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    _themeState.dispose();
     _adminSecurityState.dispose();
     _userState.dispose();
     super.dispose();
@@ -567,7 +571,7 @@ class _MyAppState extends State<MyApp> {
 
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ThemeState()),
+        ChangeNotifierProvider.value(value: _themeState),
         ChangeNotifierProvider.value(value: _userState),
         ChangeNotifierProvider(create: (_) => CategoryState()),
         ChangeNotifierProvider(create: (_) => ProductState()),
