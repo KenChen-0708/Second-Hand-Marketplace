@@ -92,7 +92,10 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
 
   Future<void> _saveSearchHistoryEntry(String value) async {
     final history = await AdminSearchPreferencesService.instance
-        .addSearchHistoryEntry(AdminSearchPreferenceKeys.orderManagement, value);
+        .addSearchHistoryEntry(
+          AdminSearchPreferenceKeys.orderManagement,
+          value,
+        );
     if (!mounted) {
       return;
     }
@@ -108,7 +111,10 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
 
   Future<void> _removeSearchHistoryEntry(String value) async {
     final history = await AdminSearchPreferencesService.instance
-        .removeSearchHistoryEntry(AdminSearchPreferenceKeys.orderManagement, value);
+        .removeSearchHistoryEntry(
+          AdminSearchPreferenceKeys.orderManagement,
+          value,
+        );
     if (!mounted) {
       return;
     }
@@ -143,17 +149,30 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
 
   List<OrderModel> _applyFilters(List<OrderModel> orders) {
     return orders.where((order) {
-      final matchesSearch = order.orderNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          (order.buyer?.name ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          (order.primarySellerName ?? '').toLowerCase().contains(_searchQuery.toLowerCase());
-      
-      final matchesStatus = _statusFilter == 'all' || order.status.toLowerCase() == _statusFilter.toLowerCase();
-      
+      final matchesSearch =
+          order.orderNumber.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          ) ||
+          (order.buyer?.name ?? '').toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          ) ||
+          (order.primarySellerName ?? '').toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          );
+
+      final matchesStatus =
+          _statusFilter == 'all' ||
+          order.status.toLowerCase() == _statusFilter.toLowerCase();
+
       final orderDate = order.createdAt ?? DateTime.now();
-      final matchesDate = _dateRange == null || 
-          (orderDate.isAfter(_dateRange!.start) && orderDate.isBefore(_dateRange!.end.add(const Duration(days: 1))));
-      
-      final matchesPrice = order.totalPrice >= _priceRange.start && order.totalPrice <= _priceRange.end;
+      final matchesDate =
+          _dateRange == null ||
+          (orderDate.isAfter(_dateRange!.start) &&
+              orderDate.isBefore(_dateRange!.end.add(const Duration(days: 1))));
+
+      final matchesPrice =
+          order.totalPrice >= _priceRange.start &&
+          order.totalPrice <= _priceRange.end;
 
       return matchesSearch && matchesStatus && matchesDate && matchesPrice;
     }).toList();
@@ -308,9 +327,7 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
       backgroundColor: isActive ? Colors.blueAccent : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: isActive ? Colors.blueAccent : Colors.black12,
-        ),
+        side: BorderSide(color: isActive ? Colors.blueAccent : Colors.black12),
       ),
     );
   }
@@ -336,7 +353,9 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('RM ${_priceRange.start.round()} - RM ${_priceRange.end.round()}'),
+              Text(
+                'RM ${_priceRange.start.round()} - RM ${_priceRange.end.round()}',
+              ),
               RangeSlider(
                 values: _priceRange,
                 min: 0,
@@ -350,7 +369,10 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
           ],
         ),
       ),
@@ -361,10 +383,12 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
     return Consumer<OrderState>(
       builder: (context, orderState, child) {
         final activeOrders = orderState.items
-            .where((o) =>
-        o.status.toLowerCase() == 'pending' ||
-            o.status.toLowerCase() == 'paid' ||
-            o.status.toLowerCase() == 'disputed')
+            .where(
+              (o) =>
+                  o.status.toLowerCase() == 'pending' ||
+                  o.status.toLowerCase() == 'paid' ||
+                  o.status.toLowerCase() == 'disputed',
+            )
             .toList();
         return _buildOrderList(_applyFilters(activeOrders), orderState);
       },
@@ -374,8 +398,9 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
   Widget _buildDisputesTab() {
     return Consumer2<DisputeState, OrderState>(
       builder: (context, disputeState, orderState, child) {
-        final openDisputes =
-        disputeState.items.where((d) => d.status == 'open').toList();
+        final openDisputes = disputeState.items
+            .where((d) => d.status == 'open')
+            .toList();
 
         if (disputeState.isLoading) {
           return const Center(child: CircularProgressIndicator());
@@ -493,10 +518,12 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
     return Consumer<OrderState>(
       builder: (context, orderState, child) {
         final historyOrders = orderState.items
-            .where((o) =>
-        o.status.toLowerCase() == 'handed over' ||
-            o.status.toLowerCase() == 'cancelled' ||
-            o.status.toLowerCase() == 'completed')
+            .where(
+              (o) =>
+                  o.status.toLowerCase() == 'handed over' ||
+                  o.status.toLowerCase() == 'cancelled' ||
+                  o.status.toLowerCase() == 'completed',
+            )
             .toList();
         return _buildOrderList(_applyFilters(historyOrders), orderState);
       },
@@ -512,71 +539,90 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
       return const Center(child: Text('No orders found.'));
     }
 
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 800) {
-        return ListView.builder(
-          padding: EdgeInsets.all(constraints.maxWidth < 420 ? 16 : 24),
-          itemCount: orders.length,
-          itemBuilder: (context, index) => _buildOrderMobileCard(orders[index]),
-        );
-      }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 800) {
+          return ListView.builder(
+            padding: EdgeInsets.all(constraints.maxWidth < 420 ? 16 : 24),
+            itemCount: orders.length,
+            itemBuilder: (context, index) =>
+                _buildOrderMobileCard(orders[index]),
+          );
+        }
 
-      return Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.black12),
-          ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black12),
+            ),
             child: SingleChildScrollView(
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
-                columns: const [
-                  DataColumn(label: Text('Order #')),
-                  DataColumn(label: Text('Item')),
-                  DataColumn(label: Text('Buyer')),
-                  DataColumn(label: Text('Seller')),
-                  DataColumn(label: Text('Price')),
-                  DataColumn(label: Text('Status')),
-                  DataColumn(label: Text('Date')),
-                  DataColumn(label: Text('Actions')),
-                ],
-                rows: orders.map((order) {
-                  return DataRow(
-                    cells: [
-                      DataCell(Text(order.orderNumber)),
-                      DataCell(
-                        Text(
-                          order.orderItems.isNotEmpty
-                              ? order.orderItems.first.product?.title ?? 'Item'
-                              : 'No Item',
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(
+                    const Color(0xFFF9FAFB),
+                  ),
+                  columns: const [
+                    DataColumn(label: Text('Order #')),
+                    DataColumn(label: Text('Item')),
+                    DataColumn(label: Text('Buyer')),
+                    DataColumn(label: Text('Seller')),
+                    DataColumn(label: Text('Price')),
+                    DataColumn(label: Text('Status')),
+                    DataColumn(label: Text('Date')),
+                    DataColumn(label: Text('Actions')),
+                  ],
+                  rows: orders.map((order) {
+                    return DataRow(
+                      cells: [
+                        DataCell(Text(order.orderNumber)),
+                        DataCell(
+                          Text(
+                            order.orderItems.isNotEmpty
+                                ? order.orderItems.first.product?.title ??
+                                      'Item'
+                                : 'No Item',
+                          ),
                         ),
-                      ),
-                      DataCell(Text(order.buyer?.name ?? 'Unknown')),
-                      DataCell(Text(order.primarySellerName ?? 'Unknown')),
-                      DataCell(Text('RM ${order.totalPrice.toStringAsFixed(2)}')),
-                      DataCell(_buildStatusBadge(order.status)),
-                      DataCell(Text(order.createdAt != null ? DateFormat('yyyy-MM-dd').format(order.createdAt!) : '-')),
-                      DataCell(
-                        IconButton(
-                          icon: const Icon(Icons.visibility_outlined, size: 20),
-                          tooltip: 'View Order Details',
-                          onPressed: () => _showAdminOrderDetails(order),
+                        DataCell(Text(order.buyer?.name ?? 'Unknown')),
+                        DataCell(Text(order.primarySellerName ?? 'Unknown')),
+                        DataCell(
+                          Text('RM ${order.totalPrice.toStringAsFixed(2)}'),
                         ),
-                      ),
-                    ],
-                  );
-                }).toList(),
+                        DataCell(_buildStatusBadge(order.status)),
+                        DataCell(
+                          Text(
+                            order.createdAt != null
+                                ? DateFormat(
+                                    'yyyy-MM-dd',
+                                  ).format(order.createdAt!)
+                                : '-',
+                          ),
+                        ),
+                        DataCell(
+                          IconButton(
+                            icon: const Icon(
+                              Icons.visibility_outlined,
+                              size: 20,
+                            ),
+                            tooltip: 'View Order Details',
+                            onPressed: () => _showAdminOrderDetails(order),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
               ),
             ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 
   Widget _buildOrderMobileCard(OrderModel order) {
@@ -620,11 +666,24 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                 ],
               ),
               const Divider(height: 24),
-              _buildDetailRow('Item', order.orderItems.isNotEmpty ? order.orderItems.first.product?.title ?? 'Item' : 'No Item'),
+              _buildDetailRow(
+                'Item',
+                order.orderItems.isNotEmpty
+                    ? order.orderItems.first.product?.title ?? 'Item'
+                    : 'No Item',
+              ),
               _buildDetailRow('Buyer', order.buyer?.name ?? 'Unknown'),
               _buildDetailRow('Seller', order.primarySellerName ?? 'Unknown'),
-              _buildDetailRow('Price', 'RM ${order.totalPrice.toStringAsFixed(2)}'),
-              _buildDetailRow('Date', order.createdAt != null ? DateFormat('yyyy-MM-dd').format(order.createdAt!) : '-'),
+              _buildDetailRow(
+                'Price',
+                'RM ${order.totalPrice.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow(
+                'Date',
+                order.createdAt != null
+                    ? DateFormat('yyyy-MM-dd').format(order.createdAt!)
+                    : '-',
+              ),
             ],
           ),
         ),
@@ -640,10 +699,16 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
         children: [
           SizedBox(
             width: 80,
-            child: Text(label, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.black54, fontSize: 13),
+            ),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -709,11 +774,21 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Order Details', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                    Text('#${order.orderNumber}', style: const TextStyle(color: Colors.black54)),
+                    Text(
+                      'Order Details',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      '#${order.orderNumber}',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
                   ],
                 ),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
               ],
             ),
             const Divider(height: 32),
@@ -728,7 +803,13 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                         children: [
                           _buildStatusBadge(order.status),
                           const SizedBox(width: 16),
-                          Text(order.createdAt != null ? DateFormat('MMM dd, yyyy HH:mm').format(order.createdAt!) : 'Unknown Date'),
+                          Text(
+                            order.createdAt != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy HH:mm',
+                                  ).format(order.createdAt!)
+                                : 'Unknown Date',
+                          ),
                         ],
                       ),
                     ),
@@ -737,9 +818,24 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                       title: 'Parties Involved',
                       child: Row(
                         children: [
-                          Expanded(child: _buildPartyInfo('Buyer', order.buyer?.name ?? 'Unknown', order.buyerId)),
-                          const Icon(Icons.compare_arrows_rounded, color: Colors.black26),
-                          Expanded(child: _buildPartyInfo('Seller', order.primarySellerName ?? 'Unknown', order.primarySellerId ?? 'Unknown')),
+                          Expanded(
+                            child: _buildPartyInfo(
+                              'Buyer',
+                              order.buyer?.name ?? 'Unknown',
+                              order.buyerId,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.compare_arrows_rounded,
+                            color: Colors.black26,
+                          ),
+                          Expanded(
+                            child: _buildPartyInfo(
+                              'Seller',
+                              order.primarySellerName ?? 'Unknown',
+                              order.primarySellerId ?? 'Unknown',
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -747,7 +843,9 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                     _buildAdminDetailSection(
                       title: 'Order Items',
                       child: Column(
-                        children: order.orderItems.map((item) => _buildOrderItemTile(item)).toList(),
+                        children: order.orderItems
+                            .map((item) => _buildOrderItemTile(item))
+                            .toList(),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -756,12 +854,28 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildInfoRow(Icons.location_on_outlined, 'Location', order.handoverLocation ?? 'TBD'),
+                          _buildInfoRow(
+                            Icons.location_on_outlined,
+                            'Location',
+                            order.handoverLocation ?? 'TBD',
+                          ),
                           const SizedBox(height: 8),
-                          _buildInfoRow(Icons.event_outlined, 'Date', order.handoverDate != null ? DateFormat('MMM dd, yyyy HH:mm').format(order.handoverDate!) : 'TBD'),
+                          _buildInfoRow(
+                            Icons.event_outlined,
+                            'Date',
+                            order.handoverDate != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy HH:mm',
+                                  ).format(order.handoverDate!)
+                                : 'TBD',
+                          ),
                           if (order.notes?.isNotEmpty ?? false) ...[
                             const SizedBox(height: 8),
-                            _buildInfoRow(Icons.notes_rounded, 'Notes', order.notes!),
+                            _buildInfoRow(
+                              Icons.notes_rounded,
+                              'Notes',
+                              order.notes!,
+                            ),
                           ],
                         ],
                       ),
@@ -771,14 +885,30 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                       title: 'Payment Summary',
                       child: Container(
                         padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Column(
                           children: [
-                            _buildSummaryRow('Subtotal', 'RM ${order.totalPrice.toStringAsFixed(2)}'),
+                            _buildSummaryRow(
+                              'Subtotal',
+                              'RM ${order.totalPrice.toStringAsFixed(2)}',
+                            ),
                             const SizedBox(height: 8),
-                            _buildSummaryRow('Total', 'RM ${order.totalPrice.toStringAsFixed(2)}', isBold: true),
+                            _buildSummaryRow(
+                              'Total',
+                              'RM ${order.totalPrice.toStringAsFixed(2)}',
+                              isBold: true,
+                            ),
                             const SizedBox(height: 8),
-                            _buildSummaryRow('Payment Status', order.paymentStatus.toUpperCase(), color: order.paymentStatus.toLowerCase() == 'paid' ? Colors.green : Colors.orange),
+                            _buildSummaryRow(
+                              'Payment Status',
+                              order.paymentStatus.toUpperCase(),
+                              color: order.paymentStatus.toLowerCase() == 'paid'
+                                  ? Colors.green
+                                  : Colors.orange,
+                            ),
                           ],
                         ),
                       ),
@@ -802,11 +932,22 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
     );
   }
 
-  Widget _buildAdminDetailSection({required String title, required Widget child}) {
+  Widget _buildAdminDetailSection({
+    required String title,
+    required Widget child,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45, letterSpacing: 1)),
+        Text(
+          title.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.black45,
+            letterSpacing: 1,
+          ),
+        ),
         const SizedBox(height: 12),
         child,
       ],
@@ -818,8 +959,14 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(role, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        Text('ID: $id', style: const TextStyle(fontSize: 10, color: Colors.black38)),
+        Text(
+          name,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        Text(
+          'ID: $id',
+          style: const TextStyle(fontSize: 10, color: Colors.black38),
+        ),
       ],
     );
   }
@@ -831,24 +978,44 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: ImageHelper.productImage(item.product?.imageUrl, width: 48, height: 48, fit: BoxFit.cover),
+            child: ImageHelper.productImage(
+              item.product?.imageUrl,
+              width: 48,
+              height: 48,
+              fit: BoxFit.cover,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.product?.title ?? 'Item', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                if (item.variant != null) 
-                  Text(item.variant!.optionSummary, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                Text(
+                  item.product?.title ?? 'Item',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                if (item.variant != null)
+                  Text(
+                    item.variant!.optionSummary,
+                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  ),
               ],
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('RM ${item.unitPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text('Qty: ${item.quantity}', style: const TextStyle(fontSize: 11, color: Colors.black54)),
+              Text(
+                'RM ${item.unitPrice.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                'Qty: ${item.quantity}',
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
             ],
           ),
         ],
@@ -867,7 +1034,10 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
             text: TextSpan(
               style: const TextStyle(color: Colors.black87, fontSize: 13),
               children: [
-                TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                TextSpan(
+                  text: '$label: ',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 TextSpan(text: value),
               ],
             ),
@@ -877,12 +1047,30 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, {bool isBold = false, Color? color}) {
+  Widget _buildSummaryRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    Color? color,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: 14)),
-        Text(value, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.w600, fontSize: 14, color: color)),
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            fontSize: 14,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            fontSize: 14,
+            color: color,
+          ),
+        ),
       ],
     );
   }
@@ -917,13 +1105,21 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => _handleResolve(
-                dispute, 'cancelled', notesController.text, context),
+              dispute,
+              'cancelled',
+              notesController.text,
+              context,
+            ),
             child: const Text('Rule for Buyer (Cancel)'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.green),
             onPressed: () => _handleResolve(
-                dispute, 'completed', notesController.text, context),
+              dispute,
+              'completed',
+              notesController.text,
+              context,
+            ),
             child: const Text('Rule for Seller (Complete)'),
           ),
         ],
@@ -931,8 +1127,12 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
     );
   }
 
-  Future<void> _handleResolve(DisputeModel dispute, String status, String notes,
-      BuildContext context) async {
+  Future<void> _handleResolve(
+    DisputeModel dispute,
+    String status,
+    String notes,
+    BuildContext context,
+  ) async {
     try {
       await context.read<DisputeState>().resolveDispute(
         disputeId: dispute.id,
@@ -987,12 +1187,14 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
           width: 500,
           height: 600,
           child: FutureBuilder<List<ChatMessageModel>>(
-            future: ChatService().getOrCreateConversation(
-              productId: productId,
-              buyerId: buyerId,
-              sellerId: sellerId,
-              currentUserId: buyerId,
-            ).then((bundle) => bundle.messages),
+            future: ChatService()
+                .getOrCreateConversation(
+                  productId: productId,
+                  buyerId: buyerId,
+                  sellerId: sellerId,
+                  currentUserId: buyerId,
+                )
+                .then((bundle) => bundle.messages),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -1002,7 +1204,9 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
               }
               final messages = snapshot.data ?? [];
               if (messages.isEmpty) {
-                return const Center(child: Text('No messages found for this transaction.'));
+                return const Center(
+                  child: Text('No messages found for this transaction.'),
+                );
               }
 
               return ListView.builder(
@@ -1010,19 +1214,30 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                 itemBuilder: (context, index) {
                   final msg = messages[index];
                   final isBuyer = msg.senderId == buyerId;
+                  final sharedProduct = ChatService.parseSharedProduct(msg);
 
                   return Align(
-                    alignment: isBuyer ? Alignment.centerLeft : Alignment.centerRight,
+                    alignment: isBuyer
+                        ? Alignment.centerLeft
+                        : Alignment.centerRight,
                     child: Container(
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isBuyer ? Colors.blue.shade50 : Colors.green.shade50,
+                        color: isBuyer
+                            ? Colors.blue.shade50
+                            : Colors.green.shade50,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isBuyer ? Colors.blue.shade100 : Colors.green.shade100),
+                        border: Border.all(
+                          color: isBuyer
+                              ? Colors.blue.shade100
+                              : Colors.green.shade100,
+                        ),
                       ),
                       child: Column(
-                        crossAxisAlignment: isBuyer ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+                        crossAxisAlignment: isBuyer
+                            ? CrossAxisAlignment.start
+                            : CrossAxisAlignment.end,
                         children: [
                           Text(
                             isBuyer ? 'Buyer' : 'Seller',
@@ -1033,11 +1248,17 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(msg.messageText),
+                          if (sharedProduct != null)
+                            _buildSharedProductMessage(sharedProduct)
+                          else
+                            _buildAdminChatMessageText(msg),
                           const SizedBox(height: 4),
                           Text(
-                            msg.createdAt?.toLocal().toString().substring(0, 16) ?? '',
-                            style: const TextStyle(fontSize: 9, color: Colors.black38),
+                            _formatChatTimestamp(msg.createdAt),
+                            style: const TextStyle(
+                              fontSize: 9,
+                              color: Colors.black38,
+                            ),
                           ),
                         ],
                       ),
@@ -1050,5 +1271,102 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
         ),
       ),
     );
+  }
+
+  Widget _buildAdminChatMessageText(ChatMessageModel message) {
+    if (message.isImage) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (message.imageUrl != null && message.imageUrl!.trim().isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: ImageHelper.productImage(
+                message.imageUrl,
+                width: 140,
+                height: 140,
+                fit: BoxFit.cover,
+              ),
+            ),
+          if (message.imageUrl != null && message.imageUrl!.trim().isNotEmpty)
+            const SizedBox(height: 8),
+          Text(ChatService.previewText(message)),
+        ],
+      );
+    }
+
+    return Text(ChatService.previewText(message));
+  }
+
+  Widget _buildSharedProductMessage(SharedProductMessage sharedProduct) {
+    final product = sharedProduct.product;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: ImageHelper.productImage(
+              product.imageUrl,
+              width: 44,
+              height: 44,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Shared product',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  product.title.isNotEmpty ? product.title : 'Untitled product',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'RM ${product.price.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatChatTimestamp(DateTime? value) {
+    if (value == null) {
+      return '';
+    }
+    return DateFormat('yyyy-MM-dd HH:mm').format(value.toLocal());
   }
 }

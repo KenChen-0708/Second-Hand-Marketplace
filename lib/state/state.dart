@@ -16,6 +16,7 @@ export 'seller_follow_state.dart';
 export 'favorite_state.dart';
 export 'dispute_state.dart';
 export 'admin_log_state.dart';
+export 'admin_fraud_state.dart';
 export 'admin_user_state.dart';
 export 'admin_security_state.dart';
 export 'theme_state.dart';

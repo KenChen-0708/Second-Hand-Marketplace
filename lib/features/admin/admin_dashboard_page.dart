@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../state/state.dart';
+
 import '../../models/models.dart';
+import '../../state/state.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -24,6 +26,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     context.read<AdminUserState>().fetchAllUsers();
     context.read<ProductState>().fetchProducts(status: null);
     context.read<OrderState>().fetchAllOrders();
+    context.read<AdminFraudState>().scanSuspiciousUsers();
   }
 
   @override
@@ -47,93 +50,118 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                Consumer<AdminFraudState>(
+                  builder: (context, fraudState, child) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: _buildFraudOverviewCard(context, fraudState),
+                    );
+                  },
+                ),
 
                 // KPIs using real data from Providers
                 LayoutBuilder(
                   builder: (context, constraints) {
                     return Consumer3<AdminUserState, ProductState, OrderState>(
-                      builder: (context, userState, productState, orderState, child) {
-                        final totalUsers = userState.users.length;
-                        final activeListings = productState.items
-                            .where((p) => p.status.toLowerCase() == 'active')
-                            .length;
-                        final completedOrders = orderState.items
-                            .where((o) =>
-                        o.status.toLowerCase() == 'handed over' ||
-                            o.status.toLowerCase() == 'completed')
-                            .length;
+                      builder:
+                          (
+                            context,
+                            userState,
+                            productState,
+                            orderState,
+                            child,
+                          ) {
+                            final totalUsers = userState.users.length;
+                            final activeListings = productState.items
+                                .where(
+                                  (p) => p.status.toLowerCase() == 'active',
+                                )
+                                .length;
+                            final completedOrders = orderState.items
+                                .where(
+                                  (o) =>
+                                      o.status.toLowerCase() == 'handed over' ||
+                                      o.status.toLowerCase() == 'completed',
+                                )
+                                .length;
 
-                        final bool isWide = constraints.maxWidth > 700;
+                            final bool isWide = constraints.maxWidth > 700;
 
-                        if (isWide) {
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: _buildKpiCard(
-                                  context,
-                                  'Total Users',
-                                  totalUsers.toString(),
-                                  Icons.people_alt,
-                                  Colors.blue,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildKpiCard(
-                                  context,
-                                  'Active Listings',
-                                  activeListings.toString(),
-                                  Icons.inventory_2,
-                                  Colors.orange,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildKpiCard(
-                                  context,
-                                  'Completed Handovers',
-                                  completedOrders.toString(),
-                                  Icons.check_circle,
-                                  Colors.green,
-                                ),
-                              ),
-                            ],
-                          );
-                        } else {
-                          return Column(
-                            children: [
-                              _buildKpiCard(
-                                context,
-                                'Total Users',
-                                totalUsers.toString(),
-                                Icons.people_alt,
-                                Colors.blue,
-                              ),
-                              const SizedBox(height: 16),
-                              _buildKpiCard(
-                                context,
-                                'Active Listings',
-                                activeListings.toString(),
-                                Icons.inventory_2,
-                                Colors.orange,
-                              ),
-                              const SizedBox(height: 16),
-                              _buildKpiCard(
-                                context,
-                                'Completed Handovers',
-                                completedOrders.toString(),
-                                Icons.check_circle,
-                                Colors.green,
-                              ),
-                            ],
-                          );
-                        }
-                      },
+                            if (isWide) {
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildKpiCard(
+                                      context,
+                                      'Total Users',
+                                      totalUsers.toString(),
+                                      Icons.people_alt,
+                                      Colors.blue,
+                                      onTap: () => context.go('/admin/users'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildKpiCard(
+                                      context,
+                                      'Active Listings',
+                                      activeListings.toString(),
+                                      Icons.inventory_2,
+                                      Colors.orange,
+                                      onTap: () =>
+                                          context.go('/admin/listings'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildKpiCard(
+                                      context,
+                                      'Completed Handovers',
+                                      completedOrders.toString(),
+                                      Icons.check_circle,
+                                      Colors.green,
+                                      onTap: () => context.go('/admin/orders'),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            } else {
+                              return Column(
+                                children: [
+                                  _buildKpiCard(
+                                    context,
+                                    'Total Users',
+                                    totalUsers.toString(),
+                                    Icons.people_alt,
+                                    Colors.blue,
+                                    onTap: () => context.go('/admin/users'),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildKpiCard(
+                                    context,
+                                    'Active Listings',
+                                    activeListings.toString(),
+                                    Icons.inventory_2,
+                                    Colors.orange,
+                                    onTap: () => context.go('/admin/listings'),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildKpiCard(
+                                    context,
+                                    'Completed Handovers',
+                                    completedOrders.toString(),
+                                    Icons.check_circle,
+                                    Colors.green,
+                                    onTap: () => context.go('/admin/orders'),
+                                  ),
+                                ],
+                              );
+                            }
+                          },
                     );
                   },
                 ),
                 const SizedBox(height: 32),
-
                 Text(
                   'Sustainability Impact: Items Saved from Landfills',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -161,9 +189,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       final spots = _generateTrendSpots(orderState.items);
                       double maxY = 10;
                       for (var spot in spots) {
-                        if (spot.y > maxY) maxY = spot.y;
+                        if (spot.y > maxY) {
+                          maxY = spot.y;
+                        }
                       }
-                      // Give some padding at the top
                       maxY = (maxY * 1.2).ceilToDouble();
 
                       return LineChart(
@@ -185,13 +214,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                 reservedSize: 32,
                                 interval: 1,
                                 getTitlesWidget: (value, meta) {
-                                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
-                                  if (value.toInt() >= 0 && value.toInt() < months.length) {
+                                  const months = [
+                                    'Jan',
+                                    'Feb',
+                                    'Mar',
+                                    'Apr',
+                                    'May',
+                                    'Jun',
+                                    'Jul',
+                                  ];
+                                  if (value.toInt() >= 0 &&
+                                      value.toInt() < months.length) {
                                     return Padding(
                                       padding: const EdgeInsets.only(top: 8.0),
                                       child: Text(
                                         months[value.toInt()],
-                                        style: const TextStyle(color: Colors.black54, fontSize: 12),
+                                        style: const TextStyle(
+                                          color: Colors.black54,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     );
                                   }
@@ -232,14 +273,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   List<FlSpot> _generateTrendSpots(List<OrderModel> orders) {
-    // 1. Group completed orders by month of the current year
     final now = DateTime.now();
     final Map<int, int> monthlyCounts = {
-      1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 // Jan to Jul
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+      6: 0,
+      7: 0,
     };
 
     for (var order in orders) {
-      if (order.status.toLowerCase() == 'completed' || order.status.toLowerCase() == 'handed over') {
+      if (order.status.toLowerCase() == 'completed' ||
+          order.status.toLowerCase() == 'handed over') {
         final date = order.createdAt ?? now;
         if (date.year == now.year && monthlyCounts.containsKey(date.month)) {
           monthlyCounts[date.month] = monthlyCounts[date.month]! + 1;
@@ -247,7 +294,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       }
     }
 
-    // 2. Convert to FlSpots
     return [
       FlSpot(0, monthlyCounts[1]!.toDouble()),
       FlSpot(1, monthlyCounts[2]!.toDouble()),
@@ -260,60 +306,83 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Widget _buildKpiCard(
-      BuildContext context,
-      String title,
-      String value,
-      IconData icon,
-      Color color,
-      ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    BuildContext context,
+    String title,
+    String value,
+    IconData icon,
+    Color color, {
+    VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w600,
-                  ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      value,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildFraudOverviewCard(
+    BuildContext context,
+    AdminFraudState fraudState,
+  ) {
+    return _buildKpiCard(
+      context,
+      'Flagged Users',
+      fraudState.flags.length.toString(),
+      Icons.shield_outlined,
+      const Color(0xFFDC2626),
+      onTap: fraudState.isLoading ? null : () => context.go('/admin/fraud'),
     );
   }
 }
