@@ -22,30 +22,44 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const firebaseServiceAccountJson = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON");
-const supabaseUrl = Deno.env.get("SUPABASE_URL");
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+let cachedSupabaseAdmin: ReturnType<typeof createClient> | null = null;
 
-if (!firebaseServiceAccountJson) {
-  throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_JSON secret.");
-}
+function getSupabaseAdmin() {
+  if (cachedSupabaseAdmin != null) {
+    return cachedSupabaseAdmin;
+  }
 
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("Missing Supabase service role configuration.");
-}
+  const firebaseServiceAccountJson =
+    Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ??
+    Deno.env.get("FCM_SERVICE_ACCOUNT");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-if (getApps().length === 0) {
-  initializeApp({
-    credential: cert(JSON.parse(firebaseServiceAccountJson)),
+  if (!firebaseServiceAccountJson) {
+    throw new Error(
+      "Missing Firebase service account secret. Set FIREBASE_SERVICE_ACCOUNT_JSON or FCM_SERVICE_ACCOUNT.",
+    );
+  }
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Missing Supabase service role configuration.");
+  }
+
+  if (getApps().length === 0) {
+    initializeApp({
+      credential: cert(JSON.parse(firebaseServiceAccountJson)),
+    });
+  }
+
+  cachedSupabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
   });
-}
 
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
+  return cachedSupabaseAdmin;
+}
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
@@ -53,8 +67,10 @@ Deno.serve(async (request) => {
   }
 
   let body: PushRequest = {};
+  let supabaseAdmin: ReturnType<typeof createClient>;
 
   try {
+    supabaseAdmin = getSupabaseAdmin();
     body = (await request.json()) as PushRequest;
     const recipientId = body.recipientId?.trim();
     const conversationId = body.conversationId?.trim() ?? "";
