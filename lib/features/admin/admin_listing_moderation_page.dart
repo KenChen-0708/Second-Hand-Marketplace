@@ -1,14 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../models/models.dart';
-import '../../state/state.dart';
 import '../../services/local/admin_search_preferences_service.dart';
 import '../../shared/widgets/admin_search_history_section.dart';
+import '../../state/state.dart';
 
 class AdminListingModerationPage extends StatefulWidget {
   const AdminListingModerationPage({super.key});
@@ -20,9 +20,9 @@ class AdminListingModerationPage extends StatefulWidget {
 
 class _AdminListingModerationPageState
     extends State<AdminListingModerationPage> {
-  final SupabaseClient _supabase = Supabase.instance.client;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+
   List<String> _searchHistory = [];
   StreamSubscription<String?>? _clearSearchSubscription;
   String _searchQuery = '';
@@ -147,7 +147,7 @@ class _AdminListingModerationPageState
       backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -158,29 +158,37 @@ class _AdminListingModerationPageState
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
-                    await context.read<ProductState>().fetchProducts(status: null);
+                    await context.read<ProductState>().fetchProducts(
+                      status: null,
+                    );
                   },
                   child: Consumer<ProductState>(
                     builder: (context, productState, child) {
-                      if (productState.isLoading && productState.items.isEmpty) {
-                        return const Center(child: CircularProgressIndicator());
+                      if (productState.isLoading &&
+                          productState.items.isEmpty) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
                       }
 
                       final filteredListings = productState.items.where((p) {
-                        final matchesSearch = p.title
-                            .toLowerCase()
-                            .contains(_searchQuery.toLowerCase());
-                        final matchesStatus = _selectedStatus == 'all' ||
+                        final matchesSearch = p.title.toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
+                        );
+                        final matchesStatus =
+                            _selectedStatus == 'all' ||
                             p.status.toLowerCase() == _selectedStatus;
                         return matchesSearch && matchesStatus;
                       }).toList();
 
                       if (filteredListings.isEmpty) {
                         return ListView(
-                          children: [
-                            const SizedBox(height: 100),
-                            const Center(
-                              child: Text('No listings found matching your criteria.'),
+                          children: const [
+                            SizedBox(height: 100),
+                            Center(
+                              child: Text(
+                                'No listings found matching your criteria.',
+                              ),
                             ),
                           ],
                         );
@@ -188,12 +196,12 @@ class _AdminListingModerationPageState
 
                       return GridView.builder(
                         gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 350,
-                          childAspectRatio: 0.72,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                        ),
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 350,
+                              childAspectRatio: 0.72,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                            ),
                         itemCount: filteredListings.length,
                         itemBuilder: (context, index) {
                           final product = filteredListings[index];
@@ -269,8 +277,14 @@ class _AdminListingModerationPageState
                 child: DropdownButton<String>(
                   value: _selectedStatus,
                   items: const [
-                    DropdownMenuItem(value: 'all', child: Text('All Status')),
-                    DropdownMenuItem(value: 'active', child: Text('Active')),
+                    DropdownMenuItem(
+                      value: 'all',
+                      child: Text('All Status'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'active',
+                      child: Text('Active'),
+                    ),
                     DropdownMenuItem(
                       value: 'inactive',
                       child: Text('Inactive'),
@@ -278,7 +292,9 @@ class _AdminListingModerationPageState
                     DropdownMenuItem(value: 'sold', child: Text('Sold')),
                   ],
                   onChanged: (val) {
-                    if (val != null) setState(() => _selectedStatus = val);
+                    if (val != null) {
+                      setState(() => _selectedStatus = val);
+                    }
                   },
                 ),
               ),
@@ -299,7 +315,7 @@ class _AdminListingModerationPageState
   }
 
   Widget _buildListingCard(ProductModel product) {
-    final bool isInactive = product.status.toLowerCase() == 'inactive';
+    final isInactive = product.status.toLowerCase() == 'inactive';
 
     return InkWell(
       onTap: () => context.push('/product/${product.id}'),
@@ -357,8 +373,14 @@ class _AdminListingModerationPageState
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
-                        onPressed: () => Share.share('Check this listing for moderation: ${product.title} \n ID: ${product.id}'),
-                        icon: const Icon(Icons.share_rounded, size: 20, color: Colors.blueAccent),
+                        onPressed: () => Share.share(
+                          'Check this listing for moderation: ${product.title} \n ID: ${product.id}',
+                        ),
+                        icon: const Icon(
+                          Icons.share_rounded,
+                          size: 20,
+                          color: Colors.blueAccent,
+                        ),
                         tooltip: 'Share Listing',
                       ),
                     ),
@@ -367,7 +389,7 @@ class _AdminListingModerationPageState
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -392,7 +414,7 @@ class _AdminListingModerationPageState
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.photo_library_outlined,
                         size: 16,
                         color: Colors.black54,
@@ -405,17 +427,6 @@ class _AdminListingModerationPageState
                           color: Colors.black54,
                         ),
                       ),
-                      const Spacer(),
-                      TextButton.icon(
-                        onPressed: () => _openPhotoEvidenceReview(product),
-                        icon: const Icon(Icons.verified_outlined, size: 16),
-                        label: const Text('Review'),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 32),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -426,18 +437,27 @@ class _AdminListingModerationPageState
                           onPressed: () => _toggleStatus(product),
                           style: OutlinedButton.styleFrom(
                             padding: EdgeInsets.zero,
-                            foregroundColor: isInactive ? Colors.green : Colors.orange,
+                            foregroundColor:
+                                isInactive ? Colors.green : Colors.orange,
                             side: BorderSide(
-                              color: isInactive ? Colors.green : Colors.orange,
+                              color:
+                                  isInactive ? Colors.green : Colors.orange,
                             ),
                           ),
-                          child: Text(isInactive ? 'Activate' : 'Deactivate', style: const TextStyle(fontSize: 12)),
+                          child: Text(
+                            isInactive ? 'Activate' : 'Deactivate',
+                            style: const TextStyle(fontSize: 12),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       IconButton(
                         onPressed: () => _confirmDelete(product),
-                        icon: const Icon(Icons.delete_rounded, color: Colors.red, size: 20),
+                        icon: const Icon(
+                          Icons.delete_rounded,
+                          color: Colors.red,
+                          size: 20,
+                        ),
                         tooltip: 'Delete Permanently',
                       ),
                     ],
@@ -452,7 +472,7 @@ class _AdminListingModerationPageState
   }
 
   Widget _buildStatusChip(String status) {
-    Color color = Colors.grey;
+    var color = Colors.grey;
     switch (status.toLowerCase()) {
       case 'active':
         color = Colors.green;
@@ -495,490 +515,9 @@ class _AdminListingModerationPageState
     return images;
   }
 
-  Future<void> _openPhotoEvidenceReview(ProductModel product) async {
-    final images = _productImages(product);
-    final noteController = TextEditingController();
-    final pageController = PageController();
-    var selectedIndex = 0;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              insetPadding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 920, maxHeight: 760),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Photo Evidence Review',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  product.title,
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(color: Colors.black54),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final isWide = constraints.maxWidth >= 720;
-                            final preview = _buildPhotoReviewPreview(
-                              context,
-                              images,
-                              selectedIndex,
-                              pageController,
-                              onPageChanged: (index) {
-                                setDialogState(() => selectedIndex = index);
-                              },
-                              onThumbnailTap: (index) {
-                                setDialogState(() => selectedIndex = index);
-                                pageController.animateToPage(
-                                  index,
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOut,
-                                );
-                              },
-                            );
-                            final details = _buildPhotoReviewDetails(
-                              context,
-                              product,
-                              images,
-                              noteController,
-                            );
-
-                            if (isWide) {
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(flex: 3, child: preview),
-                                  const SizedBox(width: 24),
-                                  Expanded(flex: 2, child: details),
-                                ],
-                              );
-                            }
-
-                            return ListView(
-                              children: [
-                                SizedBox(height: 420, child: preview),
-                                const SizedBox(height: 20),
-                                details,
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        alignment: WrapAlignment.end,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            child: const Text('Close'),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: () => _submitPhotoReview(
-                              product: product,
-                              decision: 'approved',
-                              nextStatus:
-                                  product.status.toLowerCase() == 'sold'
-                                      ? 'sold'
-                                      : 'active',
-                              notes: noteController.text.trim(),
-                              reviewedImages: images.length,
-                            ).whenComplete(() {
-                              if (mounted && dialogContext.mounted) {
-                                Navigator.of(dialogContext).pop();
-                              }
-                            }),
-                            icon: const Icon(Icons.check_circle_outline),
-                            label: const Text('Approve Photos'),
-                          ),
-                          FilledButton.tonalIcon(
-                            onPressed: () => _submitPhotoReview(
-                              product: product,
-                              decision: 'flagged',
-                              nextStatus: 'inactive',
-                              notes: noteController.text.trim(),
-                              reviewedImages: images.length,
-                            ).whenComplete(() {
-                              if (mounted && dialogContext.mounted) {
-                                Navigator.of(dialogContext).pop();
-                              }
-                            }),
-                            icon: const Icon(Icons.flag_outlined),
-                            label: const Text('Flag and Deactivate'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    noteController.dispose();
-    pageController.dispose();
-  }
-
-  Widget _buildPhotoReviewPreview(
-    BuildContext context,
-    List<String> images,
-    int selectedIndex,
-    PageController pageController, {
-    required ValueChanged<int> onPageChanged,
-    required ValueChanged<int> onThumbnailTap,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.black12),
-            ),
-            child: images.isEmpty
-                ? const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.no_photography_outlined,
-                            size: 56, color: Colors.black26),
-                        SizedBox(height: 12),
-                        Text('No listing photos uploaded.'),
-                      ],
-                    ),
-                  )
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: PageView.builder(
-                      controller: pageController,
-                      itemCount: images.length,
-                      onPageChanged: onPageChanged,
-                      itemBuilder: (context, index) {
-                        return InteractiveViewer(
-                          minScale: 0.8,
-                          maxScale: 3,
-                          child: Image.network(
-                            images[index],
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                              color: const Color(0xFFF3F4F6),
-                              alignment: Alignment.center,
-                              child: const Icon(
-                                Icons.broken_image_outlined,
-                                size: 56,
-                                color: Colors.black26,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (images.isNotEmpty) ...[
-          Text(
-            'Image ${selectedIndex + 1} of ${images.length}',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: Colors.black54),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 72,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: images.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                final isSelected = index == selectedIndex;
-                return GestureDetector(
-                  onTap: () => onThumbnailTap(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 72,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? Colors.blueAccent : Colors.black12,
-                        width: isSelected ? 2 : 1,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(11),
-                      child: Image.network(
-                        images[index],
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: const Color(0xFFF3F4F6),
-                          child: const Icon(
-                            Icons.image_not_supported_outlined,
-                            color: Colors.black26,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildPhotoReviewDetails(
-    BuildContext context,
-    ProductModel product,
-    List<String> images,
-    TextEditingController noteController,
-  ) {
-    final hasEnoughPhotos = images.length >= 3;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Moderation Checklist',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            _buildEvidenceRow(
-              icon: Icons.photo_library_outlined,
-              label: 'Photos uploaded',
-              value: '${images.length}',
-              highlight: hasEnoughPhotos ? Colors.green : Colors.orange,
-            ),
-            _buildEvidenceRow(
-              icon: Icons.inventory_2_outlined,
-              label: 'Listing status',
-              value: product.status.toUpperCase(),
-            ),
-            _buildEvidenceRow(
-              icon: Icons.sell_outlined,
-              label: 'Condition declared',
-              value: product.condition,
-            ),
-            _buildEvidenceRow(
-              icon: Icons.person_outline,
-              label: 'Seller ID',
-              value: product.sellerId,
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: hasEnoughPhotos
-                    ? Colors.green.withOpacity(0.08)
-                    : Colors.orange.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                hasEnoughPhotos
-                    ? 'Photo set looks sufficient for a manual review.'
-                    : 'Photo set is limited. Consider deactivating until clearer evidence is provided.',
-                style: const TextStyle(fontSize: 13, height: 1.4),
-              ),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: noteController,
-              maxLines: 5,
-              decoration: InputDecoration(
-                labelText: 'Internal moderation notes',
-                hintText:
-                    'Record missing angles, suspicious edits, or other evidence findings.',
-                alignLabelWithHint: true,
-                filled: true,
-                fillColor: const Color(0xFFF9FAFB),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEvidenceRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    Color? highlight,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: (highlight ?? Colors.blueGrey).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 18, color: highlight ?? Colors.blueGrey),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _submitPhotoReview({
-    required ProductModel product,
-    required String decision,
-    required String nextStatus,
-    required String notes,
-    required int reviewedImages,
-  }) async {
-    try {
-      await context.read<ProductState>().updateProduct(product.id, {
-        'status': nextStatus,
-        'title': product.title,
-      });
-      // Log the review action — non-fatal: a failure here should not block
-      // the status update that already succeeded.
-      try {
-        await _logPhotoReview(
-          product: product,
-          decision: decision,
-          previousStatus: product.status,
-          nextStatus: nextStatus,
-          notes: notes,
-          reviewedImages: reviewedImages,
-        );
-      } catch (_) {
-        // Logging failure is non-critical; swallow silently.
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              decision == 'approved'
-                  ? 'Photo review approved. Listing status is $nextStatus.'
-                  : 'Photo review flagged. Listing moved to $nextStatus.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-      rethrow;
-    }
-  }
-
-  Future<void> _logPhotoReview({
-    required ProductModel product,
-    required String decision,
-    required String previousStatus,
-    required String nextStatus,
-    required String notes,
-    required int reviewedImages,
-  }) async {
-    final adminId = _supabase.auth.currentUser?.id;
-    if (adminId == null) {
-      return;
-    }
-
-    await _supabase.from('admin_logs').insert({
-      'admin_id': adminId,
-      'action': 'listing_photo_review',
-      'entity_type': 'product',
-      'entity_id': product.id,
-      'details': {
-        'decision': decision,
-        'product_title': product.title,
-        'previous_status': previousStatus,
-        'next_status': nextStatus,
-        'reviewed_images': reviewedImages,
-        'notes': notes,
-      },
-    });
-  }
-
   Future<void> _toggleStatus(ProductModel product) async {
-    final newStatus = product.status.toLowerCase() == 'active' ? 'inactive' : 'active';
+    final newStatus =
+        product.status.toLowerCase() == 'active' ? 'inactive' : 'active';
     try {
       await context.read<ProductState>().updateProduct(product.id, {
         'status': newStatus,
@@ -1025,7 +564,10 @@ class _AdminListingModerationPageState
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               }
