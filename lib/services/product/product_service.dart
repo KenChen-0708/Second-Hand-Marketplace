@@ -14,7 +14,10 @@ class ProductService {
   final LocalDatabaseService _localDatabase = LocalDatabaseService.instance;
   final ConnectivityService _connectivityService = ConnectivityService.instance;
 
-  Future<List<ProductModel>> fetchProducts({String? status, String? sellerId}) async {
+  Future<List<ProductModel>> fetchProducts({
+    String? status,
+    String? sellerId,
+  }) async {
     final cachedProducts = await _localDatabase.getCachedProducts(
       status: status,
       sellerId: sellerId,
@@ -25,9 +28,11 @@ class ProductService {
     }
 
     try {
-      var query = _supabase.from('products').select(
-        '*, variations:product_variants(*, attributes:product_variant_attributes(*))',
-      );
+      var query = _supabase
+          .from('products')
+          .select(
+            '*, variations:product_variants(*, attributes:product_variant_attributes(*))',
+          );
 
       if (status != null && status.isNotEmpty) {
         query = query.eq('status', status);
@@ -42,7 +47,9 @@ class ProductService {
       final products = (data as List)
           .map(
             (item) => ProductModel.fromMap(
-              _resolveProductImageFields(Map<String, dynamic>.from(item as Map)),
+              _resolveProductImageFields(
+                Map<String, dynamic>.from(item as Map),
+              ),
             ),
           )
           .toList();
@@ -97,7 +104,10 @@ class ProductService {
     }
   }
 
-  Future<List<ProductModel>> getCachedProducts({String? status, String? sellerId}) {
+  Future<List<ProductModel>> getCachedProducts({
+    String? status,
+    String? sellerId,
+  }) {
     return _localDatabase.getCachedProducts(status: status, sellerId: sellerId);
   }
 
@@ -118,11 +128,15 @@ class ProductService {
             '${DateTime.now().millisecondsSinceEpoch}_${userId}_$index.webp';
         final webpBytes = await ImageHelper.convertFileToWebp(path);
 
-        await _supabase.storage.from(_productImageBucket).uploadBinary(
-          fileName,
-          webpBytes,
-          fileOptions: const FileOptions(contentType: ImageHelper.webpMimeType),
-        );
+        await _supabase.storage
+            .from(_productImageBucket)
+            .uploadBinary(
+              fileName,
+              webpBytes,
+              fileOptions: const FileOptions(
+                contentType: ImageHelper.webpMimeType,
+              ),
+            );
         imagePathsInBucket.add(fileName);
       }
       return imagePathsInBucket;
@@ -140,7 +154,9 @@ class ProductService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchSubcategories(String categoryId) async {
+  Future<List<Map<String, dynamic>>> fetchSubcategories(
+    String categoryId,
+  ) async {
     try {
       final data = await _supabase
           .from('subcategories')
@@ -176,7 +192,10 @@ class ProductService {
     }
   }
 
-  Future<String> getOrCreateSubcategory(String categoryId, String subcategoryName) async {
+  Future<String> getOrCreateSubcategory(
+    String categoryId,
+    String subcategoryName,
+  ) async {
     try {
       final subResp = await _supabase
           .from('subcategories')
@@ -212,15 +231,71 @@ class ProductService {
       }
       payload.remove('price');
 
-      final response = await _supabase
-          .from('products')
-          .insert(payload)
-          .select('id')
-          .single();
-      return response['id'] as String;
+      try {
+        return await _insertProduct(payload);
+      } on PostgrestException catch (e) {
+        if (!_isDuplicateProductIdError(e)) {
+          rethrow;
+        }
+      }
+
+      var nextProductNumber = await _fetchNextProductNumber();
+      for (var attempt = 0; attempt < 5; attempt++) {
+        final retryPayload = Map<String, dynamic>.from(payload)
+          ..['id'] = _formatProductId(nextProductNumber + attempt);
+        try {
+          return await _insertProduct(retryPayload);
+        } on PostgrestException catch (e) {
+          if (!_isDuplicateProductIdError(e)) {
+            rethrow;
+          }
+        }
+      }
+
+      throw const PostgrestException(
+        message: 'Unable to allocate a unique product ID.',
+        code: '23505',
+      );
     } catch (e) {
       throw Exception('Failed to create product: $e');
     }
+  }
+
+  Future<String> _insertProduct(Map<String, dynamic> payload) async {
+    final response = await _supabase
+        .from('products')
+        .insert(payload)
+        .select('id')
+        .single();
+    return response['id'] as String;
+  }
+
+  bool _isDuplicateProductIdError(PostgrestException error) {
+    final details = error.details?.toString();
+    return error.code == '23505' &&
+        (error.message.contains('products_pkey') ||
+            (details?.contains('Key (id)=') ?? false));
+  }
+
+  Future<int> _fetchNextProductNumber() async {
+    final rows = await _supabase.from('products').select('id').like('id', 'P%');
+    var highest = 0;
+    for (final row in rows as List) {
+      final id = (row as Map)['id']?.toString();
+      if (id == null || !id.startsWith('P')) {
+        continue;
+      }
+
+      final number = int.tryParse(id.substring(1));
+      if (number != null && number > highest) {
+        highest = number;
+      }
+    }
+    return highest + 1;
+  }
+
+  String _formatProductId(int number) {
+    return 'P${number.toString().padLeft(4, '0')}';
   }
 
   Future<void> createProductVariations(
@@ -255,7 +330,8 @@ class ProductService {
       for (var index = 0; index < variations.length; index++) {
         final variation = variations[index];
         final insertedVariantId = insertedVariantList[index]['id'] as String;
-        final rawAttributes = variation['attributes'] as List? ??
+        final rawAttributes =
+            variation['attributes'] as List? ??
             _legacyAttributesForVariation(variation);
         for (final rawAttribute in rawAttributes) {
           final attribute = Map<String, dynamic>.from(rawAttribute as Map);
@@ -268,7 +344,9 @@ class ProductService {
       }
 
       if (attributeRows.isNotEmpty) {
-        await _supabase.from('product_variant_attributes').insert(attributeRows);
+        await _supabase
+            .from('product_variant_attributes')
+            .insert(attributeRows);
       }
     } on PostgrestException catch (e) {
       throw Exception(e.message);
@@ -287,10 +365,7 @@ class ProductService {
     }
 
     return [
-      {
-        'attribute_name': type,
-        'attribute_value': value,
-      },
+      {'attribute_name': type, 'attribute_value': value},
     ];
   }
 
@@ -318,7 +393,10 @@ class ProductService {
   Future<Map<String, Map<String, dynamic>>> fetchMeetupLocations(
     List<String> productIds,
   ) async {
-    final uniqueProductIds = productIds.toSet().where((id) => id.isNotEmpty).toList();
+    final uniqueProductIds = productIds
+        .toSet()
+        .where((id) => id.isNotEmpty)
+        .toList();
     if (uniqueProductIds.isEmpty) {
       return const {};
     }
@@ -333,7 +411,9 @@ class ProductService {
       for (final row in (data as List)) {
         final map = Map<String, dynamic>.from(row as Map);
         final productId = map['product_id']?.toString();
-        if (productId == null || productId.isEmpty || locations.containsKey(productId)) {
+        if (productId == null ||
+            productId.isEmpty ||
+            locations.containsKey(productId)) {
           continue;
         }
         locations[productId] = map;
@@ -344,7 +424,10 @@ class ProductService {
     }
   }
 
-  Future<void> updateMeetupLocation(String productId, Map<String, dynamic> locationData) async {
+  Future<void> updateMeetupLocation(
+    String productId,
+    Map<String, dynamic> locationData,
+  ) async {
     try {
       // First check if a location exists for this product
       final existing = await fetchMeetupLocation(productId);
@@ -373,7 +456,8 @@ class ProductService {
       if (e.code == '23503') {
         await _supabase
             .from('products')
-            .update({'status': 'inactive'}).eq('id', productId);
+            .update({'status': 'inactive'})
+            .eq('id', productId);
       } else {
         throw Exception(e.message);
       }
@@ -382,7 +466,10 @@ class ProductService {
     }
   }
 
-  Future<void> updateProduct(String productId, Map<String, dynamic> updateData) async {
+  Future<void> updateProduct(
+    String productId,
+    Map<String, dynamic> updateData,
+  ) async {
     try {
       final data = {
         ...updateData,
@@ -405,7 +492,9 @@ class ProductService {
   }
 
   Map<String, dynamic> _resolveProductImageFields(Map<String, dynamic> data) {
-    final resolvedImages = ImageHelper.resolveProductImageUrls(data['image_urls']);
+    final resolvedImages = ImageHelper.resolveProductImageUrls(
+      data['image_urls'],
+    );
     final resolvedImageUrl =
         ImageHelper.resolveProductImageUrl(
           data['image_url']?.toString(),
