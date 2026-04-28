@@ -12,8 +12,13 @@ enum CategorySortMode {
 
 class CategoryState extends EntityState<CategoryModel> {
   final _supabase = Supabase.instance.client;
-  List<SubcategoryModel> _subcategories = [];
-  List<SubcategoryModel> get subcategories => _subcategories;
+  final Map<String, List<SubcategoryModel>> _subcategoriesByCategory = {};
+  List<SubcategoryModel> get subcategories =>
+      _subcategoriesByCategory.values.expand((list) => list).toList();
+  List<SubcategoryModel> subcategoriesForCategory(String categoryId) =>
+      List<SubcategoryModel>.unmodifiable(
+        _subcategoriesByCategory[categoryId] ?? const <SubcategoryModel>[],
+      );
 
   CategorySortMode _sortMode = CategorySortMode.custom;
   CategorySortMode get sortMode => _sortMode;
@@ -129,6 +134,8 @@ class CategoryState extends EntityState<CategoryModel> {
 
   Future<void> fetchSubcategories(String categoryId) async {
     try {
+      late final List<SubcategoryModel> subcategories;
+
       // Try fetching with new column 'sort_priority', fallback to name
       try {
         final response = await _supabase
@@ -137,7 +144,7 @@ class CategoryState extends EntityState<CategoryModel> {
             .eq('category_id', categoryId)
             .order('sort_priority');
 
-        _subcategories = (response as List)
+        subcategories = (response as List)
             .map((m) => SubcategoryModel.fromMap(Map<String, dynamic>.from(m)))
             .toList();
       } catch (_) {
@@ -147,10 +154,12 @@ class CategoryState extends EntityState<CategoryModel> {
             .eq('category_id', categoryId)
             .order('name');
 
-        _subcategories = (response as List)
+        subcategories = (response as List)
             .map((m) => SubcategoryModel.fromMap(Map<String, dynamic>.from(m)))
             .toList();
       }
+
+      _subcategoriesByCategory[categoryId] = subcategories;
       notifyListeners();
     } catch (e) {
       setError(e.toString());
@@ -228,28 +237,100 @@ class CategoryState extends EntityState<CategoryModel> {
 
   Future<void> addSubcategory(String categoryId, String name) async {
     try {
-      final response = await _supabase
-          .from('subcategories')
-          .insert({
+      final currentSubcategories = _subcategoriesByCategory[categoryId] ?? const [];
+      final payload = <String, dynamic>{
         'category_id': categoryId,
         'name': name,
         'is_enabled': true,
-        'sort_priority': _subcategories.length,
-      })
-          .select()
-          .single();
-      _subcategories.add(SubcategoryModel.fromMap(Map<String, dynamic>.from(response)));
-      notifyListeners();
+        'sort_priority': currentSubcategories.length,
+      };
+
+      try {
+        await _supabase.from('subcategories').insert(payload);
+      } on PostgrestException catch (e) {
+        if (_isDuplicateSubcategoryIdError(e)) {
+          await _insertSubcategoryWithAllocatedId(payload);
+        } else {
+          await _supabase.from('subcategories').insert({
+            'category_id': categoryId,
+            'name': name,
+          });
+        }
+      } catch (_) {
+        await _supabase.from('subcategories').insert({
+          'category_id': categoryId,
+          'name': name,
+        });
+      }
+
+      await fetchSubcategories(categoryId);
     } catch (e) {
       setError(e.toString());
       rethrow;
     }
   }
 
-  Future<void> deleteSubcategory(String id) async {
+  bool _isDuplicateSubcategoryIdError(PostgrestException error) {
+    final details = error.details?.toString() ?? '';
+    return error.code == '23505' &&
+        (error.message.contains('subcategories_pkey') ||
+            details.contains('Key (id)='));
+  }
+
+  Future<void> _insertSubcategoryWithAllocatedId(
+    Map<String, dynamic> payload,
+  ) async {
+    var nextNumber = await _fetchNextSubcategoryNumber();
+    for (var attempt = 0; attempt < 10; attempt++) {
+      final retryPayload = Map<String, dynamic>.from(payload)
+        ..['id'] = _formatSubcategoryId(nextNumber + attempt);
+      try {
+        await _supabase.from('subcategories').insert(retryPayload);
+        return;
+      } on PostgrestException catch (e) {
+        if (!_isDuplicateSubcategoryIdError(e)) {
+          rethrow;
+        }
+      }
+    }
+
+    throw Exception('Unable to allocate a unique subcategory ID.');
+  }
+
+  Future<int> _fetchNextSubcategoryNumber() async {
+    final rows = await _supabase
+        .from('subcategories')
+        .select('id')
+        .like('id', 'SCAT%');
+
+    var highest = 0;
+    for (final row in rows as List) {
+      final id = (row as Map)['id']?.toString();
+      if (id == null || !id.startsWith('SCAT')) {
+        continue;
+      }
+
+      final number = int.tryParse(id.substring(4));
+      if (number != null && number > highest) {
+        highest = number;
+      }
+    }
+
+    return highest + 1;
+  }
+
+  String _formatSubcategoryId(int number) {
+    return 'SCAT${number.toString().padLeft(4, '0')}';
+  }
+
+  Future<void> deleteSubcategory(String categoryId, String id) async {
     try {
       await _supabase.from('subcategories').delete().eq('id', id);
-      _subcategories.removeWhere((s) => s.id == id);
+      final existing = List<SubcategoryModel>.from(
+        _subcategoriesByCategory[categoryId] ?? const <SubcategoryModel>[],
+      );
+      existing.removeWhere((s) => s.id == id);
+      _subcategoriesByCategory[categoryId] = existing;
       notifyListeners();
     } catch (e) {
       setError(e.toString());

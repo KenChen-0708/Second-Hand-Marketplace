@@ -452,6 +452,7 @@ class _AdminCategoryManagementPageState
   Widget _buildSubcategorySection(CategoryModel category) {
     return Consumer<CategoryState>(
       builder: (context, state, child) {
+        final subcategories = state.subcategoriesForCategory(category.id);
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
@@ -471,16 +472,16 @@ class _AdminCategoryManagementPageState
                 ],
               ),
               const SizedBox(height: 8),
-              if (state.subcategories.isEmpty)
+              if (subcategories.isEmpty)
                 const Text('No subcategories.', style: TextStyle(fontSize: 12, color: Colors.black38))
               else
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: state.subcategories.map((sub) {
+                  children: subcategories.map((sub) {
                     return Chip(
                       label: Text(sub.name, style: const TextStyle(fontSize: 11)),
-                      onDeleted: () => _confirmDeleteSubcategory(sub),
+                      onDeleted: () => _confirmDeleteSubcategory(category.id, sub),
                       deleteIconColor: Colors.red.shade300,
                       backgroundColor: Colors.white,
                       side: const BorderSide(color: Colors.black12),
@@ -551,7 +552,16 @@ class _AdminCategoryManagementPageState
             onPressed: () async {
               if (_categoryController.text.isNotEmpty) {
                 Navigator.pop(context);
-                await context.read<CategoryState>().addSubcategory(categoryId, _categoryController.text.trim());
+                try {
+                  await context.read<CategoryState>().addSubcategory(
+                    categoryId,
+                    _categoryController.text.trim(),
+                  );
+                } catch (e) {
+                  if (mounted) {
+                    _showErrorSnackBar('Failed to add subcategory: $e');
+                  }
+                }
               }
             },
             child: const Text('Add'),
@@ -605,7 +615,7 @@ class _AdminCategoryManagementPageState
     );
   }
 
-  void _confirmDeleteSubcategory(SubcategoryModel sub) {
+  void _confirmDeleteSubcategory(String categoryId, SubcategoryModel sub) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -617,7 +627,10 @@ class _AdminCategoryManagementPageState
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               Navigator.pop(context);
-              await context.read<CategoryState>().deleteSubcategory(sub.id);
+              await context.read<CategoryState>().deleteSubcategory(
+                categoryId,
+                sub.id,
+              );
             },
             child: const Text('Remove'),
           ),
