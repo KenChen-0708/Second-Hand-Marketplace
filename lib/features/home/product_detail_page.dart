@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
-import '../../models/mock_data.dart';
 import '../../shared/utils/image_helper.dart';
 import '../../shared/utils/product_display_helper.dart';
 import '../../shared/widgets/purchase_selection_sheet.dart';
@@ -92,13 +91,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
 
     final categoryState = context.read<CategoryState>();
-    final category = categoryState.items.cast<CategoryModel?>().firstWhere(
-      (item) => item?.id == categoryId,
-      orElse: () => mockCategories.cast<CategoryModel?>().firstWhere(
-        (item) => item?.id == categoryId,
-        orElse: () => null,
-      ),
-    );
+    final category = categoryState.getById(categoryId);
 
     return category?.name ?? 'Uncategorized';
   }

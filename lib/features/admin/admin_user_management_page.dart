@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../state/state.dart';
 import '../../models/models.dart';
+import '../../services/local/admin_search_preferences_service.dart';
+import '../../shared/widgets/admin_search_history_section.dart';
 
 class AdminUserManagementPage extends StatefulWidget {
   const AdminUserManagementPage({super.key});
@@ -13,18 +17,120 @@ class AdminUserManagementPage extends StatefulWidget {
 }
 
 class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  List<String> _searchHistory = [];
+  StreamSubscription<String?>? _clearSearchSubscription;
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _searchFocusNode.addListener(_handleSearchFocusChange);
+    _clearSearchSubscription = AdminSearchPreferencesService.instance
+        .clearCurrentSearchStream
+        .listen(_handleClearSearchRequest);
+    _restoreSearchHistory();
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    _persistSearchToHistory();
+    _clearSearchSubscription?.cancel();
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
+    _searchFocusNode.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _refresh() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AdminUserState>().fetchAllUsers();
     });
+  }
+
+  Future<void> _restoreSearchHistory() async {
+    final history = await AdminSearchPreferencesService.instance
+        .readSearchHistory(AdminSearchPreferenceKeys.userManagement);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = history);
+  }
+
+  void _handleSearchChanged(String value) {
+    setState(() => _searchQuery = value);
+  }
+
+  void _handleSearchFocusChange() {
+    if (!_searchFocusNode.hasFocus) {
+      _persistSearchToHistory();
+    }
+  }
+
+  void _persistSearchToHistory() {
+    final value = _searchController.text.trim();
+    if (value.isEmpty) {
+      return;
+    }
+
+    unawaited(_saveSearchHistoryEntry(value));
+  }
+
+  Future<void> _saveSearchHistoryEntry(String value) async {
+    final history = await AdminSearchPreferencesService.instance
+        .addSearchHistoryEntry(AdminSearchPreferenceKeys.userManagement, value);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = history);
+  }
+
+  Future<void> _selectSearchHistoryEntry(String value) async {
+    _searchController.text = value;
+    _handleSearchChanged(value);
+    await _saveSearchHistoryEntry(value);
+  }
+
+  Future<void> _removeSearchHistoryEntry(String value) async {
+    final history = await AdminSearchPreferencesService.instance
+        .removeSearchHistoryEntry(
+          AdminSearchPreferenceKeys.userManagement,
+          value,
+        );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = history);
+  }
+
+  Future<void> _clearSearchHistory() async {
+    await AdminSearchPreferencesService.instance.clearSearchHistory(
+      AdminSearchPreferenceKeys.userManagement,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = []);
+  }
+
+  void _handleClearSearchRequest(String? key) {
+    if (key != null && key != AdminSearchPreferenceKeys.userManagement) {
+      return;
+    }
+
+    _persistSearchToHistory();
+    if (!mounted) {
+      return;
+    }
+
+    _searchController.clear();
+    setState(() => _searchQuery = '');
   }
 
   @override
@@ -51,6 +157,9 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
               ),
               const SizedBox(height: 24),
               TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   labelText: 'Search Users',
                   prefixIcon: const Icon(Icons.search),
@@ -60,8 +169,18 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
                   fillColor: Colors.white,
                   filled: true,
                 ),
-                onChanged: (val) => setState(() => _searchQuery = val),
+                onChanged: _handleSearchChanged,
+                onSubmitted: _saveSearchHistoryEntry,
               ),
+              if (_searchHistory.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                AdminSearchHistorySection(
+                  history: _searchHistory,
+                  onSelected: _selectSearchHistoryEntry,
+                  onDeleted: _removeSearchHistoryEntry,
+                  onClearAll: _clearSearchHistory,
+                ),
+              ],
               const SizedBox(height: 24),
               Expanded(
                 child: RefreshIndicator(

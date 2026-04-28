@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../state/state.dart';
 import '../../models/models.dart';
 import '../../services/chat/chat_service.dart';
+import '../../services/local/admin_search_preferences_service.dart';
+import '../../shared/widgets/admin_search_history_section.dart';
 import '../../shared/utils/image_helper.dart';
 
 class AdminOrderManagementPage extends StatefulWidget {
@@ -18,6 +22,8 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  List<String> _searchHistory = [];
   String _searchQuery = '';
   String _statusFilter = 'all';
   DateTimeRange? _dateRange;
@@ -27,6 +33,8 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _searchFocusNode.addListener(_handleSearchFocusChange);
+    _restoreSearchState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<OrderState>().fetchAllOrders();
       context.read<DisputeState>().fetchAllDisputes();
@@ -35,9 +43,102 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
 
   @override
   void dispose() {
+    _persistSearchToHistory();
     _tabController.dispose();
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _restoreSearchState() async {
+    final savedQuery = await AdminSearchPreferencesService.instance
+        .readCurrentSearchQuery(AdminSearchPreferenceKeys.orderManagement);
+    final history = await AdminSearchPreferencesService.instance
+        .readSearchHistory(AdminSearchPreferenceKeys.orderManagement);
+    if (!mounted) {
+      return;
+    }
+
+    _searchController.text = savedQuery;
+    setState(() {
+      _searchQuery = savedQuery;
+      _searchHistory = history;
+    });
+  }
+
+  void _handleSearchChanged(String value) {
+    setState(() => _searchQuery = value);
+    AdminSearchPreferencesService.instance.writeCurrentSearchQuery(
+      AdminSearchPreferenceKeys.orderManagement,
+      value,
+    );
+  }
+
+  void _handleSearchFocusChange() {
+    if (!_searchFocusNode.hasFocus) {
+      _persistSearchToHistory();
+    }
+  }
+
+  void _persistSearchToHistory() {
+    final value = _searchController.text.trim();
+    if (value.isEmpty) {
+      return;
+    }
+
+    unawaited(_saveSearchHistoryEntry(value));
+  }
+
+  Future<void> _saveSearchHistoryEntry(String value) async {
+    final history = await AdminSearchPreferencesService.instance
+        .addSearchHistoryEntry(AdminSearchPreferenceKeys.orderManagement, value);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = history);
+  }
+
+  Future<void> _selectSearchHistoryEntry(String value) async {
+    _searchController.text = value;
+    _handleSearchChanged(value);
+    await _saveSearchHistoryEntry(value);
+  }
+
+  Future<void> _removeSearchHistoryEntry(String value) async {
+    final history = await AdminSearchPreferencesService.instance
+        .removeSearchHistoryEntry(AdminSearchPreferenceKeys.orderManagement, value);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = history);
+  }
+
+  Future<void> _clearSearchHistory() async {
+    await AdminSearchPreferencesService.instance.clearSearchHistory(
+      AdminSearchPreferenceKeys.orderManagement,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _searchHistory = []);
+  }
+
+  void _resetFilters() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _statusFilter = 'all';
+      _dateRange = null;
+      _priceRange = const RangeValues(0, 10000);
+    });
+    AdminSearchPreferencesService.instance.writeCurrentSearchQuery(
+      AdminSearchPreferenceKeys.orderManagement,
+      '',
+    );
   }
 
   List<OrderModel> _applyFilters(List<OrderModel> orders) {
@@ -60,109 +161,157 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
 
   @override
   Widget build(BuildContext context) {
+    final isCompactLayout = MediaQuery.of(context).size.width < 420;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight + 140),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Order Management',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildFilterBar(),
-              const SizedBox(height: 8),
-              TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                labelColor: Colors.blueAccent,
-                unselectedLabelColor: Colors.black54,
-                indicatorColor: Colors.blueAccent,
-                tabs: const [
-                  Tab(text: 'Active Orders'),
-                  Tab(text: 'Disputes'),
-                  Tab(text: 'Order History'),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildActiveOrdersTab(),
-          _buildDisputesTab(),
-          _buildHistoryTab(),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              isCompactLayout ? 16 : 24,
+              16,
+              isCompactLayout ? 16 : 24,
+              8,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Order Management',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildFilterBar(),
+                const SizedBox(height: 8),
+                TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelColor: Colors.blueAccent,
+                  unselectedLabelColor: Colors.black54,
+                  indicatorColor: Colors.blueAccent,
+                  tabs: const [
+                    Tab(text: 'Active Orders'),
+                    Tab(text: 'Disputes'),
+                    Tab(text: 'Order History'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildActiveOrdersTab(),
+                _buildDisputesTab(),
+                _buildHistoryTab(),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildFilterBar() {
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search Order ID, Buyer or Seller...',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompactLayout = constraints.maxWidth < 420;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search Order ID, Buyer or Seller...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: _handleSearchChanged,
+              onSubmitted: _saveSearchHistoryEntry,
             ),
-            onChanged: (val) => setState(() => _searchQuery = val),
-          ),
-        ),
-        const SizedBox(width: 12),
-        _buildFilterChip(
-          label: _dateRange == null ? 'Date Range' : '${DateFormat('MM/dd').format(_dateRange!.start)} - ${DateFormat('MM/dd').format(_dateRange!.end)}',
-          icon: Icons.calendar_today_outlined,
-          onTap: _selectDateRange,
-          isActive: _dateRange != null,
-        ),
-        const SizedBox(width: 8),
-        _buildFilterChip(
-          label: 'Price Range',
-          icon: Icons.attach_money_rounded,
-          onTap: _showPriceFilter,
-          isActive: _priceRange.start > 0 || _priceRange.end < 10000,
-        ),
-        const SizedBox(width: 8),
-        IconButton(
-          onPressed: () {
-            setState(() {
-              _searchController.clear();
-              _searchQuery = '';
-              _statusFilter = 'all';
-              _dateRange = null;
-              _priceRange = const RangeValues(0, 10000);
-            });
-          },
-          icon: const Icon(Icons.refresh_rounded),
-          tooltip: 'Reset Filters',
-        ),
-      ],
+            if (_searchHistory.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              AdminSearchHistorySection(
+                history: _searchHistory,
+                onSelected: _selectSearchHistoryEntry,
+                onDeleted: _removeSearchHistoryEntry,
+                onClearAll: _clearSearchHistory,
+              ),
+            ],
+            SizedBox(height: isCompactLayout ? 12 : 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _buildFilterChip(
+                  label: _dateRange == null
+                      ? 'Date Range'
+                      : '${DateFormat('MM/dd').format(_dateRange!.start)} - ${DateFormat('MM/dd').format(_dateRange!.end)}',
+                  icon: Icons.calendar_today_outlined,
+                  onTap: _selectDateRange,
+                  isActive: _dateRange != null,
+                ),
+                _buildFilterChip(
+                  label: 'Price Range',
+                  icon: Icons.attach_money_rounded,
+                  onTap: _showPriceFilter,
+                  isActive: _priceRange.start > 0 || _priceRange.end < 10000,
+                ),
+                IconButton(
+                  onPressed: _resetFilters,
+                  icon: const Icon(Icons.refresh_rounded),
+                  tooltip: 'Reset Filters',
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildFilterChip({required String label, required IconData icon, required VoidCallback onTap, bool isActive = false}) {
+  Widget _buildFilterChip({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
     return ActionChip(
       onPressed: onTap,
-      avatar: Icon(icon, size: 16, color: isActive ? Colors.white : Colors.black54),
-      label: Text(label, style: TextStyle(color: isActive ? Colors.white : Colors.black87, fontSize: 12)),
+      avatar: Icon(
+        icon,
+        size: 16,
+        color: isActive ? Colors.white : Colors.black54,
+      ),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isActive ? Colors.white : Colors.black87,
+          fontSize: 12,
+        ),
+      ),
       backgroundColor: isActive ? Colors.blueAccent : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isActive ? Colors.blueAccent : Colors.black12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: isActive ? Colors.blueAccent : Colors.black12,
+        ),
+      ),
     );
   }
 
@@ -237,7 +386,9 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(
+            MediaQuery.of(context).size.width < 420 ? 16 : 24,
+          ),
           itemCount: openDisputes.length,
           itemBuilder: (context, index) {
             final dispute = openDisputes[index];
@@ -268,12 +419,17 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Dispute #$displayId',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        Expanded(
+                          child: Text(
+                            'Dispute #$displayId',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -306,8 +462,10 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                     ),
                     Text('Description: ${dispute.description}'),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         if (order != null)
                           TextButton.icon(
@@ -315,7 +473,6 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
                             icon: const Icon(Icons.chat_outlined),
                             label: const Text('View Chat History'),
                           ),
-                        const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: () => _showResolveDialog(dispute),
                           child: const Text('Resolve Dispute'),
@@ -358,7 +515,7 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
     return LayoutBuilder(builder: (context, constraints) {
       if (constraints.maxWidth < 800) {
         return ListView.builder(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(constraints.maxWidth < 420 ? 16 : 24),
           itemCount: orders.length,
           itemBuilder: (context, index) => _buildOrderMobileCard(orders[index]),
         );
@@ -446,12 +603,19 @@ class _AdminOrderManagementPageState extends State<AdminOrderManagementPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Order #${order.orderNumber}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  Expanded(
+                    child: Text(
+                      'Order #${order.orderNumber}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   _buildStatusBadge(order.status),
                 ],
               ),

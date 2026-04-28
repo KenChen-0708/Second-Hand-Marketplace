@@ -26,9 +26,9 @@ const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
 const geminiBaseUrl =
   Deno.env.get("GEMINI_BASE_URL") ?? "https://generativelanguage.googleapis.com/v1beta";
-const geminiModel = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
+const geminiModel = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.1-flash-lite-preview";
 const geminiFallbackModel =
-  Deno.env.get("GEMINI_FALLBACK_MODEL") ?? "gemini-2.5-flash-lite";
+  Deno.env.get("GEMINI_FALLBACK_MODEL") ?? "gemini-2.5-flash";
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Missing Supabase configuration.");
@@ -128,18 +128,22 @@ Deno.serve(async (request) => {
 
     if (!aiResponse.ok) {
       const primaryErrorText = await aiResponse.text();
+      
+      // FIX: Use .length > 0 instead of .isNotEmpty
+      // ALSO: Fallback on 404 (Not Found) OR 503 (Busy)
       const shouldTryFallback =
-        aiResponse.status == 503 && geminiFallbackModel.isNotEmpty &&
-        geminiFallbackModel != geminiModel;
+        (aiResponse.status === 503 || aiResponse.status === 404) && 
+        geminiFallbackModel && 
+        geminiFallbackModel.length > 0 &&
+        geminiFallbackModel !== geminiModel;
 
       if (shouldTryFallback) {
+        console.log(`Primary failed (${aiResponse.status}), trying fallback: ${geminiFallbackModel}`);
         aiResponse = await fetch(
           `${geminiBaseUrl}/models/${geminiFallbackModel}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
           },
         );
